@@ -1,0 +1,26 @@
+{
+  "description": "Registry of papers reproduced in this repository and how they relate to one another. This file is intentionally kept at the repository root (parallel to the individual paper folders), because it describes cross-paper relationships rather than the internals of any single paper.",
+  "schema": {
+    "papers[].id": "stable short identifier used in citation edges",
+    "papers[].folder": "path to the self-contained folder for this paper",
+    "citations[]": "directed edge {from, to}: paper `from` cites paper `to` (both are ids in papers[])"
+  },
+  "papers": [
+    {
+      "id": "attention-is-all-you-need",
+      "title": "Attention Is All You Need",
+      "authors": [
+        "Ashish Vaswani", "Noam Shazeer", "Niki Parmar", "Jakob Uszkoreit",
+        "Llion Jones", "Aidan N. Gomez", "Łukasz Kaiser", "Illia Polosukhin"
+      ],
+      "year": 2017,
+      "venue": "NeurIPS",
+      "arxiv": "1706.03762",
+      "folder": "Attention Is All You Need",
+      "status": "reproduced",
+      "tags": ["transformer", "attention", "seq2seq", "architecture"],
+      "summary": "Introduces the Transformer, a sequence-to-sequence architecture based entirely on attention, dispensing with recurrence and convolutions."
+    }
+  ],
+  "citations": []
+}
