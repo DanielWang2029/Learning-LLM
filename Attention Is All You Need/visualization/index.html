@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Attention Is All You Need — Architecture Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --embed: #22d3ee;
+    --pos: #a78bfa;
+    --attn: #fb7185;
+    --cross: #f59e0b;
+    --ffn: #34d399;
+    --norm: #64748b;
+    --gen: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--embed); }
+  header.hero {
+    padding: 40px 24px 28px;
+    text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(244,114,182,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0;
+    font-size: 34px;
+    letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 40%, #fb7185 75%, #f59e0b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 760px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+
+  /* Architecture layout */
+  .arch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 26px;
+    align-items: start;
+  }
+  @media (max-width: 820px) { .arch { grid-template-columns: 1fr; } }
+  .stack {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .stack h3 { margin: 2px 0 12px; text-align: center; font-size: 15px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .nx {
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 10px 10px 14px;
+    position: relative;
+    margin: 6px 0;
+    background: rgba(255,255,255,.015);
+  }
+  .nx::before {
+    content: "N ×";
+    position: absolute; top: -11px; left: 14px;
+    background: var(--panel); padding: 0 8px; font-size: 12px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .block {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 13px; margin: 9px 0; border-radius: 11px;
+    cursor: pointer; border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    background: var(--panel-2);
+    user-select: none;
+  }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .block .label { font-weight: 600; }
+  .block .sec { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .arrow { text-align: center; color: var(--line); font-size: 18px; line-height: 1; margin: -3px 0; }
+  .c-embed { background: linear-gradient(90deg, rgba(34,211,238,.16), transparent); }
+  .c-pos   { background: linear-gradient(90deg, rgba(167,139,250,.16), transparent); }
+  .c-attn  { background: linear-gradient(90deg, rgba(251,113,133,.16), transparent); }
+  .c-cross { background: linear-gradient(90deg, rgba(245,158,11,.16), transparent); }
+  .c-ffn   { background: linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .c-norm  { background: linear-gradient(90deg, rgba(100,116,139,.18), transparent); }
+  .c-gen   { background: linear-gradient(90deg, rgba(244,114,182,.16), transparent); }
+  .io {
+    text-align: center; color: var(--muted); font-size: 13px;
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 8px 0;
+    background: rgba(255,255,255,.02);
+  }
+  .cross-link { text-align:center; color: var(--cross); font-size: 12px; margin: 2px 0 8px; }
+
+  /* Detail panel */
+  .detail {
+    position: sticky; top: 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px 20px; box-shadow: var(--shadow); min-height: 260px;
+  }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .detail .formula {
+    margin: 14px 0; padding: 12px 14px; border-radius: 10px;
+    background: #0d132a; border: 1px solid var(--line);
+    font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap;
+  }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink); }
+  .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  /* Sub-diagrams grid */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: var(--shadow);
+  }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  /* Heatmap */
+  .heat { display: grid; gap: 3px; }
+  .heat .row { display: grid; gap: 3px; grid-auto-flow: column; }
+  .cell {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 5px; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #00121f; transition: transform .1s;
+  }
+  .cell:hover { transform: scale(1.12); outline: 2px solid #fff; z-index: 2; }
+  .axis-x, .axis-y { color: var(--muted); font-size: 11px; }
+  .heat-wrap { display: grid; grid-template-columns: 26px 1fr; grid-template-rows: 1fr 20px; gap: 6px; align-items: center; }
+  .ylabels { display: grid; gap: 3px; }
+  .ylabels div { display:flex; align-items:center; justify-content:flex-end; font-size: 11px; color: var(--muted); }
+  .xlabels { display: grid; grid-auto-flow: column; gap: 3px; text-align:center; font-size: 11px; color: var(--muted); }
+  .legend-row { display:flex; align-items:center; gap:8px; margin-top:10px; color:var(--muted); font-size:12px; }
+  .legend-bar { height: 10px; flex: 1; border-radius: 6px; background: linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a); }
+  .sample-note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .decode-line { font-family: ui-monospace, monospace; color: var(--ink); margin-top: 8px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  canvas { width: 100%; height: 220px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Attention Is All You Need</h1>
+  <p>An interactive, color-coded map of the Transformer — the encoder–decoder architecture that replaced recurrence and convolutions entirely with attention. Click any block to see what it does and where it lives in the paper.</p>
+  <div class="badges">
+    <span class="badge">Vaswani et al., 2017</span>
+    <span class="badge">Encoder–Decoder</span>
+    <span class="badge">Multi-Head Attention</span>
+    <span class="badge">Positional Encoding</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The architecture, end to end</h2>
+  <p class="section-sub">Two stacks of <b>N</b> identical layers. The encoder maps the input sequence to a set of continuous representations; the decoder generates the output one token at a time, attending to both its own past and the encoder's output.</p>
+
+  <div class="arch">
+    <!-- ENCODER -->
+    <div class="stack">
+      <h3>Encoder</h3>
+      <div class="io">Inputs (source tokens)</div>
+      <div class="arrow">↓</div>
+      <div class="block c-embed" data-key="embed"><span class="dot" style="background:var(--embed)"></span><span class="label">Input Embedding</span><span class="sec">§3.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-pos" data-key="pos"><span class="dot" style="background:var(--pos)"></span><span class="label">+ Positional Encoding</span><span class="sec">§3.5</span></div>
+      <div class="arrow">↓</div>
+      <div class="nx">
+        <div class="block c-attn" data-key="mha"><span class="dot" style="background:var(--attn)"></span><span class="label">Multi-Head Self-Attention</span><span class="sec">§3.2.2</span></div>
+        <div class="block c-norm" data-key="addnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Add &amp; Norm</span><span class="sec">§3.1</span></div>
+        <div class="block c-ffn" data-key="ffn"><span class="dot" style="background:var(--ffn)"></span><span class="label">Feed Forward</span><span class="sec">§3.3</span></div>
+        <div class="block c-norm" data-key="addnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Add &amp; Norm</span><span class="sec">§3.1</span></div>
+      </div>
+      <div class="cross-link">→ encoder output (memory) feeds every decoder layer</div>
+    </div>
+
+    <!-- DECODER -->
+    <div class="stack">
+      <h3>Decoder</h3>
+      <div class="io">Outputs (shifted right)</div>
+      <div class="arrow">↓</div>
+      <div class="block c-embed" data-key="embed"><span class="dot" style="background:var(--embed)"></span><span class="label">Output Embedding</span><span class="sec">§3.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-pos" data-key="pos"><span class="dot" style="background:var(--pos)"></span><span class="label">+ Positional Encoding</span><span class="sec">§3.5</span></div>
+      <div class="arrow">↓</div>
+      <div class="nx">
+        <div class="block c-attn" data-key="masked"><span class="dot" style="background:var(--attn)"></span><span class="label">Masked Multi-Head Self-Attention</span><span class="sec">§3.2.3</span></div>
+        <div class="block c-norm" data-key="addnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Add &amp; Norm</span><span class="sec">§3.1</span></div>
+        <div class="block c-cross" data-key="cross"><span class="dot" style="background:var(--cross)"></span><span class="label">Cross-Attention (enc–dec)</span><span class="sec">§3.2.3</span></div>
+        <div class="block c-norm" data-key="addnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Add &amp; Norm</span><span class="sec">§3.1</span></div>
+        <div class="block c-ffn" data-key="ffn"><span class="dot" style="background:var(--ffn)"></span><span class="label">Feed Forward</span><span class="sec">§3.3</span></div>
+        <div class="block c-norm" data-key="addnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Add &amp; Norm</span><span class="sec">§3.1</span></div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="block c-gen" data-key="linear"><span class="dot" style="background:var(--gen)"></span><span class="label">Linear</span><span class="sec">§3.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-gen" data-key="softmax"><span class="dot" style="background:var(--gen)"></span><span class="label">Softmax</span><span class="sec">§3.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="io">Output probabilities</div>
+    </div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div style="height:18px"></div>
+  <div class="detail" id="detail">
+    <h3 id="d-title">Click a block above</h3>
+    <div class="tag" id="d-tag">Every colored block is interactive.</div>
+    <div class="formula" id="d-formula">Select any component of the encoder or decoder to reveal its role, its equations, and the exact tensor shapes it produces in the accompanying PyTorch implementation.</div>
+    <ul id="d-points"></ul>
+    <p class="hint" id="d-file"></p>
+  </div>
+
+  <h2 class="section-title">How attention is computed</h2>
+  <p class="section-sub">The single mechanism the whole paper rests on — no recurrence, no convolution.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Scaled Dot-Product Attention <span class="sec" style="color:var(--muted);font-size:12px">§3.2.1</span></h4>
+      <p class="small">Compare every query with every key, scale, softmax, then take a weighted sum of the values.</p>
+      <div class="formula">Attention(Q, K, V) = softmax( Q·Kᵀ / √d_k ) · V
+
+Q : (·, seq_q, d_k)     queries
+K : (·, seq_k, d_k)     keys
+V : (·, seq_k, d_v)     values
+mask → set disallowed scores to −∞ before softmax</div>
+      <ul>
+        <li>The <code class="k">√d_k</code> scaling keeps dot products from growing large and pushing softmax into tiny-gradient regions.</li>
+        <li>The <b>mask</b> is how the decoder stays causal and how padding is ignored.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Multi-Head Attention <span class="sec" style="color:var(--muted);font-size:12px">§3.2.2</span></h4>
+      <p class="small">Run attention <b>h</b> times in parallel on learned projections, then concatenate.</p>
+      <div class="formula">head_i = Attention(Q·Wᵢ^Q, K·Wᵢ^K, V·Wᵢ^V)
+MultiHead(Q,K,V) = Concat(head_1..head_h) · W^O
+
+d_k = d_v = d_model / h    (base model: 512 / 8 = 64)</div>
+      <ul>
+        <li>Each head can specialize — e.g. one tracks position, another tracks syntax.</li>
+        <li>Total cost is similar to single-head attention at full dimension.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Attention in action (from a trained model)</h2>
+  <p class="section-sub">These heatmaps come from the model in this folder after training on the toy <b>copy</b> task. Brighter = higher attention weight. Hover any cell for its value.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Decoder → Encoder cross-attention</h4>
+      <p class="small">Each output token (row) looks back at the source tokens (columns). The bright diagonal shows it has learned a clean one-to-one alignment.</p>
+      <div id="heat-cross"></div>
+      <div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+      <div class="decode-line" id="decode-line"></div>
+    </div>
+    <div class="card">
+      <h4>Encoder self-attention (layer 0)</h4>
+      <p class="small">Each source token (row) attends over all source tokens (columns), mixing context before the decoder ever sees it.</p>
+      <div id="heat-self"></div>
+      <div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+      <p class="sample-note" id="data-source-note"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Positional encoding</h2>
+  <p class="section-sub">Attention alone is order-agnostic, so the paper injects position with fixed sine/cosine waves of geometrically increasing wavelength (§3.5). Each curve below is one embedding dimension across positions.</p>
+  <div class="card">
+    <canvas id="pe-canvas" width="1100" height="220"></canvas>
+    <p class="sample-note">PE(pos, 2i) = sin(pos / 10000^(2i/d_model)) &nbsp;&nbsp; PE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))</p>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Attention Is All You Need”</b> (Vaswani et al., 2017).
+    Diagram and data generated from the reference implementation in <code class="k">transformer/</code>.
+    Run <code class="k">python demo/inspect_structure.py</code> to regenerate live traces.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in sample from a model trained on the copy task (data/trained_attention_sample.json).
+// If this page is served over http(s), it will try to load fresh data instead.
+const BAKED = {
+  "source": [5, 8, 3, 9, 7, 4],
+  "decoded": [5, 8, 3, 9, 7, 4],
+  "src_labels": ["5","8","3","9","7","4"],
+  "tgt_labels": ["<b>","5","8","3","9","7","4"],
+  "cross_attention": [
+    [0.9787,0.0212,0.0,0.0,0.0,0.0],
+    [0.1675,0.8061,0.0264,0.0001,0.0,0.0],
+    [0.0045,0.0463,0.938,0.0111,0.0001,0.0],
+    [0.0001,0.0022,0.1016,0.8527,0.0432,0.0003],
+    [0.0,0.0,0.0032,0.0766,0.8853,0.0349],
+    [0.0,0.0,0.0,0.0002,0.0392,0.9607],
+    [0.0377,0.0001,0.0,0.0,0.003,0.9592]
+  ],
+  "encoder_self_attention": [
+    [0.4871,0.1392,0.093,0.1496,0.0731,0.0581],
+    [0.1445,0.4639,0.0961,0.1309,0.0836,0.0811],
+    [0.1403,0.1183,0.4384,0.1239,0.0751,0.104],
+    [0.1364,0.1387,0.1067,0.3876,0.1242,0.1064],
+    [0.1464,0.0543,0.157,0.1627,0.351,0.1286],
+    [0.1167,0.0606,0.2172,0.0883,0.0933,0.424]
+  ]
+};
+
+const DETAILS = {
+  embed: {
+    title: "Input / Output Embedding", tag: "Paper §3.4 — Embeddings and Softmax",
+    formula: "x = Embedding(token) · √d_model\n\nvocab → d_model dimensional vectors\nshape: (batch, seq_len) → (batch, seq_len, d_model)",
+    points: [
+      "A learned lookup table turns each token id into a dense vector.",
+      "Multiplied by √d_model so its scale matches the positional encoding.",
+      "Input and output embeddings (and the pre-softmax linear) share weights in the paper."
+    ],
+    file: "Implemented in transformer/model.py → class Embeddings"
+  },
+  pos: {
+    title: "Positional Encoding", tag: "Paper §3.5",
+    formula: "PE(pos, 2i)   = sin(pos / 10000^(2i/d_model))\nPE(pos, 2i+1) = cos(pos / 10000^(2i/d_model))\n\nadded elementwise to the embeddings (no learned parameters)",
+    points: [
+      "Attention has no inherent notion of order — this restores it.",
+      "Fixed sinusoids let the model extrapolate to longer sequences than seen in training.",
+      "Relative positions are expressible as linear functions of these encodings."
+    ],
+    file: "Implemented in transformer/positional.py → class PositionalEncoding"
+  },
+  mha: {
+    title: "Multi-Head Self-Attention", tag: "Paper §3.2.2 (encoder)",
+    formula: "Attention(Q,K,V) = softmax(Q·Kᵀ / √d_k) · V\nMultiHead = Concat(head_1..head_h) · W^O\n\nQ = K = V = the layer input  (self-attention)",
+    points: [
+      "Every position attends to every other position in the source — full context, in one step.",
+      "h parallel heads each learn a different relationship.",
+      "No mask here: the encoder may look both left and right."
+    ],
+    file: "Implemented in transformer/attention.py → class MultiHeadAttention"
+  },
+  masked: {
+    title: "Masked Multi-Head Self-Attention", tag: "Paper §3.2.3 (decoder)",
+    formula: "same as self-attention, but with a causal mask:\nscores[i, j > i] = −∞   before softmax\n\n(lower-triangular allowed region)",
+    points: [
+      "Prevents position i from attending to future positions during training.",
+      "Guarantees the prediction for token i depends only on tokens < i.",
+      "This is what makes teacher-forced parallel training equivalent to left-to-right generation."
+    ],
+    file: "Mask built in transformer/model.py → subsequent_mask()"
+  },
+  cross: {
+    title: "Encoder–Decoder Cross-Attention", tag: "Paper §3.2.3",
+    formula: "Q = decoder state\nK = V = encoder output (memory)\n\nAttention(Q, K, V) = softmax(Q·Kᵀ / √d_k) · V",
+    points: [
+      "Queries come from the decoder; keys and values come from the encoder.",
+      "This is where the output sequence actually consults the input sequence.",
+      "The heatmap below shows the alignment this layer learns."
+    ],
+    file: "Implemented in transformer/layers.py → class DecoderLayer"
+  },
+  ffn: {
+    title: "Position-wise Feed-Forward Network", tag: "Paper §3.3",
+    formula: "FFN(x) = max(0, x·W1 + b1)·W2 + b2\n\nd_model → d_ff → d_model   (base: 512 → 2048 → 512)\napplied identically & independently at each position",
+    points: [
+      "Two linear layers with a ReLU in between — a per-token MLP.",
+      "Gives the model non-linear capacity between attention mixing steps.",
+      "Same weights across positions, different weights across layers."
+    ],
+    file: "Implemented in transformer/feedforward.py → class PositionwiseFeedForward"
+  },
+  addnorm: {
+    title: "Residual Connection + Layer Norm", tag: "Paper §3.1",
+    formula: "output = LayerNorm( x + Sublayer(x) )",
+    points: [
+      "Wraps every attention and feed-forward sub-layer.",
+      "The residual path keeps gradients flowing through deep stacks.",
+      "LayerNorm stabilizes activations so training converges."
+    ],
+    file: "Implemented in transformer/layers.py (norm1/norm2/norm3)"
+  },
+  linear: {
+    title: "Final Linear Projection", tag: "Paper §3.4",
+    formula: "logits = decoder_output · W + b\nd_model → vocab_size",
+    points: [
+      "Maps each decoder position back to a score over the whole vocabulary.",
+      "Weights are tied with the embedding matrix in the paper."
+    ],
+    file: "Implemented in transformer/model.py → self.generator"
+  },
+  softmax: {
+    title: "Softmax", tag: "Paper §3.4",
+    formula: "p(next token) = softmax(logits)",
+    points: [
+      "Turns vocabulary scores into a probability distribution.",
+      "Greedy or beam search picks the next token from this distribution."
+    ],
+    file: "Applied on top of self.generator output"
+  }
+};
+
+// ---- Detail panel wiring
+const blocks = document.querySelectorAll('.block');
+const dTitle = document.getElementById('d-title');
+const dTag = document.getElementById('d-tag');
+const dFormula = document.getElementById('d-formula');
+const dPoints = document.getElementById('d-points');
+const dFile = document.getElementById('d-file');
+function show(key, el) {
+  const d = DETAILS[key];
+  if (!d) return;
+  blocks.forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  dTitle.textContent = d.title;
+  dTag.textContent = d.tag;
+  dFormula.textContent = d.formula;
+  dPoints.innerHTML = d.points.map(p => `<li>${p}</li>`).join('');
+  dFile.textContent = d.file;
+}
+blocks.forEach(b => b.addEventListener('click', () => show(b.dataset.key, b)));
+
+// ---- Heatmap rendering
+function heatColor(t) { // t in [0,1] -> vivid gradient
+  const stops = [[11,16,32],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];
+  const x = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.floor(x), f = x - i;
+  const a = stops[i], b = stops[Math.min(i+1, stops.length-1)];
+  const c = a.map((v,k) => Math.round(v + (b[k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderHeat(containerId, matrix, rowLabels, colLabels) {
+  const el = document.getElementById(containerId);
+  const cols = colLabels.length;
+  const wrap = document.createElement('div');
+  wrap.className = 'heat-wrap';
+  wrap.style.gridTemplateColumns = `28px 1fr`;
+
+  const ylab = document.createElement('div');
+  ylab.className = 'ylabels';
+  ylab.style.gridTemplateRows = `repeat(${matrix.length}, 1fr)`;
+  rowLabels.forEach(l => { const d=document.createElement('div'); d.textContent=l; ylab.appendChild(d); });
+
+  const heat = document.createElement('div');
+  heat.className = 'heat';
+  heat.style.gridTemplateRows = `repeat(${matrix.length}, 1fr)`;
+  matrix.forEach((row, ri) => {
+    const r = document.createElement('div');
+    r.className = 'row';
+    r.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    row.slice(0, cols).forEach((v, ci) => {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      c.style.background = heatColor(v);
+      if (v >= 0.35) c.textContent = v.toFixed(2).replace(/^0/, '');
+      c.title = `${rowLabels[ri]} → ${colLabels[ci]} : ${v.toFixed(4)}`;
+      r.appendChild(c);
+    });
+    heat.appendChild(r);
+  });
+
+  const spacer = document.createElement('div');
+  const xlab = document.createElement('div');
+  xlab.className = 'xlabels';
+  xlab.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  colLabels.forEach(l => { const d=document.createElement('div'); d.textContent=l; xlab.appendChild(d); });
+
+  wrap.appendChild(ylab); wrap.appendChild(heat);
+  wrap.appendChild(spacer); wrap.appendChild(xlab);
+  el.innerHTML = '';
+  el.appendChild(wrap);
+}
+
+function draw(data, sourceLabel) {
+  const src = data.src_labels;
+  const tgt = data.tgt_labels;
+  renderHeat('heat-cross', data.cross_attention, tgt, src);
+  renderHeat('heat-self', data.encoder_self_attention, src, src);
+  document.getElementById('decode-line').innerHTML =
+    `source <code class="k">[${data.source.join(', ')}]</code> → model output <code class="k">[${data.decoded.join(', ')}]</code>`;
+  document.getElementById('data-source-note').textContent = sourceLabel;
+}
+
+// Try to load fresh data when served over http; otherwise use the baked sample.
+(async function initHeat() {
+  if (location.protocol.startsWith('http')) {
+    try {
+      const res = await fetch('../data/trained_attention_sample.json', {cache:'no-store'});
+      if (res.ok) { const j = await res.json(); draw(j, 'Live data: data/trained_attention_sample.json'); return; }
+    } catch (e) {}
+  }
+  draw(BAKED, 'Baked-in sample (open via a local server to load live data).');
+})();
+
+// ---- Positional encoding canvas
+(function drawPE() {
+  const canvas = document.getElementById('pe-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, dModel = 64, maxPos = 100;
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = '#1e2946'; ctx.lineWidth = 1;
+  for (let g=0; g<=10; g++){ const x=g/10*W; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(0,H/2); ctx.lineTo(W,H/2); ctx.strokeStyle='#33406a'; ctx.stroke();
+  const dims = [0, 4, 8, 16, 32];
+  const colors = ['#22d3ee','#a78bfa','#fb7185','#34d399','#f59e0b'];
+  dims.forEach((i, idx) => {
+    ctx.beginPath();
+    for (let pos=0; pos<maxPos; pos++) {
+      const denom = Math.pow(10000, (2*Math.floor(i/2))/dModel);
+      const val = (i % 2 === 0) ? Math.sin(pos/denom) : Math.cos(pos/denom);
+      const x = pos/(maxPos-1)*W;
+      const y = H/2 - val*(H/2 - 16);
+      pos === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle = colors[idx]; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = colors[idx]; ctx.font = '12px monospace';
+    ctx.fillText('dim '+i, 8, 16 + idx*15);
+  });
+})();
+
+// open with the encoder self-attention block highlighted by default
+show('mha', document.querySelector('.block[data-key="mha"]'));
+</script>
+</body>
+</html>
