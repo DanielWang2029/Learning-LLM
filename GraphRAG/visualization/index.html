@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GraphRAG — From Local to Global</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --c0:#22d3ee; --c1:#34d399; --c2:#f59e0b; --c3:#a78bfa; --bridge:#fb7185;
+    --good:#34d399; --bad:#fb7185; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #10233a 0%, transparent 60%),
+                     radial-gradient(1000px 500px at 100% 0%, #201a3a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(52,211,153,.12) 40%, rgba(167,139,250,.14));
+    border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#34d399 40%,#a78bfa);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1120px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:900px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* pipeline */
+  .pipe { display:flex; align-items:stretch; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .pstep { flex:1; min-width:150px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center; }
+  .pstep .n { font-size:11px; color:var(--muted); } .pstep .t { font-weight:700; margin-top:4px; }
+  .pstep .d { color:var(--muted); font-size:12px; margin-top:6px; }
+  .parrow { display:flex; align-items:center; color:var(--muted); font-size:22px; }
+
+  canvas#graph { width:100%; height:520px; display:block; background:#0a0f1e; border-radius:12px; border:1px solid var(--line); }
+  .glegend { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; color:var(--muted); font-size:12px; }
+  .sw { width:14px; height:14px; border-radius:50%; display:inline-block; vertical-align:-2px; margin-right:5px; }
+  .swl { width:20px; height:3px; display:inline-block; vertical-align:3px; margin-right:5px; }
+
+  .commgrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; } @media (max-width:800px){ .commgrid{grid-template-columns:1fr;} }
+  .comm { border-radius:12px; padding:14px; border:1px solid var(--line); background:var(--panel-2); }
+  .comm .th { font-weight:700; } .comm .ent { color:var(--muted); font-size:13px; margin-top:6px; }
+  .comm .sm { font-size:13px; margin-top:8px; }
+
+  .qa { background:#0d132a; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+  .chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; margin:2px; border:1px solid var(--line); }
+  .hit { font-family:ui-monospace,monospace; font-size:12.5px; margin:5px 0; color:#cfe8ff; }
+  .bars { display:flex; flex-direction:column; gap:14px; margin-top:6px; }
+  .barrow .barlbl { display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; }
+  .bartrack { background:#0d132a; border:1px solid var(--line); border-radius:10px; height:30px; overflow:hidden; }
+  .barfill { height:100%; display:flex; align-items:center; padding-left:12px; font-weight:700; color:#00121f; border-radius:9px 0 0 9px; white-space:nowrap; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>GraphRAG: From Local to Global</h1>
+  <p>Vanilla RAG retrieves a few similar chunks — perfect for <b>local</b> facts, useless for <b>global</b>
+  sensemaking. GraphRAG builds a knowledge graph, detects <b>communities</b>, summarizes each, and answers a global
+  query by <b>map-reduce</b> over those summaries. Every figure below is <b>real</b> output from this folder's demo.</p>
+  <div class="badges">
+    <span class="badge">Microsoft, 2024</span>
+    <span class="badge">arXiv 2404.16130</span>
+    <span class="badge">Entity Graph</span>
+    <span class="badge">Community Detection</span>
+    <span class="badge">Map-Reduce</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The pipeline</h2>
+  <div class="card">
+    <div class="pipe">
+      <div class="pstep"><div class="n">STEP 1</div><div class="t">Documents</div><div class="d" id="p-docs"></div></div>
+      <div class="parrow">→</div>
+      <div class="pstep"><div class="n">STEP 2</div><div class="t">Entity graph</div><div class="d" id="p-graph"></div></div>
+      <div class="parrow">→</div>
+      <div class="pstep"><div class="n">STEP 3</div><div class="t">Communities</div><div class="d" id="p-comm"></div></div>
+      <div class="parrow">→</div>
+      <div class="pstep"><div class="n">STEP 4</div><div class="t">Global answer</div><div class="d">map-reduce over community summaries</div></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The knowledge graph</h2>
+  <p class="section-sub">Entities are nodes, relations are edges. Colors are the communities found by greedy
+  modularity; <b style="color:var(--bridge)">pink</b> edges are the <i>bridges</i> that connect themes (which is why
+  connected-components is too coarse). Hover a node for its name.</p>
+  <div class="card">
+    <canvas id="graph" width="1080" height="520"></canvas>
+    <div class="glegend" id="glegend"></div>
+  </div>
+
+  <h2 class="section-title">Community summaries (the MAP step)</h2>
+  <div class="card"><div class="commgrid" id="comms"></div></div>
+
+  <h2 class="section-title">Local vs global questions</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--good)">Local question — vanilla RAG is fine</h4>
+      <div class="qa" id="local-q"></div>
+      <p class="small">Top-k retrieval nails specific facts: the answer is a single chunk with high overlap.</p>
+    </div>
+    <div class="card">
+      <h4>Global question — the hard case</h4>
+      <div class="qa" id="global-q"></div>
+      <p class="small">A fixed handful of chunks cannot represent the whole corpus.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Global answer: vanilla top-k RAG vs GraphRAG</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--bad)">Vanilla RAG — top-<span id="kk"></span> chunks</h4>
+      <div id="vanilla-hits"></div>
+      <p class="small" style="margin-top:10px">Themes covered: <span id="vanilla-themes"></span></p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--good)">GraphRAG — map-reduce answer</h4>
+      <div class="qa" id="graphrag-answer" style="font-size:14px"></div>
+      <p class="small">Themes covered: <span id="graphrag-themes"></span></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h4>Theme coverage on the global question</h4>
+    <div class="bars" id="cov-bars"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>GraphRAG</b> (Microsoft, 2024 · arXiv 2404.16130).
+    Data baked from <code class="k">data/graphrag_results.json</code> — regenerate with
+    <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"themes": ["Solar Energy", "Space Exploration", "Genomics", "Artificial Intelligence"], "graph": {"nodes": [{"id": "Aria", "community": 0, "degree": 1, "theme": "Solar Energy", "x": 2.223, "y": -0.024}, {"id": "Batteries", "community": 0, "degree": 1, "theme": "Solar Energy", "x": 2.315, "y": 0.019}, {"id": "BioLab", "community": 1, "degree": 2, "theme": "Genomics", "x": -0.096, "y": 2.265}, {"id": "Boston", "community": 1, "degree": 1, "theme": "Genomics", "x": 0.235, "y": 2.37}, {"id": "Bruno", "community": 0, "degree": 1, "theme": "Solar Energy", "x": 2.073, "y": -0.228}, {"id": "Cara", "community": 2, "degree": 1, "theme": "Space Exploration", "x": -2.312, "y": 0.007}, {"id": "Chips", "community": 3, "degree": 1, "theme": "Artificial Intelligence", "x": -0.419, "y": -2.239}, {"id": "Cortex", "community": 3, "degree": 6, "theme": "Artificial Intelligence", "x": -0.224, "y": -2.332}, {"id": "DNA", "community": 1, "degree": 1, "theme": "Genomics", "x": -0.098, "y": 2.143}, {"id": "Dan", "community": 2, "degree": 1, "theme": "Space Exploration", "x": -2.126, "y": 0.188}, {"id": "DataWorks", "community": 3, "degree": 2, "theme": "Artificial Intelligence", "x": -0.023, "y": -1.954}, {"id": "Ela", "community": 1, "degree": 1, "theme": "Genomics", "x": -0.12, "y": 2.263}, {"id": "Finn", "community": 1, "degree": 1, "theme": "Genomics", "x": 0.163, "y": 2.217}, {"id": "GeneTherapy", "community": 1, "degree": 1, "theme": "Genomics", "x": -0.134, "y": 2.034}, {"id": "Genoma", "community": 1, "degree": 6, "theme": "Genomics", "x": -0.082, "y": 2.24}, {"id": "Gia", "community": 3, "degree": 1, "theme": "Artificial Intelligence", "x": -0.182, "y": -2.238}, {"id": "GridCo", "community": 0, "degree": 2, "theme": "Solar Energy", "x": 2.171, "y": 0.097}, {"id": "Helios", "community": 0, "degree": 6, "theme": "Solar Energy", "x": 2.239, "y": 0.064}, {"id": "Hugo", "community": 3, "degree": 1, "theme": "Artificial Intelligence", "x": -0.118, "y": -2.223}, {"id": "NeuralNets", "community": 3, "degree": 1, "theme": "Artificial Intelligence", "x": 0.141, "y": -1.931}, {"id": "Nevada", "community": 0, "degree": 1, "theme": "Solar Energy", "x": 1.973, "y": 0.273}, {"id": "Nova", "community": 0, "degree": 2, "theme": "Solar Energy", "x": 2.442, "y": 0.141}, {"id": "Orion", "community": 2, "degree": 6, "theme": "Space Exploration", "x": -2.152, "y": -0.057}, {"id": "Quill", "community": 1, "degree": 2, "theme": "Genomics", "x": 0.262, "y": 2.553}, {"id": "Rockets", "community": 2, "degree": 1, "theme": "Space Exploration", "x": -1.876, "y": 0.237}, {"id": "Satellites", "community": 2, "degree": 1, "theme": "Space Exploration", "x": -2.136, "y": -0.217}, {"id": "Seattle", "community": 3, "degree": 1, "theme": "Artificial Intelligence", "x": -0.001, "y": -2.082}, {"id": "SolarPanels", "community": 0, "degree": 1, "theme": "Solar Energy", "x": 1.968, "y": 0.071}, {"id": "StarPort", "community": 2, "degree": 2, "theme": "Space Exploration", "x": -2.123, "y": 0.125}, {"id": "Texas", "community": 2, "degree": 1, "theme": "Space Exploration", "x": -2.413, "y": -0.119}], "edges": [{"source": "Aria", "target": "Helios", "rel": "founded", "bridge": false}, {"source": "Helios", "target": "SolarPanels", "rel": "develops", "bridge": false}, {"source": "Helios", "target": "Nevada", "rel": "located_in", "bridge": false}, {"source": "Bruno", "target": "Helios", "rel": "works_at", "bridge": false}, {"source": "Helios", "target": "GridCo", "rel": "partners_with", "bridge": false}, {"source": "GridCo", "target": "Batteries", "rel": "develops", "bridge": false}, {"source": "Cara", "target": "Orion", "rel": "founded", "bridge": false}, {"source": "Orion", "target": "Rockets", "rel": "develops", "bridge": false}, {"source": "Orion", "target": "Texas", "rel": "located_in", "bridge": false}, {"source": "Dan", "target": "Orion", "rel": "works_at", "bridge": false}, {"source": "Orion", "target": "StarPort", "rel": "partners_with", "bridge": false}, {"source": "StarPort", "target": "Satellites", "rel": "develops", "bridge": false}, {"source": "Ela", "target": "Genoma", "rel": "founded", "bridge": false}, {"source": "Genoma", "target": "GeneTherapy", "rel": "develops", "bridge": false}, {"source": "Genoma", "target": "Boston", "rel": "located_in", "bridge": false}, {"source": "Finn", "target": "Genoma", "rel": "works_at", "bridge": false}, {"source": "Genoma", "target": "BioLab", "rel": "partners_with", "bridge": false}, {"source": "BioLab", "target": "DNA", "rel": "researches", "bridge": false}, {"source": "Gia", "target": "Cortex", "rel": "founded", "bridge": false}, {"source": "Cortex", "target": "NeuralNets", "rel": "develops", "bridge": false}, {"source": "Cortex", "target": "Seattle", "rel": "located_in", "bridge": false}, {"source": "Hugo", "target": "Cortex", "rel": "works_at", "bridge": false}, {"source": "Cortex", "target": "DataWorks", "rel": "partners_with", "bridge": false}, {"source": "DataWorks", "target": "Chips", "rel": "develops", "bridge": false}, {"source": "Nova", "target": "Helios", "rel": "invests_in", "bridge": false}, {"source": "Nova", "target": "Orion", "rel": "invests_in", "bridge": true}, {"source": "Quill", "target": "Genoma", "rel": "invests_in", "bridge": false}, {"source": "Quill", "target": "Cortex", "rel": "invests_in", "bridge": true}], "n_nodes": 30, "n_edges": 28, "n_connected_components": 2, "n_communities": 4}, "communities": [{"id": 0, "dominant_theme": "Solar Energy", "size": 8, "key_entities": ["Helios", "GridCo", "Nova"], "relations": ["develops", "founded", "invests_in", "located_in", "partners_with", "works_at"], "summary": "This community centers on Solar Energy: key entities are Helios, GridCo, Nova; relationships include develops, founded, invests_in, located_in, partners_with, works_at.", "members": ["Aria", "Batteries", "Bruno", "GridCo", "Helios", "Nevada", "Nova", "SolarPanels"]}, {"id": 1, "dominant_theme": "Genomics", "size": 8, "key_entities": ["Genoma", "Quill", "BioLab"], "relations": ["develops", "founded", "invests_in", "located_in", "partners_with", "researches", "works_at"], "summary": "This community centers on Genomics: key entities are Genoma, Quill, BioLab; relationships include develops, founded, invests_in, located_in, partners_with, researches, works_at.", "members": ["BioLab", "Boston", "DNA", "Ela", "Finn", "GeneTherapy", "Genoma", "Quill"]}, {"id": 2, "dominant_theme": "Space Exploration", "size": 7, "key_entities": ["Orion", "StarPort", "Cara"], "relations": ["develops", "founded", "located_in", "partners_with", "works_at"], "summary": "This community centers on Space Exploration: key entities are Orion, StarPort, Cara; relationships include develops, founded, located_in, partners_with, works_at.", "members": ["Cara", "Dan", "Orion", "Rockets", "Satellites", "StarPort", "Texas"]}, {"id": 3, "dominant_theme": "Artificial Intelligence", "size": 7, "key_entities": ["Cortex", "DataWorks", "NeuralNets"], "relations": ["develops", "founded", "located_in", "partners_with", "works_at"], "summary": "This community centers on Artificial Intelligence: key entities are Cortex, DataWorks, NeuralNets; relationships include develops, founded, located_in, partners_with, works_at.", "members": ["Chips", "Cortex", "DataWorks", "Gia", "Hugo", "NeuralNets", "Seattle"]}], "queries": {"local": {"q": "Where is Helios located?", "answer": "Helios is located in Nevada.", "ok": true}, "global": {"q": "What are the main themes discussed across all of the documents?", "vanilla_hits": [{"text": "Aria founded Helios.", "theme": "Solar Energy", "sim": 0.0}, {"text": "Helios develops SolarPanels.", "theme": "Solar Energy", "sim": 0.0}, {"text": "Helios is located in Nevada.", "theme": "Solar Energy", "sim": 0.0}, {"text": "Bruno works at Helios.", "theme": "Solar Energy", "sim": 0.0}], "vanilla_themes": ["Solar Energy"], "vanilla_coverage": 0.25, "graphrag_answer": "Across the whole corpus there are 4 main themes: Solar Energy, Genomics, Space Exploration, Artificial Intelligence.", "graphrag_themes": ["Solar Energy", "Genomics", "Space Exploration", "Artificial Intelligence"], "graphrag_coverage": 1.0, "k": 4}}};
+const COMM_COLORS = ['#22d3ee','#34d399','#f59e0b','#a78bfa','#f472b6','#60a5fa'];
+
+function render(d){
+  const g=d.graph;
+  document.getElementById('p-docs').textContent = `${d.graph.nodes.length? '' : ''}${countChunks(d)} facts, ${d.themes.length} themes`;
+  document.getElementById('p-graph').textContent = `${g.n_nodes} entities, ${g.n_edges} relations`;
+  document.getElementById('p-comm').textContent =
+    `${g.n_communities} communities (vs ${g.n_connected_components} components)`;
+
+  drawGraph(g, d);
+
+  // legend
+  const gl=document.getElementById('glegend'); gl.innerHTML='';
+  d.communities.forEach((c,i)=>{ const s=document.createElement('span');
+    s.innerHTML=`<span class="sw" style="background:${COMM_COLORS[i%COMM_COLORS.length]}"></span>${c.dominant_theme}`;
+    gl.appendChild(s); });
+  const br=document.createElement('span'); br.innerHTML=`<span class="swl" style="background:var(--bridge)"></span>bridge edge`;
+  gl.appendChild(br);
+
+  // community cards
+  const cc=document.getElementById('comms'); cc.innerHTML='';
+  d.communities.forEach((c,i)=>{ const el=document.createElement('div'); el.className='comm';
+    el.style.borderLeft=`4px solid ${COMM_COLORS[i%COMM_COLORS.length]}`;
+    el.innerHTML=`<div class="th" style="color:${COMM_COLORS[i%COMM_COLORS.length]}">${c.dominant_theme}</div>
+      <div class="ent">key entities: ${c.key_entities.join(', ')} · ${c.size} nodes</div>
+      <div class="sm">${c.summary}</div>`;
+    cc.appendChild(el); });
+
+  // local
+  const lq=d.queries.local;
+  document.getElementById('local-q').innerHTML =
+    `<div><b>Q:</b> ${lq.q}</div><div class="hit" style="margin-top:8px">→ "${lq.answer}" ${lq.ok?'✅':'❌'}</div>`;
+
+  // global question box
+  const gq=d.queries.global;
+  document.getElementById('global-q').innerHTML = `<div><b>Q:</b> ${gq.q}</div>`;
+  document.getElementById('kk').textContent = gq.k;
+
+  const vh=document.getElementById('vanilla-hits'); vh.innerHTML='';
+  gq.vanilla_hits.forEach(h=>{ const div=document.createElement('div'); div.className='hit';
+    div.textContent=`• "${h.text}"  [${h.theme}]`; vh.appendChild(div); });
+  document.getElementById('vanilla-themes').innerHTML =
+    gq.vanilla_themes.map(t=>`<span class="chip" style="border-color:var(--bad);color:#ffd7de">${t}</span>`).join('') +
+    ` <b>(${(gq.vanilla_coverage*100).toFixed(0)}%)</b>`;
+
+  document.getElementById('graphrag-answer').textContent = gq.graphrag_answer;
+  document.getElementById('graphrag-themes').innerHTML =
+    gq.graphrag_themes.map(t=>`<span class="chip" style="border-color:var(--good);color:#c9ffe9">${t}</span>`).join('') +
+    ` <b>(${(gq.graphrag_coverage*100).toFixed(0)}%)</b>`;
+
+  // coverage bars
+  const cb=document.getElementById('cov-bars');
+  function bar(label,val,color){ const pct=val*100;
+    return `<div class="barrow"><div class="barlbl"><span>${label}</span><span>${pct.toFixed(0)}%</span></div>
+      <div class="bartrack"><div class="barfill" style="width:${pct}%;background:${color}">${pct.toFixed(0)}% of themes</div></div></div>`; }
+  cb.innerHTML = bar('Vanilla top-k RAG', gq.vanilla_coverage,'var(--bad)') +
+                 bar('GraphRAG (map-reduce)', gq.graphrag_coverage,'var(--good)');
+}
+
+function countChunks(d){
+  // number of facts = number of edges (one per fact)
+  return d.graph.n_edges;
+}
+
+function drawGraph(g, d){
+  const cv=document.getElementById('graph'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height; ctx.clearRect(0,0,W,H);
+  const xs=g.nodes.map(n=>n.x), ys=g.nodes.map(n=>n.y);
+  const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+  const pad=48;
+  const X=x=>pad+(x-minx)/(maxx-minx)*(W-2*pad);
+  const Y=y=>pad+(y-miny)/(maxy-miny)*(H-2*pad);
+  const pos={}; g.nodes.forEach(n=>pos[n.id]=[X(n.x),Y(n.y)]);
+
+  // edges
+  g.edges.forEach(e=>{ const a=pos[e.source],b=pos[e.target]; if(!a||!b) return;
+    ctx.strokeStyle = e.bridge ? '#fb7185' : '#2f3a5e';
+    ctx.lineWidth = e.bridge ? 2.5 : 1.2;
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); });
+
+  // nodes
+  g.nodes.forEach(n=>{ const [x,y]=pos[n.id]; const r=6+n.degree*1.6;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle=COMM_COLORS[n.community%COMM_COLORS.length]; ctx.fill();
+    ctx.strokeStyle='#0a0f1e'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#e8ecf7'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(n.id, x, y-r-3); });
+
+  // store for hover
+  cv._pos=pos; cv._nodes=g.nodes;
+  cv.onmousemove=(ev)=>{ const rect=cv.getBoundingClientRect();
+    const mx=(ev.clientX-rect.left)*W/rect.width, my=(ev.clientY-rect.top)*H/rect.height;
+    let hit=null; g.nodes.forEach(n=>{ const [x,y]=pos[n.id]; const r=6+n.degree*1.6;
+      if((mx-x)**2+(my-y)**2 < (r+4)**2) hit=n; });
+    cv.title = hit ? `${hit.id} — ${hit.theme} (degree ${hit.degree})` : ''; };
+}
+
+(async function init(){
+  let d=BAKED;
+  if(location.protocol.startsWith('http')){ try{ const res=await fetch('../data/graphrag_results.json',{cache:'no-store'});
+    if(res.ok) d=await res.json(); }catch(e){} }
+  render(d);
+})();
+</script>
+</body>
+</html>
