@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LIMO — Less Is More for Reasoning</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340; --ink: #e8ecf7; --muted: #93a0c0;
+    --line: #2a3352; --hi: #34d399; --lo: #fb7185; --accent: #a78bfa; --blue: #22d3ee;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #123a2a 0%, transparent 60%), var(--bg);
+    color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); }
+  header.hero { padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(52,211,153,.14), rgba(167,139,250,.14) 50%, rgba(251,113,133,.14));
+    border-bottom: 1px solid var(--line); }
+  header.hero h1 { margin: 0; font-size: 34px; letter-spacing:.5px;
+    background: linear-gradient(90deg, #34d399, #a78bfa 55%, #fb7185); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 800px; }
+  .badges { margin-top: 14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 820px; }
+  .card { background: var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow: var(--shadow); }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:22px; }
+  @media (max-width:860px){ .grid2 { grid-template-columns: 1fr; } }
+  .card h4 { margin:0 0 6px; }
+  .card p.small { color: var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family: ui-monospace, monospace; }
+
+  /* thesis bars */
+  .thesis { display:grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items:end; }
+  @media (max-width:720px){ .thesis { grid-template-columns:1fr; } }
+  .barwrap { text-align:center; }
+  .bars { display:flex; align-items:flex-end; justify-content:center; gap: 34px; height: 240px; padding: 0 10px; }
+  .bar { width: 92px; border-radius: 12px 12px 0 0; position: relative; transition: height 1s cubic-bezier(.2,.8,.2,1);
+    display:flex; align-items:flex-start; justify-content:center; }
+  .bar .val { position:absolute; top:-26px; font-weight:800; font-size:18px; }
+  .bar.hi { background: linear-gradient(180deg, var(--hi), #1e7d5b); }
+  .bar.lo { background: linear-gradient(180deg, var(--lo), #8f3345); }
+  .bar-lab { margin-top: 10px; font-size: 13px; }
+  .bar-lab .n { color: var(--muted); font-size:12px; }
+  .axis { border-top:1px solid var(--line); margin-top: -1px; }
+
+  /* trace comparison */
+  .trace { font-family: ui-monospace, monospace; font-size: 15px; letter-spacing:.5px; word-break: break-all; line-height:1.9; }
+  .trace .q { color: var(--blue); }
+  .trace .step { color: var(--hi); }
+  .trace .ans { background: rgba(167,139,250,.22); color:#e6dcff; padding: 1px 6px; border-radius:6px; }
+  .trace .none { color: var(--muted); font-style: italic; }
+  .tag { display:inline-block; font-size:11px; padding:2px 9px; border-radius:999px; margin-bottom:8px; }
+  .tag.hi { background: rgba(52,211,153,.16); color: var(--hi); }
+  .tag.lo { background: rgba(251,113,133,.16); color: var(--lo); }
+
+  .gens { font-family: ui-monospace, monospace; font-size:13.5px; }
+  .gen { display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:9px; margin:5px 0; background: rgba(255,255,255,.02); border:1px solid var(--line); }
+  .gen .mark { width:20px; text-align:center; font-weight:800; }
+  .ok { color: var(--hi); } .wrong { color: var(--lo); }
+
+  .formula { margin:12px 0 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family: ui-monospace, monospace; font-size:13px; color:#cfe8ff; white-space:pre-wrap; }
+  .footer { color: var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .kpi { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:8px; color:var(--muted); font-size:13px; }
+  .kpi b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>LIMO — Less Is More for Reasoning</h1>
+  <p>A handful of <b>high-quality</b> step-by-step reasoning demonstrations can teach a model to reason better than a <b>much larger</b> pile of low-quality ones. Below, the same tiny model is fine-tuned two ways at an <b>equal training budget</b> — the numbers are real, captured from this folder's demo.</p>
+  <div class="badges">
+    <span class="badge">Ye et al., 2025</span>
+    <span class="badge">arXiv:2502.03387</span>
+    <span class="badge">Data quality &gt; quantity</span>
+    <span class="badge">SFT for reasoning</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The result: fewer, better traces win</h2>
+  <p class="section-sub" id="thesis-sub"></p>
+  <div class="card">
+    <div class="thesis">
+      <div class="barwrap">
+        <div class="bars" id="acc-bars"></div>
+        <div class="axis"></div>
+        <div class="bar-lab" style="margin-top:12px">Held-out reasoning accuracy</div>
+      </div>
+      <div class="barwrap">
+        <div class="bars" id="size-bars"></div>
+        <div class="axis"></div>
+        <div class="bar-lab" style="margin-top:12px">Number of training demonstrations (log scale)</div>
+      </div>
+    </div>
+    <div class="kpi" id="kpi"></div>
+  </div>
+
+  <h2 class="section-title">Same task, two demonstration qualities</h2>
+  <p class="section-sub">The task is chained single-digit addition modulo 10. Both training sets give the <b>correct answer</b>; they differ only in whether the <b>reasoning</b> is shown. The step-by-step version teaches a reusable single-step skill — which is why so few examples suffice.</p>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag hi">HIGH QUALITY · curated · few</span>
+      <p class="small">Every intermediate running-sum step is written out.</p>
+      <div class="trace" id="trace-hi"></div>
+      <div class="formula">reusable skill:  (a + b) mod 10   →  learned once, applied at every step</div>
+    </div>
+    <div class="card">
+      <span class="tag lo">LOW QUALITY · bulk · many</span>
+      <p class="small">Straight to the answer — no reasoning demonstrated.</p>
+      <div class="trace" id="trace-lo"></div>
+      <div class="formula">must learn:  f(a,b,c,d) = (a+b+c+d) mod 10   →  hard to generalize from answers alone</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">What each fine-tuned model actually generates</h2>
+  <p class="section-sub">On <b>unseen</b> held-out problems. The curated model shows its work and gets the answer right; the bulk model guesses.</p>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag hi">curated model</span>
+      <div class="gens" id="gens-hi"></div>
+    </div>
+    <div class="card">
+      <span class="tag lo">bulk model</span>
+      <div class="gens" id="gens-lo"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“LIMO: Less Is More for Reasoning”</b>, Ye et al., 2025.
+    All numbers and traces are produced by <code class="k">python demo/run_demo.py</code> in this folder.
+    Serve the folder to load live data from <code class="k">data/limo_run.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"meta":{"num_terms":4,"curated_n":200,"bulk_n":2000,"steps":600,"batch":64,"test_n":300},"metrics":{"curated_acc":0.9933333333333333,"bulk_acc":0.10333333333333333,"curated_tokens":1075200,"bulk_tokens":422400},"examples":{"curated_trace":"3+5+2+4=3+5=8;8+2=0;0+4=4#4.","bulk_trace":"3+5+2+4=#4.","curated_gens":[{"prompt":"7+7+4+3=","answer":1,"generated":"7+7+4+3=7+7=4;4+4=8;8+3=1#1.","pred":1,"ok":true},{"prompt":"4+4+3+2=","answer":3,"generated":"4+4+3+2=4+4=8;8+3=1;1+2=3#3.","pred":3,"ok":true},{"prompt":"5+7+9+9=","answer":0,"generated":"5+7+9+9=5+7=2;2+9=1;1+9=0#0.","pred":0,"ok":true},{"prompt":"4+6+7+4=","answer":1,"generated":"4+6+7+4=4+6=0;0+7=7;7+4=1#1.","pred":1,"ok":true},{"prompt":"3+8+3+6=","answer":0,"generated":"3+8+3+6=3+8=1;1+3=4;4+6=0#0.","pred":0,"ok":true},{"prompt":"2+9+2+8=","answer":1,"generated":"2+9+2+8=2+9=1;1+2=3;3+8=1#1.","pred":1,"ok":true}],"bulk_gens":[{"prompt":"7+7+4+3=","answer":1,"generated":"7+7+4+3=#6.","pred":6,"ok":false},{"prompt":"4+4+3+2=","answer":3,"generated":"4+4+3+2=#6.","pred":6,"ok":false},{"prompt":"5+7+9+9=","answer":0,"generated":"5+7+9+9=#6.","pred":6,"ok":false},{"prompt":"4+6+7+4=","answer":1,"generated":"4+6+7+4=#6.","pred":6,"ok":false},{"prompt":"3+8+3+6=","answer":0,"generated":"3+8+3+6=#6.","pred":6,"ok":false},{"prompt":"2+9+2+8=","answer":1,"generated":"2+9+2+8=#6.","pred":6,"ok":false}]}};
+let DATA = BAKED;
+
+function renderThesis() {
+  const m = DATA.metrics, meta = DATA.meta;
+  const accHi = m.curated_acc*100, accLo = m.bulk_acc*100;
+  document.getElementById("thesis-sub").innerHTML =
+    `The curated set is <b>${(meta.bulk_n/meta.curated_n).toFixed(0)}× smaller</b> and sees <b>fewer training tokens</b>, yet reaches <b>${accHi.toFixed(0)}%</b> held-out accuracy versus <b>${accLo.toFixed(0)}%</b> for the bulk low-quality set. Both trained for ${meta.steps} identical steps.`;
+
+  const accBars = document.getElementById("acc-bars");
+  accBars.innerHTML = "";
+  [["hi", accHi, "curated", meta.curated_n], ["lo", accLo, "bulk", meta.bulk_n]].forEach(([cls,val,name,n])=>{
+    const col = document.createElement("div"); col.style.textAlign="center";
+    const b = document.createElement("div"); b.className="bar "+cls; b.style.height="0px";
+    b.innerHTML = `<div class="val ${cls==='hi'?'ok':'wrong'}">${val.toFixed(0)}%</div>`;
+    col.appendChild(b);
+    const lab=document.createElement("div"); lab.className="bar-lab"; lab.innerHTML=`${name}<div class="n">${n} examples</div>`;
+    col.appendChild(lab); accBars.appendChild(col);
+    requestAnimationFrame(()=>{ setTimeout(()=>{ b.style.height=(val/100*200)+"px"; }, 60); });
+  });
+
+  const sizeBars = document.getElementById("size-bars");
+  sizeBars.innerHTML="";
+  const maxLog = Math.log10(Math.max(meta.curated_n, meta.bulk_n));
+  [["hi", meta.curated_n, "curated"], ["lo", meta.bulk_n, "bulk"]].forEach(([cls,n,name])=>{
+    const col=document.createElement("div"); col.style.textAlign="center";
+    const b=document.createElement("div"); b.className="bar "+cls; b.style.height="0px";
+    b.innerHTML=`<div class="val ${cls==='hi'?'ok':'wrong'}">${n}</div>`;
+    col.appendChild(b);
+    const lab=document.createElement("div"); lab.className="bar-lab"; lab.textContent=name; col.appendChild(lab);
+    sizeBars.appendChild(col);
+    const h = Math.log10(n)/maxLog*200;
+    requestAnimationFrame(()=>{ setTimeout(()=>{ b.style.height=h+"px"; }, 60); });
+  });
+
+  document.getElementById("kpi").innerHTML =
+    `<span>curated tokens seen: <b>${m.curated_tokens.toLocaleString()}</b></span>` +
+    `<span>bulk tokens seen: <b>${m.bulk_tokens.toLocaleString()}</b></span>` +
+    `<span>accuracy gap: <b>${(accHi-accLo).toFixed(0)} points</b></span>`;
+}
+
+function markup(trace) {
+  // trace like "3+5+2+4=3+5=8;8+2=0;0+4=4#4."
+  const eq = trace.indexOf("=");
+  const hash = trace.indexOf("#");
+  const q = trace.slice(0, eq);
+  const reasoning = trace.slice(eq+1, hash);
+  const ans = trace.slice(hash+1).replace(".", "");
+  const rHtml = reasoning.length ? `<span class="step">${reasoning}</span>` : `<span class="none">(no reasoning shown)</span>`;
+  return `<span class="q">${q}</span> = ${rHtml} → <span class="ans">${ans}</span>`;
+}
+function renderTraces() {
+  document.getElementById("trace-hi").innerHTML = markup(DATA.examples.curated_trace);
+  document.getElementById("trace-lo").innerHTML = markup(DATA.examples.bulk_trace);
+}
+function renderGens() {
+  function fill(el, gens) {
+    el.innerHTML="";
+    gens.forEach(g=>{
+      const d=document.createElement("div"); d.className="gen";
+      d.innerHTML = `<span class="mark ${g.ok?'ok':'wrong'}">${g.ok?'✓':'✗'}</span><span>${g.generated}</span>`;
+      el.appendChild(d);
+    });
+  }
+  fill(document.getElementById("gens-hi"), DATA.examples.curated_gens);
+  fill(document.getElementById("gens-lo"), DATA.examples.bulk_gens);
+}
+
+function initAll(){ renderThesis(); renderTraces(); renderGens(); }
+(async function init(){
+  if (location.protocol.startsWith("http")) {
+    try { const r = await fetch("../data/limo_run.json", {cache:"no-store"}); if (r.ok) DATA = await r.json(); } catch(e){}
+  }
+  initAll();
+})();
+</script>
+</body>
+</html>

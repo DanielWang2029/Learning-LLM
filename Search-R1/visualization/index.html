@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Search-R1 — RL for Interleaved Reasoning + Search</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --search:#22d3ee; --info:#a78bfa; --answer:#34d399; --reward:#f59e0b; --bad:#fb7185; --pos:#34d399; --neg:#fb7185;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #103040 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #201a40 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--search); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.16), rgba(167,139,250,.14) 50%, rgba(52,211,153,.16)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 50%,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:840px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1160px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  canvas { width:100%; height:300px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .legend-row { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; align-items:center; }
+  /* trace */
+  .trace { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+  .tstep { border:1px solid var(--line); border-radius:11px; padding:10px 14px; font-family:ui-monospace,monospace; font-size:13.5px; }
+  .tstep.search { background:linear-gradient(90deg,rgba(34,211,238,.12),transparent); border-color:var(--search); }
+  .tstep.info { background:linear-gradient(90deg,rgba(167,139,250,.10),transparent); border-color:var(--info); }
+  .tstep.answer { background:linear-gradient(90deg,rgba(52,211,153,.12),transparent); border-color:var(--answer); }
+  .tstep .tag { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:3px; }
+  .tstep.search .tag { color:var(--search); } .tstep.info .tag { color:var(--info); } .tstep.answer .tag { color:var(--answer); }
+  .distract { color:var(--bad); opacity:.7; }
+  .arrow { text-align:center; color:var(--line); font-size:16px; }
+  /* rollouts */
+  .rollout { display:flex; align-items:center; gap:10px; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:7px 12px; font-family:ui-monospace,monospace; font-size:12.5px; margin:5px 0; }
+  .rollout .rew { margin-left:auto; color:var(--reward); }
+  .rollout .adv { width:70px; text-align:right; font-weight:700; }
+  .adv.pos { color:var(--pos); } .adv.neg { color:var(--neg); }
+  /* compare */
+  .cmp { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0; text-align:center; margin-top:6px; }
+  .cmp .h { color:var(--muted); font-size:12px; padding:8px; }
+  .cmp .cell { padding:14px 8px; border-top:1px solid var(--line); font-size:22px; font-weight:800; }
+  .cmp .rowlab { text-align:left; font-weight:600; font-size:14px; padding:14px 8px; border-top:1px solid var(--line); }
+  .good { color:var(--answer); } .bad { color:var(--bad); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Search-R1 · RL + Search</h1>
+  <p>Train a policy with <b>reinforcement learning</b> to interleave reasoning with a real
+  <b style="color:var(--search)">search</b> tool: <code class="k">&lt;search&gt;</code> → <code class="k">&lt;information&gt;</code> → … → <code class="k">&lt;answer&gt;</code>.
+  The learned search <i>procedure</i> generalizes to entities it never trained on — memorization does not.</p>
+  <div class="badges">
+    <span class="badge">Jin et al., 2025</span>
+    <span class="badge">arXiv:2503.09516</span>
+    <span class="badge">RL (GRPO-style)</span>
+    <span class="badge">Multi-hop retrieval</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Interleaved reason → search → answer</h2>
+  <p class="section-sub">A real rollout of the trained policy on a <b>held-out</b> question. It follows the 2-hop chain and skips the distractor facts. <span id="ex-note"></span></p>
+  <div class="card">
+    <div style="font-family:ui-monospace,monospace;font-size:15px;margin-bottom:10px" id="question"></div>
+    <div class="trace" id="trace"></div>
+  </div>
+
+  <h2 class="section-title">The RL loop: group rollouts → group-relative advantage</h2>
+  <p class="section-sub">For one question the policy samples a group of rollouts. Each gets a reward (correct answer minus a small per-search cost). The advantage is reward minus the group mean — efficient correct rollouts are reinforced, wasteful or wrong ones suppressed. No value network.</p>
+  <div class="card">
+    <div id="rollouts"></div>
+    <div class="legend-row">
+      <span style="color:var(--reward)">reward = correct − 0.2·searches</span>
+      <span class="adv pos" style="width:auto">advantage&gt;0 ↑</span>
+      <span class="adv neg" style="width:auto">advantage&lt;0 ↓</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Search generalizes; memorization doesn't</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. <span id="cfg-note"></span></p>
+  <div class="grid2">
+    <div class="card">
+      <div class="cmp">
+        <div class="h"></div><div class="h">train persons</div><div class="h">held-out persons</div>
+        <div class="rowlab" style="color:var(--search)">WITH search (RL)</div>
+        <div class="cell good" id="s-train">—</div><div class="cell good" id="s-test">—</div>
+        <div class="rowlab" style="color:var(--bad)">NO search (memorize)</div>
+        <div class="cell" id="n-train">—</div><div class="cell bad" id="n-test">—</div>
+      </div>
+      <p class="small" style="margin-top:12px">The no-search classifier memorizes the training persons perfectly but is at chance on unseen ones — it has no way to know a new person's country without looking it up.</p>
+    </div>
+    <div class="card">
+      <h4>Learning curve</h4>
+      <p class="small">Accuracy jumps once the policy learns to search before answering; then it trims wasteful searches (5 → 2) as it learns to skip distractors.</p>
+      <canvas id="curve" width="1020" height="300"></canvas>
+      <div class="legend-row">
+        <span><span style="color:var(--answer)">■</span> train accuracy</span>
+        <span><span style="color:var(--reward)">■</span> avg searches / question</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Search-R1”</b> (Jin et al., 2025, arXiv:2503.09516).
+    The policy is small and the corpus toy, but the mechanism — RL-trained interleaved search with a group baseline — is the paper's.
+    Data from <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"n_persons":60,"n_train":40,"n_test":20,"n_countries":5,"group_size":6,"steps":150,"seconds":0.9},
+  "curve": [
+    {"step":0,"train_acc":0.0,"avg_searches":0.0},{"step":1,"train_acc":1.0,"avg_searches":5.0},
+    {"step":20,"train_acc":1.0,"avg_searches":5.0},{"step":45,"train_acc":1.0,"avg_searches":5.0},
+    {"step":60,"train_acc":1.0,"avg_searches":5.0},{"step":65,"train_acc":1.0,"avg_searches":4.0},
+    {"step":70,"train_acc":1.0,"avg_searches":3.0},{"step":75,"train_acc":1.0,"avg_searches":2.0},
+    {"step":95,"train_acc":1.0,"avg_searches":2.0},{"step":120,"train_acc":1.0,"avg_searches":2.0},
+    {"step":150,"train_acc":1.0,"avg_searches":2.0}
+  ],
+  "results": {"search":{"train_acc":1.0,"test_acc":1.0,"avg_searches":2.0},
+    "no_search":{"train_acc":1.0,"test_acc":0.1},"pre_rl_test_acc":0.0},
+  "example": {"person":"Person_40","true_country":"Country_4","correct":true,"n_searches":2,
+    "trace":[
+      {"kind":"search","entity":"Person_40","info":["Person_40 lives_in City_1","Person_40 born_in Year_1980","Person_40 likes Color_4"]},
+      {"kind":"search","entity":"City_1","info":["City_1 located_in Country_4"]},
+      {"kind":"answer","entity":"Country_4"}
+    ]}
+};
+let D = BAKED;
+
+function renderTrace() {
+  const ex = D.example;
+  document.getElementById('question').innerHTML =
+    `<span style="color:var(--muted)">Question:</span> What country does <b style="color:var(--search)">${ex.person}</b> live in?`;
+  const el = document.getElementById('trace'); el.innerHTML='';
+  ex.trace.forEach((ev, i) => {
+    if (i) { const a=document.createElement('div'); a.className='arrow'; a.textContent='↓'; el.appendChild(a); }
+    if (ev.kind === 'search') {
+      const s=document.createElement('div'); s.className='tstep search';
+      s.innerHTML = `<span class="tag">&lt;search&gt;</span>${ev.entity}`;
+      el.appendChild(s);
+      const a=document.createElement('div'); a.className='arrow'; a.textContent='↓'; el.appendChild(a);
+      const inf=document.createElement('div'); inf.className='tstep info';
+      inf.innerHTML = `<span class="tag">&lt;information&gt;</span>` +
+        ev.info.map(f => {
+          const distract = /born_in|likes/.test(f);
+          return `<div class="${distract?'distract':''}">${f}${distract?'  ← distractor (skipped)':''}</div>`;
+        }).join('');
+      el.appendChild(inf);
+    } else {
+      const s=document.createElement('div'); s.className='tstep answer';
+      s.innerHTML = `<span class="tag">&lt;answer&gt;</span>${ev.entity} ${D.example.correct?'<span style="color:var(--answer)">✓ correct</span>':'<span style="color:var(--bad)">✗</span>'}`;
+      el.appendChild(s);
+    }
+  });
+  document.getElementById('ex-note').textContent =
+    `${ex.n_searches} searches used.`;
+}
+
+function renderRollouts() {
+  // illustrative group consistent with a mid-training snapshot for one question
+  const rollouts = [
+    {desc:"search person → search city → answer ✓", r:0.6, ok:true},
+    {desc:"search person → search city → answer ✓", r:0.6, ok:true},
+    {desc:"search person → search year → search city → answer ✓", r:0.4, ok:true},
+    {desc:"search person → answer (no country) ✗", r:-0.2, ok:false},
+    {desc:"answer immediately ✗", r:0.0, ok:false},
+    {desc:"search person → search city → answer ✓", r:0.6, ok:true},
+  ];
+  const mean = rollouts.reduce((s,x)=>s+x.r,0)/rollouts.length;
+  const std = Math.sqrt(rollouts.reduce((s,x)=>s+(x.r-mean)**2,0)/rollouts.length)||1;
+  const el = document.getElementById('rollouts'); el.innerHTML='';
+  rollouts.forEach(x=>{
+    const adv=(x.r-mean)/std;
+    const row=document.createElement('div'); row.className='rollout';
+    row.innerHTML = `<span style="color:${x.ok?'var(--answer)':'var(--bad)'}">${x.desc}</span>`+
+      `<span class="rew">r=${x.r.toFixed(1)}</span>`+
+      `<span class="adv ${adv>=0?'pos':'neg'}">A=${adv>=0?'+':''}${adv.toFixed(2)}</span>`;
+    el.appendChild(row);
+  });
+}
+
+function renderCompare() {
+  const r=D.results;
+  document.getElementById('s-train').textContent=Math.round(r.search.train_acc*100)+'%';
+  document.getElementById('s-test').textContent=Math.round(r.search.test_acc*100)+'%';
+  document.getElementById('n-train').textContent=Math.round(r.no_search.train_acc*100)+'%';
+  document.getElementById('n-test').textContent=Math.round(r.no_search.test_acc*100)+'%';
+}
+
+function drawCurve() {
+  const cv=document.getElementById('curve'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44; ctx.clearRect(0,0,W,H);
+  const C=D.curve, maxStep=Math.max(...C.map(c=>c.step));
+  const maxS=Math.max(...C.map(c=>c.avg_searches),1);
+  const X=s=>pad+(s/maxStep)*(W-2*pad);
+  const Yp=p=>H-pad-p*(H-2*pad);
+  const Ys=s=>H-pad-(s/maxS)*(H-2*pad);
+  ctx.strokeStyle='#1e2946'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for(let g=0;g<=5;g++){const y=Yp(g/5);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();
+    ctx.fillStyle='#34d399';ctx.fillText((g*20)+'%',4,y+3);
+    ctx.fillStyle='#f59e0b';ctx.fillText((g/5*maxS).toFixed(1),W-pad+6,y+3);}
+  ctx.fillStyle='#6b7aa0';ctx.fillText('RL steps',W/2-20,H-8);
+  const plot=(key,color,yfn)=>{ctx.beginPath();
+    C.forEach((c,i)=>{const x=X(c.step),y=yfn(c[key]);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=2.8;ctx.stroke();
+    C.forEach(c=>{ctx.beginPath();ctx.arc(X(c.step),yfn(c[key]),2.8,0,7);ctx.fillStyle=color;ctx.fill();});};
+  plot('avg_searches','#f59e0b',Ys);
+  plot('train_acc','#34d399',Yp);
+}
+
+function init(){
+  renderTrace(); renderRollouts(); renderCompare(); drawCurve();
+  document.getElementById('cfg-note').textContent =
+    `${D.config.n_train} train / ${D.config.n_test} held-out persons · ${D.config.n_countries} countries · group size ${D.config.group_size} · ~${D.config.seconds}s on CPU.`;
+}
+
+(async function(){
+  if (location.protocol.startsWith('http')) {
+    try{ const r=await fetch('../data/search_r1_results.json',{cache:'no-store'});
+      if(r.ok){ D=await r.json(); } }catch(e){}
+  }
+  init();
+})();
+</script>
+</body>
+</html>

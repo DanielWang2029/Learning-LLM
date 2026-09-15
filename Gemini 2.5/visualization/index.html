@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gemini 2.5 — Thinking & Test-Time Compute Scaling</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --g1:#4f8cff; --g2:#22d3ee; --g3:#a78bfa; --acc:#22d3ee; --good:#34d399; --bad:#fb7185; --gold:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #16224a 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #182a4a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--acc); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(79,140,255,.16), rgba(34,211,238,.14) 50%, rgba(167,139,250,.16)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#4f8cff,#22d3ee 50%,#a78bfa); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:840px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1160px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; } @media(max-width:860px){ .grid3{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  canvas { width:100%; height:320px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .legend-row { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; align-items:center; }
+  .honest { border-left:3px solid var(--gold); background:rgba(245,158,11,.08); padding:10px 14px; border-radius:8px; color:#f2d79b; font-size:13.5px; }
+  .sliderbox { display:flex; align-items:center; gap:14px; margin:6px 0 12px; }
+  input[type=range] { flex:1; accent-color:var(--acc); }
+  .kpi .box { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:10px 16px; text-align:center; }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; }
+  .kpi .num { font-size:24px; font-weight:800; } .kpi .cap { font-size:12px; color:var(--muted); }
+  /* ballot */
+  .ballot { display:grid; grid-template-columns:24px 1fr 46px; gap:6px 10px; align-items:center; margin-top:8px; font-family:ui-monospace,monospace; font-size:13px; }
+  .bar { height:16px; border-radius:5px; background:linear-gradient(90deg,var(--g1),var(--g2)); }
+  .bar.win { background:linear-gradient(90deg,var(--good),#8ef0c0); }
+  .ballot .lab { text-align:right; color:var(--muted); }
+  .paths { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .pdot { width:12px; height:12px; border-radius:3px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Gemini 2.5 · Test-Time Scaling</h1>
+  <p>A <b style="color:var(--g2)">thinking</b> model gets more accurate the more it is allowed to
+  <b style="color:var(--g3)">think</b> at test time. Let it reason several times and answer with the
+  result it reaches most often — independent slips cancel, accuracy climbs, then saturates.</p>
+  <div class="badges">
+    <span class="badge">Google, 2025</span>
+    <span class="badge">arXiv:2507.06261</span>
+    <span class="badge">Thinking model</span>
+    <span class="badge">Test-time compute scaling</span>
+    <span class="badge">Closed model — mechanism reproduced</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="honest"><b>Honest reproduction.</b> Gemini 2.5 is closed. We reproduce its documented headline — accuracy scaling with test-time compute — using the standard mechanism (parallel sampled reasoning paths + majority vote / self-consistency) at small scale on a toy multi-step task.</div>
+
+  <h2 class="section-title">The test-time scaling curve</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. <span id="cfg-note"></span></p>
+  <div class="card">
+    <canvas id="curve" width="1080" height="320"></canvas>
+    <div class="legend-row">
+      <span><span style="color:var(--g2)">■</span> accuracy vs test-time compute</span>
+      <span><span style="color:var(--gold)">●</span> selected budget</span>
+      <span>x-axis is log₂(paths)</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Majority vote in action</h2>
+  <p class="section-sub">One real problem, decoded many times. Each path is one fallible attempt; the answer is the plurality winner. Slide the compute budget and watch the ballot fill in.</p>
+  <div class="grid2">
+    <div class="card">
+      <div style="font-family:ui-monospace,monospace;font-size:16px;margin-bottom:6px" id="ex-problem"></div>
+      <div class="sliderbox">
+        <span style="color:var(--acc);font-weight:700">paths</span>
+        <input type="range" id="paths" min="0" max="7" step="1" value="7" />
+        <span id="paths-val" style="font-family:ui-monospace,monospace;color:var(--acc);width:4ch;text-align:right">128</span>
+      </div>
+      <div class="kpi">
+        <div class="box"><div class="num" id="k-win" style="color:var(--good)">—</div><div class="cap">majority answer</div></div>
+        <div class="box"><div class="num" id="k-share" style="color:var(--g2)">—</div><div class="cap">winning share</div></div>
+      </div>
+      <div class="paths" id="paths-viz"></div>
+    </div>
+    <div class="card">
+      <h4>Ballot (votes per answer 0–9)</h4>
+      <p class="small">At the full budget of 128 paths, the correct answer wins by plurality even though many single paths slip.</p>
+      <div class="ballot" id="ballot"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Why it works &amp; the rest of Gemini 2.5</h2>
+  <div class="grid3">
+    <div class="card">
+      <h4>Independent slips cancel</h4>
+      <ul><li>Each path errs on a different step, so wrong answers scatter across the vocabulary.</li>
+          <li>The correct answer is the single most reinforced outcome → it wins the vote.</li>
+          <li>More paths ⇒ lower variance ⇒ higher, saturating accuracy.</li></ul>
+    </div>
+    <div class="card">
+      <h4>Long context</h4>
+      <p class="small">Gemini 2.5 documents context windows up to ~1M tokens — whole books, codebases, or hours of transcript in a single prompt. (Not reproduced here; CPU-scale.)</p>
+    </div>
+    <div class="card">
+      <h4>Native multimodality</h4>
+      <p class="small">The report describes a single model over text, images, audio, and video. (Not reproduced here; we isolate the test-time-scaling behaviour.)</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Gemini 2.5</b> (Google, 2025, arXiv:2507.06261).
+    The model here is a tiny MLP; the mechanism — accuracy scaling with test-time compute via self-consistency — is the paper's documented behaviour.
+    Data from <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"length": 6, "n_test": 150, "mod": 10, "temperature": 1.0, "noise": 3.5, "seconds": 16.6},
+  "scaling_curve": [
+    {"paths":1,"thinking_tokens":6,"accuracy":0.4533},
+    {"paths":2,"thinking_tokens":12,"accuracy":0.44},
+    {"paths":4,"thinking_tokens":24,"accuracy":0.6933},
+    {"paths":8,"thinking_tokens":48,"accuracy":0.7533},
+    {"paths":16,"thinking_tokens":96,"accuracy":0.96},
+    {"paths":32,"thinking_tokens":192,"accuracy":1.0},
+    {"paths":64,"thinking_tokens":384,"accuracy":1.0},
+    {"paths":128,"thinking_tokens":768,"accuracy":1.0}
+  ],
+  "single_path_accuracy": 0.4533, "max_budget_accuracy": 1.0,
+  "example": {"problem":"4 +1 +3 -3 *2 -3 *2 = ?","true":4,"single_answer":4,
+    "majority_answer":4,"votes":[23,0,10,0,66,0,9,0,20,0],"paths":128}
+};
+let D = BAKED;
+
+function drawCurve(activeIdx) {
+  const cv = document.getElementById('curve'), ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, pad=48;
+  ctx.clearRect(0,0,W,H);
+  const C = D.scaling_curve;
+  const xs = C.map(c=>Math.log2(c.paths));
+  const maxX = Math.max(...xs);
+  const X = i => pad + (xs[i]/maxX)*(W-2*pad);
+  const Y = p => H-pad - p*(H-2*pad);
+  ctx.strokeStyle='#1e2946'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for (let g=0; g<=5; g++){ const y=Y(g/5); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke();
+    ctx.fillStyle='#22d3ee'; ctx.fillText((g*20)+'%', 6, y+3); }
+  ctx.fillStyle='#6b7aa0'; ctx.fillText('test-time compute (sampled reasoning paths)', W/2-110, H-10);
+  C.forEach((c,i)=>{ ctx.fillStyle='#6b7aa0'; ctx.fillText(c.paths, X(i)-6, H-pad+16); });
+
+  // area fill
+  ctx.beginPath();
+  C.forEach((c,i)=>{ const x=X(i), y=Y(c.accuracy); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.lineTo(X(C.length-1), H-pad); ctx.lineTo(X(0), H-pad); ctx.closePath();
+  const grad = ctx.createLinearGradient(0,pad,0,H-pad);
+  grad.addColorStop(0,'rgba(34,211,238,.28)'); grad.addColorStop(1,'rgba(34,211,238,0)');
+  ctx.fillStyle=grad; ctx.fill();
+
+  ctx.beginPath();
+  C.forEach((c,i)=>{ const x=X(i), y=Y(c.accuracy); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=3; ctx.stroke();
+  C.forEach((c,i)=>{ ctx.beginPath(); ctx.arc(X(i), Y(c.accuracy), 3.4, 0, 7); ctx.fillStyle='#22d3ee'; ctx.fill(); });
+
+  const a = C[activeIdx];
+  ctx.beginPath(); ctx.arc(X(activeIdx), Y(a.accuracy), 7, 0, 7); ctx.fillStyle='#f59e0b'; ctx.fill();
+  ctx.fillStyle='#f2d79b'; ctx.fillText((a.accuracy*100).toFixed(0)+'%', X(activeIdx)-10, Y(a.accuracy)-12);
+}
+
+function renderBallot() {
+  const v = D.example.votes, total = v.reduce((a,b)=>a+b,0), max = Math.max(...v);
+  const win = v.indexOf(max);
+  const el = document.getElementById('ballot'); el.innerHTML='';
+  v.forEach((count,i)=>{
+    const lab = document.createElement('div'); lab.className='lab'; lab.textContent=i;
+    const barwrap = document.createElement('div');
+    const bar = document.createElement('div'); bar.className='bar'+(i===win?' win':'');
+    bar.style.width = (count/max*100)+'%'; if(count===0) bar.style.opacity=.12;
+    barwrap.appendChild(bar);
+    const num = document.createElement('div'); num.style.color='#9fb0d6'; num.textContent=count;
+    el.appendChild(lab); el.appendChild(barwrap); el.appendChild(num);
+  });
+}
+
+function updatePaths() {
+  const idx = +document.getElementById('paths').value;
+  const c = D.scaling_curve[idx];
+  document.getElementById('paths-val').textContent = c.paths;
+  // simulate the ballot at this budget by scaling the full-vote proportions
+  const full = D.example.votes, total = full.reduce((a,b)=>a+b,0);
+  const scaled = full.map(x => Math.round(x / total * c.paths));
+  const max = Math.max(...scaled), win = scaled.indexOf(max);
+  document.getElementById('k-win').textContent = win;
+  document.getElementById('k-share').textContent = total? Math.round(max/Math.max(1,scaled.reduce((a,b)=>a+b,0))*100)+'%' : '—';
+  // path dots colored by whether that path landed on the eventual winner
+  const pv = document.getElementById('paths-viz'); pv.innerHTML='';
+  const winner = D.example.true;
+  for (let i=0;i<c.paths;i++){
+    const d=document.createElement('div'); d.className='pdot';
+    d.style.background = (i < scaled[winner]) ? 'var(--good)' : 'var(--bad)';
+    d.title = (i < scaled[winner]) ? 'reached correct answer' : 'slipped';
+    pv.appendChild(d);
+  }
+  drawCurve(idx);
+}
+
+function init(){
+  document.getElementById('cfg-note').textContent =
+    `${D.config.length}-step problems · ${D.config.n_test} test cases · stochastic decoding (noise ${D.config.noise}) · ~${D.config.seconds}s on CPU.`;
+  document.getElementById('ex-problem').innerHTML =
+    `<span style="color:var(--g2)">${D.example.problem}</span>  <span style="color:var(--muted)">true = ${D.example.true}</span>`;
+  document.getElementById('paths').max = D.scaling_curve.length-1;
+  renderBallot();
+  updatePaths();
+}
+document.getElementById('paths').addEventListener('input', updatePaths);
+
+(async function(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/gemini25_results.json',{cache:'no-store'});
+      if (r.ok) { D = await r.json(); } } catch(e){}
+  }
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scaling Embeddings vs Experts</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --embed: #22d3ee;
+    --expert: #f59e0b;
+    --base: #64748b;
+    --good: #34d399;
+    --bad: #fb7185;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #0a2233 0%, transparent 55%),
+                radial-gradient(1000px 500px at 100% 0%, #2a1e05 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--embed); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.15), rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 32px; letter-spacing: .3px;
+    background: linear-gradient(90deg, #22d3ee, #34d399 55%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 840px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 21px; margin: 38px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 880px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; color: #cfe8ff; overflow-x:auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  .budget { display:flex; height:44px; border-radius:10px; overflow:hidden; border:1px solid var(--line); margin:10px 0; }
+  .budget .seg { display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:#00121f; }
+  .kpi { display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; }
+  .kpi .box { flex:1; min-width:150px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .kpi .box .lab { color:var(--muted); font-size:12px; }
+  .kpi .box .val { font-size:24px; font-weight:700; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap;}
+  .swatch { display:inline-flex; align-items:center; gap:6px; }
+  .swatch i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Scaling Embeddings Outperforms Scaling Experts</h1>
+  <p>Given a <b>fixed parameter budget</b>, spending the extra capacity on the <b style="color:var(--embed)">embedding</b> (N-gram / Over-Encoding) can beat spending it on more MoE <b style="color:var(--expert)">experts</b>. Both models below have the same total parameters and see the same data.</p>
+  <div class="badges">
+    <span class="badge">Meituan LongCat Team · 2026</span>
+    <span class="badge">arXiv:2601.21204</span>
+    <span class="badge">N-gram Embedding</span>
+    <span class="badge">MoE experts</span>
+    <span class="badge">Fixed budget</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">One budget, two ways to spend it</h2>
+  <p class="section-sub">Both tiny LMs share an identical backbone (token embedding + 1 causal-attention layer + readout). The extra parameters go to either N-gram embedding tables or MoE experts. Numbers from <code class="k">demo/run_demo.py</code>.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--embed)">Scale embeddings</h4>
+      <p class="small">Add hashed N-gram tables that bake local context into each token's representation.</p>
+      <div class="budget" id="budget-emb"></div>
+      <div class="kpi">
+        <div class="box"><div class="lab">total params</div><div class="val" id="emb-params">–</div></div>
+        <div class="box"><div class="lab">accuracy</div><div class="val" style="color:var(--good)" id="emb-acc">–</div></div>
+        <div class="box"><div class="lab">loss</div><div class="val" id="emb-loss">–</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--expert)">Scale experts</h4>
+      <p class="small">Add more MoE experts (top-k routed) to grow FFN capacity.</p>
+      <div class="budget" id="budget-exp"></div>
+      <div class="kpi">
+        <div class="box"><div class="lab">total params</div><div class="val" id="exp-params">–</div></div>
+        <div class="box"><div class="lab">accuracy</div><div class="val" id="exp-acc">–</div></div>
+        <div class="box"><div class="lab">loss</div><div class="val" id="exp-loss">–</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend-row">
+    <span class="swatch"><i style="background:var(--base)"></i>shared backbone</span>
+    <span class="swatch"><i style="background:var(--embed)"></i>N-gram embedding tables</span>
+    <span class="swatch"><i style="background:var(--expert)"></i>extra MoE experts</span>
+  </div>
+
+  <h2 class="section-title">The N-gram Embedding mechanism</h2>
+  <p class="section-sub">Instead of a single lookup per token, the embedding sums the base token vector with hashed n-gram lookups over the local context (paper §2, Eq. 1-3). Here the task's next token depends on the previous <b>trigram</b>, and a collision-free trigram hash bakes that predictive signal straight into the input.</p>
+  <div class="card">
+    <div class="formula">e_i = (1 / ((N-1)K+1)) · [ E0(t_i) + Σ_{n=2..N} Σ_{k=1..K}  W_{n,k} · E_{n,k}( H_{n,k}(t_{i-n+1..i}) ) ]
+
+H_n(t_{i-n+1..i}) = ( Σ_{j=0}^{n-1} t_{i-j} · V0^j ) mod V_n        (rolling hash, Eq. 2)
+
+this demo:  N-gram orders = (3),  hash vocab V_n = 16³ = 4096  ->  collision-free trigram lookup
+            → the (a,b,c) → next mapping is available in ONE embedding lookup</div>
+    <p class="small">A 1-layer attention + MoE model must instead gather three previous tokens and compose their 3-way interaction — costly to learn at a fixed budget in limited steps.</p>
+  </div>
+
+  <h2 class="section-title">Training on the same data, same budget</h2>
+  <p class="section-sub">Validation accuracy and loss over training. The embedding-scaled model converges faster and to a better optimum.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Accuracy over training</h4>
+      <canvas id="acc-canvas" width="1100" height="260"></canvas>
+    </div>
+    <div class="card">
+      <h4>Loss over training</h4>
+      <canvas id="loss-canvas" width="1100" height="260"></canvas>
+    </div>
+  </div>
+  <div class="legend-row">
+    <span class="swatch"><i style="background:var(--embed)"></i>scale embeddings</span>
+    <span class="swatch"><i style="background:var(--expert)"></i>scale experts</span>
+    <span id="summary" style="margin-left:10px"></span>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Scaling Embeddings Outperforms Scaling Experts in Language Models”</b> (2026).
+    Generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate <code class="k">data/results.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"paper":"Scaling Embeddings Outperforms Scaling Experts in Language Models (2026)","arxiv":"2601.21204","config":{"vocab":16,"d_model":24,"seq_len":24,"ngram_orders":[3],"hash_vocab":4096,"n_experts":32,"top_k":2},"params":{"embeddings":104817,"experts":105248},"breakdown":{"backbone":6513,"embeddings_extra":98304,"experts_extra":98735},"final":{"embeddings":{"loss":0.0032443776726722717,"acc":0.9999070167541504},"experts":{"loss":0.16556838154792786,"acc":0.9525669813156128}},"curves":{"embeddings":[{"step":1,"loss":2.9006,"acc":0.0666852667927742},{"step":80,"loss":2.2443,"acc":0.3294270932674408},{"step":160,"loss":0.9599,"acc":0.7578589916229248},{"step":240,"loss":0.3772,"acc":0.909970223903656},{"step":320,"loss":0.1755,"acc":0.958798348903656},{"step":400,"loss":0.0825,"acc":0.9828869104385376},{"step":480,"loss":0.0443,"acc":0.9931640625},{"step":560,"loss":0.0141,"acc":0.9971632957458496},{"step":640,"loss":0.0077,"acc":0.9992559552192688},{"step":720,"loss":0.0064,"acc":0.999627947807312},{"step":800,"loss":0.0035,"acc":0.9999070167541504}],"experts":[{"step":1,"loss":2.9651,"acc":0.0548735111951828},{"step":80,"loss":2.6685,"acc":0.1450427770614624},{"step":160,"loss":2.2916,"acc":0.2880859375},{"step":240,"loss":1.6316,"acc":0.5249720811843872},{"step":320,"loss":1.0686,"acc":0.7045201063156128},{"step":400,"loss":0.7174,"acc":0.8005022406578064},{"step":480,"loss":0.4933,"acc":0.8608165979385376},{"step":560,"loss":0.3975,"acc":0.897832989692688},{"step":640,"loss":0.2811,"acc":0.924990713596344},{"step":720,"loss":0.2121,"acc":0.937872052192688},{"step":800,"loss":0.1907,"acc":0.9525669813156128}]}};
+
+function fmt(n){ return n.toLocaleString(); }
+
+function drawBudget(id, backbone, extra, extraColor, extraLabel) {
+  const total = backbone + extra;
+  const el = document.getElementById(id);
+  el.innerHTML =
+    `<div class="seg" style="width:${backbone/total*100}%;background:var(--base)" title="shared backbone">${(backbone/total*100).toFixed(0)}%</div>`+
+    `<div class="seg" style="width:${extra/total*100}%;background:${extraColor}" title="${extraLabel}">${extraLabel} ${(extra/total*100).toFixed(0)}%</div>`;
+}
+
+function lineChart(canvasId, curves, key, yMax, colors) {
+  const c = document.getElementById(canvasId), ctx = c.getContext('2d');
+  const W = c.width, H = c.height, padL = 44, padB = 26, padT = 12, padR = 12;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = '#1e2946'; ctx.lineWidth = 1;
+  for (let g=0; g<=4; g++){ const y = padT + (H-padT-padB)*g/4; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillStyle='#5b6890'; ctx.font='11px monospace'; ctx.fillText((yMax*(1-g/4)).toFixed(2), 6, y+4); }
+  const maxStep = curves.embeddings[curves.embeddings.length-1].step;
+  function plot(curve, color) {
+    ctx.beginPath();
+    curve.forEach((pt, i) => {
+      const x = padL + (W-padL-padR) * pt.step / maxStep;
+      const y = padT + (H-padT-padB) * (1 - Math.min(pt[key], yMax)/yMax);
+      i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.stroke();
+    const last = curve[curve.length-1];
+    const lx = padL + (W-padL-padR); const ly = padT + (H-padT-padB)*(1-Math.min(last[key],yMax)/yMax);
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(lx-2, ly, 4, 0, 7); ctx.fill();
+  }
+  plot(curves.embeddings, colors[0]);
+  plot(curves.experts, colors[1]);
+}
+
+function render(d) {
+  const p = d.params, f = d.final;
+  const bk = d.breakdown;
+  drawBudget('budget-emb', bk.backbone, bk.embeddings_extra, 'var(--embed)', 'N-gram');
+  drawBudget('budget-exp', bk.backbone, bk.experts_extra, 'var(--expert)', 'experts');
+
+  document.getElementById('emb-params').textContent = fmt(p.embeddings);
+  document.getElementById('exp-params').textContent = fmt(p.experts);
+  document.getElementById('emb-acc').textContent = (f.embeddings.acc*100).toFixed(1)+'%';
+  document.getElementById('exp-acc').textContent = (f.experts.acc*100).toFixed(1)+'%';
+  document.getElementById('emb-loss').textContent = f.embeddings.loss.toFixed(3);
+  document.getElementById('exp-loss').textContent = f.experts.loss.toFixed(3);
+  document.getElementById('exp-acc').style.color = f.experts.acc < f.embeddings.acc ? 'var(--bad)' : 'var(--good)';
+
+  lineChart('acc-canvas', d.curves, 'acc', 1.0, ['#22d3ee', '#f59e0b']);
+  const lmax = Math.max(d.curves.experts[0].loss, d.curves.embeddings[0].loss);
+  lineChart('loss-canvas', d.curves, 'loss', Math.ceil(lmax*10)/10, ['#22d3ee', '#f59e0b']);
+
+  document.getElementById('summary').innerHTML =
+    `at matched budget (${fmt(p.embeddings)} vs ${fmt(p.experts)} params): embeddings `+
+    `<b style="color:var(--good)">${(f.embeddings.acc*100).toFixed(1)}%</b> vs experts `+
+    `<b>${(f.experts.acc*100).toFixed(1)}%</b>`;
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/results.json', {cache:'no-store'});
+      if (r.ok) { render(await r.json()); return; } } catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>

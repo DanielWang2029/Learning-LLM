@@ -37,7 +37,7 @@ papers rather than the internals of any single one:
 │   ├── demo/              # runnable demos + data generator
 │   ├── visualization/     # interactive algorithm visualization
 │   └── README.md          # how to set up & run this paper
-└── <27 more paper folders, each with the same self-contained layout>
+└── <62 more paper folders, each with the same self-contained layout>
     ├── <paper>.pdf        # the paper
     ├── src/               # from-scratch reference implementation
     ├── data/              # tiny sample dataset (or generator)
@@ -60,12 +60,16 @@ python demo/run_demo.py          # prints evidence the algorithm works
 
 ## Papers reproduced
 
-All 28 papers below have a self-contained folder with a from-scratch
+All 63 papers here have a self-contained folder with a from-scratch
 implementation, a tiny sample dataset, a runnable CPU demo, docs, a development
-environment, and an interactive HTML visualization. The list is drawn from
-widely-used curations — notably *Essential LLM Papers* (Foundation Models Deep
-Dive). Explore [`citation_graph.html`](citation_graph.html) to see how they
-relate on a timeline colored by theme.
+environment, and an interactive HTML visualization. Explore
+[`citation_graph.html`](citation_graph.html) to see how they relate on a
+timeline colored by theme.
+
+The first batch below (through the DeepSeek-R1 row) is drawn from widely-used
+foundational curations — notably *Essential LLM Papers* (Foundation Models Deep
+Dive). The [**Top-cited by year (2023–2026)**](#top-cited-by-year-20232026)
+section that follows adds the most-cited LLM papers of each recent year.
 
 | Paper | Year | Category | Folder |
 |---|---|---|---|
@@ -97,6 +101,78 @@ relate on a timeline colored by theme.
 | QLoRA: Efficient Finetuning of Quantized LLMs | 2023 | Efficient Fine-tuning | [`QLoRA/`](QLoRA/) |
 | Tree of Thoughts | 2023 | Reasoning | [`Tree of Thoughts/`](Tree%20of%20Thoughts/) |
 | DeepSeek-R1 | 2025 | Reasoning | [`DeepSeek-R1/`](DeepSeek-R1/) |
+
+## Top-cited by year (2023–2026)
+
+The **top-10 most-cited LLM papers of each year** from 2023 to 2026. Papers
+already covered above are marked *(above)* and not duplicated. Rankings use
+Google Scholar / Semantic Scholar counts as aggregated by Zeta Alpha, the NLLG
+arXiv reports, Paper Digest influence lists, and *bestpapers.ai*. **2025 counts
+are still maturing and the 2026 list is provisional** — only a partial year has
+elapsed and citation data is not yet reliable, so 2026 is ranked by early
+prominence/attention (Paper Digest, *1kpapers*, Sebastian Raschka's 2026 list)
+rather than mature citation counts.
+
+### 2023
+
+| Paper | Category | Folder |
+|---|---|---|
+| GPT-4 Technical Report | Model Milestones | [`GPT-4/`](GPT-4/) |
+| Visual Instruction Tuning (LLaVA) | Multimodal | [`LLaVA/`](LLaVA/) |
+| Sparks of AGI: Early experiments with GPT-4 | Evaluation & Analysis | [`Sparks of AGI/`](Sparks%20of%20AGI/) |
+| A Survey of Large Language Models | Survey | [`A Survey of Large Language Models/`](A%20Survey%20of%20Large%20Language%20Models/) |
+| Mistral 7B | Architectural Innovations | [`Mistral 7B/`](Mistral%207B/) |
+| LLaMA | Model Milestones | *(above)* |
+| Llama 2 | Model Milestones | *(above)* |
+| QLoRA | Efficient Fine-tuning | *(above)* |
+| Direct Preference Optimization | Alignment | *(above)* |
+| Tree of Thoughts | Reasoning | *(above)* |
+
+### 2024
+
+| Paper | Category | Folder |
+|---|---|---|
+| The Llama 3 Herd of Models | Model Milestones | [`Llama 3/`](Llama%203/) |
+| Qwen2.5 Technical Report | Model Milestones | [`Qwen2.5/`](Qwen2.5/) |
+| DeepSeekMath (GRPO) | Reasoning | [`DeepSeekMath/`](DeepSeekMath/) |
+| Gemini 1.5 | Model Milestones | [`Gemini 1.5/`](Gemini%201.5/) |
+| DeepSeek-V3 | Architectural Innovations | [`DeepSeek-V3/`](DeepSeek-V3/) |
+| Gemma 2 | Model Milestones | [`Gemma 2/`](Gemma%202/) |
+| Phi-3 | Model Milestones | [`Phi-3/`](Phi-3/) |
+| Mixtral of Experts | Architectural Innovations | [`Mixtral of Experts/`](Mixtral%20of%20Experts/) |
+| DoRA | Efficient Fine-tuning | [`DoRA/`](DoRA/) |
+| GraphRAG | Context & Retrieval | [`GraphRAG/`](GraphRAG/) |
+
+### 2025
+
+| Paper | Category | Folder |
+|---|---|---|
+| DeepSeek-R1 | Reasoning | *(above)* |
+| Qwen3 Technical Report | Model Milestones | [`Qwen3/`](Qwen3/) |
+| Gemini 2.5 | Model Milestones | [`Gemini 2.5/`](Gemini%202.5/) |
+| s1: Simple Test-time Scaling | Reasoning | [`s1 - Simple Test-Time Scaling/`](s1%20-%20Simple%20Test-Time%20Scaling/) |
+| Gemma 3 | Model Milestones | [`Gemma 3/`](Gemma%203/) |
+| Search-R1 | Reasoning | [`Search-R1/`](Search-R1/) |
+| Large Language Diffusion Models (LLaDA) | Architectural Innovations | [`LLaDA/`](LLaDA/) |
+| LIMO: Less Is More for Reasoning | Reasoning | [`LIMO/`](LIMO/) |
+| Kimi K1.5 | Reasoning | [`Kimi K1.5/`](Kimi%20K1.5/) |
+| Native Sparse Attention | Architectural Innovations | [`Native Sparse Attention/`](Native%20Sparse%20Attention/) |
+| Chain of Draft | Reasoning | [`Chain of Draft/`](Chain%20of%20Draft/) |
+
+### 2026 (provisional)
+
+| Paper | Category | Folder |
+|---|---|---|
+| GLM-5: from Vibe Coding to Agentic Engineering | Model Milestones | [`GLM-5/`](GLM-5/) |
+| DeepSeek-V4 | Architectural Innovations | [`DeepSeek-V4/`](DeepSeek-V4/) |
+| Kimi K3 | Architectural Innovations | [`Kimi K3/`](Kimi%20K3/) |
+| Qwen-AgentWorld | Reasoning | [`Qwen-AgentWorld/`](Qwen-AgentWorld/) |
+| Nemotron 3 Super | Architectural Innovations | [`Nemotron 3 Super/`](Nemotron%203%20Super/) |
+| Gated DeltaNet-2 | Architectural Innovations | [`Gated DeltaNet-2/`](Gated%20DeltaNet-2/) |
+| Step 3.5 Flash | Architectural Innovations | [`Step 3.5 Flash/`](Step%203.5%20Flash/) |
+| Scaling Embeddings vs Experts | Scaling Laws | [`Scaling Embeddings vs Experts/`](Scaling%20Embeddings%20vs%20Experts/) |
+| Deep Delta Learning | Architectural Innovations | [`Deep Delta Learning/`](Deep%20Delta%20Learning/) |
+| ZAYA1-8B | Architectural Innovations | [`ZAYA1-8B/`](ZAYA1-8B/) |
 
 ## Adding a new paper
 

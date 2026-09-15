@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep Delta Learning — Read, Compare, Rewrite</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --read: #22d3ee;
+    --target: #34d399;
+    --write: #fb7185;
+    --gate: #a78bfa;
+    --state: #f59e0b;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #0a2233 0%, transparent 55%),
+                radial-gradient(1000px 500px at 100% 0%, #2a0f1f 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--read); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(52,211,153,.14) 50%, rgba(251,113,133,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 32px; letter-spacing: .3px;
+    background: linear-gradient(90deg, #22d3ee, #34d399 50%, #fb7185);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 840px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 21px; margin: 38px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 880px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; color: #cfe8ff; overflow-x:auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  .pipe { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .node { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-align:center; flex:1; min-width:110px; }
+  .node .t { font-weight:600; } .node .s { color:var(--muted); font-size:12px; }
+  .flowarrow { color:var(--line); font-size:20px; }
+  .kpi { display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; }
+  .kpi .box { flex:1; min-width:150px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .kpi .box .lab { color:var(--muted); font-size:12px; } .kpi .box .val { font-size:24px; font-weight:700; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  table { width:100%; border-collapse:collapse; font-family: ui-monospace, monospace; font-size:13px; }
+  th, td { padding:6px 8px; text-align:right; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap;}
+  .swatch { display:inline-flex; align-items:center; gap:6px; } .swatch i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Deep Delta Learning</h1>
+  <p>The delta rule as a <b>read → compare → rewrite</b> operation — used both as a fast-weight <b style="color:var(--read)">associative memory</b> and as a <b style="color:var(--write)">depth-wise residual interface</b> that edits the residual stream toward a target.</p>
+  <div class="badges">
+    <span class="badge">Zhang, Liu, Wang &amp; Gu · 2026</span>
+    <span class="badge">arXiv:2601.00417</span>
+    <span class="badge">Delta rule</span>
+    <span class="badge">Associative memory</span>
+    <span class="badge">Residual interface</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The delta rule: read, compare, write</h2>
+  <p class="section-sub">Read the current value along a direction, compare it to a target, and write back a gated rank-1 correction. This single move powers both faces of the paper.</p>
+  <div class="card">
+    <div class="pipe">
+      <div class="node" style="border-color:var(--read)"><div class="t" style="color:var(--read)">read</div><div class="s">r = kᵀ X</div></div>
+      <div class="flowarrow">→</div>
+      <div class="node" style="border-color:var(--target)"><div class="t" style="color:var(--target)">compare</div><div class="s">e = v − r</div></div>
+      <div class="flowarrow">→</div>
+      <div class="node" style="border-color:var(--gate)"><div class="t" style="color:var(--gate)">gate</div><div class="s">β ∈ (0,2)</div></div>
+      <div class="flowarrow">→</div>
+      <div class="node" style="border-color:var(--write)"><div class="t" style="color:var(--write)">write</div><div class="s">X += β·k·eᵀ</div></div>
+    </div>
+    <div class="formula">associative memory:   W ← W + β (v − W k) kᵀ            recall:  v̂ = W q
+depth-wise DDL:        X_{l+1} = X_l + β_l k_l (v_l − k_lᵀ X_l)ᵀ      (Eq. 2.2)</div>
+  </div>
+
+  <h2 class="section-title">Face 1 — Associative memory: store once, recall</h2>
+  <p class="section-sub">Store key→value bindings in a single pass, then recall them. Rewriting a key <i>replaces</i> its value (the delta rule subtracts the current read first) rather than piling up a superposition. Numbers from <code class="k">demo/run_demo.py</code>, Part A.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Recall &amp; overwrite</h4>
+      <div class="kpi">
+        <div class="box"><div class="lab">recall accuracy (8 pairs)</div><div class="val" style="color:var(--target)" id="recall-acc">–</div></div>
+        <div class="box"><div class="lab">recall error (MSE)</div><div class="val" id="recall-mse">–</div></div>
+      </div>
+      <div class="formula" id="overwrite-box"></div>
+    </div>
+    <div class="card">
+      <h4>Capacity: recall accuracy vs #pairs stored</h4>
+      <p class="small">A <span id="mem-dim"></span>-dimensional memory recalls perfectly while lightly loaded, then degrades gracefully as pairs approach the dimension.</p>
+      <canvas id="cap-canvas" width="1100" height="240"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Face 2 — Depth-wise DDL: correcting the residual across layers</h2>
+  <p class="section-sub">Deep Delta Learning applies the same rule down the residual stream. Its signature property (Eq. 2.4): one rewrite scales the selected-readout error by exactly <code class="k">(1 − β)</code> — identity at β=0, exact overwrite at β=1, over-relaxed for 1&lt;β&lt;2.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>e_post = (1 − β) · e_pre &nbsp;<span class="small" id="dev-note"></span></h4>
+      <table id="id-table"></table>
+    </div>
+    <div class="card">
+      <h4>Readout error vs depth</h4>
+      <p class="small">Stacking DDL layers drives a readout to its target; the error contracts by (1−β) per layer.</p>
+      <canvas id="conv-canvas" width="1100" height="240"></canvas>
+      <div class="legend-row" id="conv-legend"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Deep Delta Learning”</b> (2026).
+    Generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate <code class="k">data/results.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"paper":"Deep Delta Learning (2026)","arxiv":"2601.00417","associative_memory":{"dim":32,"recall_accuracy_8":1.0,"recall_mse_8":0.004160103388130665,"overwrite":{"cos_v_old":0.03454501926898956,"cos_v_new":1.0},"capacity_curve":[{"n_pairs":2,"accuracy":1.0},{"n_pairs":4,"accuracy":1.0},{"n_pairs":8,"accuracy":1.0},{"n_pairs":12,"accuracy":0.9833333373069764},{"n_pairs":16,"accuracy":0.975},{"n_pairs":20,"accuracy":0.9399999856948853},{"n_pairs":24,"accuracy":0.9},{"n_pairs":28,"accuracy":0.8714285731315613},{"n_pairs":32,"accuracy":0.825},{"n_pairs":40,"accuracy":0.7349999904632568},{"n_pairs":48,"accuracy":0.6208333253860474}]},"depth_wise_ddl":{"identity_check":[{"beta":0.0,"e_pre":3.0363528728485107,"e_post":3.0363528728485107,"predicted":3.0363528728485107},{"beta":0.25,"e_pre":2.900540828704834,"e_post":2.175405740737915,"predicted":2.1754056215286255},{"beta":0.5,"e_pre":2.0090606212615967,"e_post":1.004530429840088,"predicted":1.0045303106307983},{"beta":0.75,"e_pre":3.069570302963257,"e_post":0.7673923373222351,"predicted":0.7673925757408142},{"beta":1.0,"e_pre":3.5076193809509277,"e_post":2.920019426255749e-07,"predicted":0.0},{"beta":1.25,"e_pre":2.387028217315674,"e_post":0.5967568755149841,"predicted":0.5967570543289185},{"beta":1.5,"e_pre":2.4430172443389893,"e_post":1.2215083837509155,"predicted":1.2215086221694946},{"beta":1.75,"e_pre":2.2362589836120605,"e_post":1.677194595336914,"predicted":1.6771942377090454},{"beta":2.0,"e_pre":1.2207523584365845,"e_post":1.2207523584365845,"predicted":1.2207523584365845}],"max_deviation":3.5762786865234375e-07,"depth_convergence":{"0.5":[2.11602,1.05801,0.529,0.2645,0.13225,0.06613,0.03306,0.01653,0.00827],"1.0":[2.11602,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"1.5":[2.11602,1.05801,0.529,0.2645,0.13225,0.06613,0.03306,0.01653,0.00827]},"depth":8,"d_model":24,"d_val":4}};
+
+function lineChart(canvasId, series, xs, yMax, opts) {
+  const c = document.getElementById(canvasId), ctx = c.getContext('2d');
+  const W = c.width, H = c.height, padL = 46, padB = 28, padT = 12, padR = 14;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = '#1e2946'; ctx.lineWidth = 1;
+  for (let g=0; g<=4; g++){ const y = padT + (H-padT-padB)*g/4; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillStyle='#5b6890'; ctx.font='11px monospace'; ctx.fillText((yMax*(1-g/4)).toFixed(2), 6, y+4); }
+  const xmin = xs[0], xmax = xs[xs.length-1];
+  series.forEach(s => {
+    ctx.beginPath();
+    s.y.forEach((yv, i) => {
+      const x = padL + (W-padL-padR)*(xs[i]-xmin)/(xmax-xmin || 1);
+      const y = padT + (H-padT-padB)*(1 - Math.min(yv, yMax)/yMax);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2.5; ctx.stroke();
+  });
+  ctx.fillStyle='#5b6890'; ctx.font='11px monospace';
+  ctx.fillText(opts.xlabel||'', W/2-30, H-6);
+}
+
+function render(d) {
+  const a = d.associative_memory, b = d.depth_wise_ddl;
+  document.getElementById('recall-acc').textContent = (a.recall_accuracy_8*100).toFixed(1)+'%';
+  document.getElementById('recall-mse').textContent = a.recall_mse_8.toFixed(4);
+  document.getElementById('mem-dim').textContent = a.dim;
+  const ow = a.overwrite;
+  document.getElementById('overwrite-box').innerHTML =
+    `overwrite test:  bind key → v_old, then rewrite key → v_new\n\n`+
+    `  recall vs v_old:  cos = <span style="color:var(--muted)">${ow.cos_v_old.toFixed(3)}</span>\n`+
+    `  recall vs v_new:  cos = <span style="color:var(--target)">${ow.cos_v_new.toFixed(3)}</span>   ← latest value recalled`;
+
+  // capacity curve
+  const xs = a.capacity_curve.map(p => p.n_pairs);
+  lineChart('cap-canvas', [{y: a.capacity_curve.map(p=>p.accuracy), color:'#34d399'}], xs, 1.0, {xlabel:'# pairs stored  ('+xs[0]+' … '+xs[xs.length-1]+')'});
+
+  // identity table
+  const rows = b.identity_check.map(r =>
+    `<tr><td>${r.beta.toFixed(2)}</td><td>${r.e_pre.toFixed(3)}</td>`+
+    `<td style="color:var(--write)">${r.e_post.toFixed(3)}</td>`+
+    `<td style="color:var(--target)">${r.predicted.toFixed(3)}</td></tr>`).join('');
+  document.getElementById('id-table').innerHTML =
+    `<tr><th>β</th><th>e_pre</th><th>e_post</th><th>(1−β)·e_pre</th></tr>` + rows;
+  document.getElementById('dev-note').textContent =
+    `(max deviation ${b.max_deviation.toExponential(1)})`;
+
+  // depth convergence
+  const conv = b.depth_convergence;
+  const layers = Array.from({length: b.depth+1}, (_,i)=>i);
+  const colors = {'0.5':'#22d3ee', '1.0':'#34d399', '1.5':'#fb7185'};
+  let ymax = 0; Object.values(conv).forEach(a => a.forEach(v => ymax = Math.max(ymax, v)));
+  const series = Object.keys(conv).map(bk => ({y: conv[bk], color: colors[bk] || '#a78bfa'}));
+  lineChart('conv-canvas', series, layers, Math.ceil(ymax*10)/10, {xlabel:'layer (0 … '+b.depth+')'});
+  document.getElementById('conv-legend').innerHTML = Object.keys(conv).map(bk =>
+    `<span class="swatch"><i style="background:${colors[bk]||'#a78bfa'}"></i>β = ${bk}</span>`).join('');
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/results.json', {cache:'no-store'});
+      if (r.ok) { render(await r.json()); return; } } catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Qwen3 — Hybrid Thinking & the Thinking Budget</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --think:#a78bfa; --answer:#34d399; --acc:#22d3ee; --budget:#f59e0b; --bad:#fb7185; --tok:#f472b6;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #201a40 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #10303a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--acc); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(167,139,250,.16), rgba(34,211,238,.14) 50%, rgba(245,158,11,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#a78bfa,#22d3ee 50%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1160px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  canvas { width:100%; height:320px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .formula { background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13.5px;color:#cfe8ff; white-space:pre-wrap; }
+  .legend-row { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; align-items:center; }
+  /* toggle */
+  .toggle { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; background:var(--panel-2); }
+  .toggle button { background:transparent; border:0; color:var(--muted); padding:9px 18px; cursor:pointer; font-size:14px; font-weight:600; }
+  .toggle button.on { color:#0b1020; background:linear-gradient(90deg,var(--think),var(--acc)); }
+  /* trace */
+  .trace { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; font-family:ui-monospace,monospace; }
+  .chip { padding:6px 11px; border-radius:9px; border:1px solid var(--line); background:var(--panel-2); }
+  .chip.start { border-color:var(--acc); color:var(--acc); }
+  .chip.step { border-color:var(--think); color:var(--think); }
+  .chip.ans { border-color:var(--answer); color:var(--answer); font-weight:700; }
+  .chip.dim { opacity:.28; }
+  .arrow { color:var(--muted); }
+  .think-wrap { border:1px dashed var(--think); border-radius:12px; padding:12px 14px; margin-top:12px; background:rgba(167,139,250,.06); }
+  .think-tag { color:var(--think); font-family:ui-monospace,monospace; font-size:12px; }
+  /* slider */
+  .sliderbox { display:flex; align-items:center; gap:14px; margin:6px 0 2px; }
+  input[type=range] { flex:1; accent-color:var(--budget); }
+  .kpi { display:flex; gap:16px; flex-wrap:wrap; }
+  .kpi .box { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:10px 16px; text-align:center; min-width:120px; }
+  .kpi .num { font-size:24px; font-weight:800; } .kpi .cap { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Qwen3 · Hybrid Thinking</h1>
+  <p>One model, two modes. Qwen3 can answer <b style="color:var(--acc)">directly</b> for speed, or
+  <b style="color:var(--think)">think step by step</b> inside <code class="k">&lt;think&gt;…&lt;/think&gt;</code> for accuracy — and the caller sets a
+  <b style="color:var(--budget)">thinking budget</b> that trades tokens for correctness.</p>
+  <div class="badges">
+    <span class="badge">Alibaba, 2025</span>
+    <span class="badge">arXiv:2505.09388</span>
+    <span class="badge">Thinking / Non-thinking</span>
+    <span class="badge">Controllable thinking budget</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Same problem, two modes</h2>
+  <p class="section-sub">A multi-step problem: start from a number and apply a chain of operations (mod 10). Flip the mode to see what the model does.</p>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <div class="toggle" id="toggle">
+        <button data-mode="direct" class="on">Non-thinking</button>
+        <button data-mode="think">Thinking</button>
+      </div>
+      <div style="font-family:ui-monospace,monospace;font-size:16px" id="problem"></div>
+    </div>
+    <div id="mode-body"></div>
+  </div>
+
+  <h2 class="section-title">The thinking budget dial</h2>
+  <p class="section-sub">Slide the budget: the thinking path executes that many steps before committing to an answer. Watch accuracy (over 400 held-out problems) rise and saturate.</p>
+  <div class="card">
+    <div class="sliderbox">
+      <span style="color:var(--budget);font-weight:700">budget</span>
+      <input type="range" id="budget" min="0" max="8" step="1" value="0" />
+      <span id="budget-val" style="font-family:ui-monospace,monospace;color:var(--budget);width:2ch;text-align:right">0</span>
+    </div>
+    <div class="kpi" style="margin:12px 0">
+      <div class="box"><div class="num" style="color:var(--acc)" id="k-acc">—</div><div class="cap">thinking accuracy</div></div>
+      <div class="box"><div class="num" style="color:var(--tok)" id="k-tok">—</div><div class="cap">avg tokens (steps)</div></div>
+      <div class="box"><div class="num" style="color:var(--bad)" id="k-non">—</div><div class="cap">non-thinking accuracy</div></div>
+    </div>
+    <div class="think-wrap">
+      <span class="think-tag">&lt;think&gt;</span>
+      <div class="trace" id="live-trace"></div>
+      <span class="think-tag">&lt;/think&gt;</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Accuracy vs thinking budget</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. <span id="cfg-note"></span></p>
+  <div class="card">
+    <canvas id="curve" width="1080" height="320"></canvas>
+    <div class="legend-row">
+      <span><span style="color:var(--acc)">■</span> thinking accuracy</span>
+      <span><span style="color:var(--tok)">■</span> avg tokens used</span>
+      <span><span style="color:var(--bad)">▬</span> non-thinking baseline</span>
+      <span><span style="color:var(--budget)">●</span> current budget</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Why thinking helps</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Thinking = execute the chain</h4>
+      <div class="formula">value₀ = start
+valueₜ = step(valueₜ₋₁, opₜ)        # one thinking token per op
+answer = value_min(budget, L)</div>
+      <ul><li>Each step carries the running value forward — no need to collapse the whole chain at once.</li>
+          <li>If the budget runs out before the chain ends, the answer is premature (wrong).</li></ul>
+    </div>
+    <div class="card">
+      <h4>Non-thinking = one shot</h4>
+      <div class="formula">answer = f(start, op₁, op₂, …, op_L)   # single forward pass</div>
+      <ul><li>Must compose every operation mentally in one step — accuracy collapses as chains grow.</li>
+          <li>Fast and cheap, but far less reliable on multi-step problems.</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to the <b>Qwen3 Technical Report</b> (Alibaba, 2025, arXiv:2505.09388).
+    The two modes here are small MLPs; the mechanism — hybrid thinking under a controllable budget — is the paper's.
+    Data from <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"max_len": 8, "n_test": 400, "mod": 10, "n_ops": 9, "seconds": 3.5},
+  "non_thinking_accuracy": 0.215,
+  "budget_curve": [
+    {"budget":0,"accuracy":0.1,"avg_tokens":0.0},
+    {"budget":1,"accuracy":0.1625,"avg_tokens":1.0},
+    {"budget":2,"accuracy":0.3025,"avg_tokens":1.89},
+    {"budget":3,"accuracy":0.4125,"avg_tokens":2.67},
+    {"budget":4,"accuracy":0.5575,"avg_tokens":3.31},
+    {"budget":5,"accuracy":0.65,"avg_tokens":3.79},
+    {"budget":6,"accuracy":0.8025,"avg_tokens":4.17},
+    {"budget":7,"accuracy":0.8775,"avg_tokens":4.39},
+    {"budget":8,"accuracy":1.0,"avg_tokens":4.52}
+  ],
+  "example": {
+    "problem":"7 +1 *3 +3 -3 +4 +2 +3 +1 = ?",
+    "think":"start=7 +1->8 *3->4 +3->7 -3->4 +4->8 +2->0 +3->3 +1->4",
+    "trace":[7,8,4,7,4,8,0,3,4],
+    "true":4, "non_thinking_answer":5, "thinking_answer":4
+  }
+};
+
+let D = BAKED;
+let mode = "direct";
+
+function opsFromProblem(p) {
+  // "7 +1 *3 ... = ?" -> ["+1","*3",...]
+  const parts = p.replace(" = ?","").trim().split(/\s+/);
+  return parts.slice(1);
+}
+
+function renderMode() {
+  const ex = D.example, ops = opsFromProblem(ex.problem);
+  document.getElementById('problem').innerHTML =
+    `<span style="color:var(--acc)">${ex.problem}</span>`;
+  const body = document.getElementById('mode-body');
+  if (mode === "direct") {
+    const ok = ex.non_thinking_answer === ex.true;
+    body.innerHTML = `<div style="margin-top:14px;color:var(--muted)">No intermediate work — one forward pass:</div>
+      <div class="trace"><span class="chip start">${ops.length}-step problem</span>
+      <span class="arrow">→</span>
+      <span class="chip ${ok?'ans':''}" style="${ok?'':'border-color:var(--bad);color:var(--bad)'}">answer = ${ex.non_thinking_answer} ${ok?'✓':'✗ (true '+ex.true+')'}</span></div>`;
+  } else {
+    body.innerHTML = `<div style="margin-top:14px;color:var(--muted)">Executes the chain one op at a time:</div>` +
+      traceHtml(D.budget_curve.length-1);
+  }
+}
+
+function traceHtml(budget) {
+  const ex = D.example, ops = opsFromProblem(ex.problem), tr = ex.trace;
+  const shown = Math.min(budget, ops.length);
+  let html = `<div class="trace"><span class="chip start">start=${tr[0]}</span>`;
+  for (let i=0; i<ops.length; i++) {
+    const dim = i >= shown ? ' dim' : '';
+    html += `<span class="arrow${dim?' dim':''}">→</span><span class="chip step${dim}">${ops[i]} → ${tr[i+1]}</span>`;
+  }
+  const ans = tr[shown];
+  const ok = ans === ex.true;
+  html += `<span class="arrow">⇒</span><span class="chip ans" style="${ok?'':'border-color:var(--bad);color:var(--bad)'}">answer = ${ans} ${ok?'✓':'✗'}</span></div>`;
+  return html;
+}
+
+function updateBudget() {
+  const b = +document.getElementById('budget').value;
+  document.getElementById('budget-val').textContent = b;
+  const pt = D.budget_curve[b];
+  document.getElementById('k-acc').textContent = Math.round(pt.accuracy*100)+'%';
+  document.getElementById('k-tok').textContent = pt.avg_tokens.toFixed(1);
+  document.getElementById('k-non').textContent = Math.round(D.non_thinking_accuracy*100)+'%';
+  document.getElementById('live-trace').innerHTML = traceHtml(b);
+  drawCurve(b);
+}
+
+function drawCurve(activeBudget) {
+  const cv = document.getElementById('curve'), ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, pad=48;
+  ctx.clearRect(0,0,W,H);
+  const C = D.budget_curve, maxB = Math.max(...C.map(c=>c.budget));
+  const maxTok = Math.max(...C.map(c=>c.avg_tokens), 1);
+  const X = b => pad + (b/maxB)*(W-2*pad);
+  const Yp = p => H-pad - p*(H-2*pad);            // proportion 0..1
+  const Yt = t => H-pad - (t/maxTok)*(H-2*pad);   // tokens
+  ctx.strokeStyle='#1e2946'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for (let g=0; g<=5; g++){ const y=Yp(g/5); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke();
+    ctx.fillStyle='#22d3ee'; ctx.fillText((g*20)+'%', 6, y+3);
+    ctx.fillStyle='#f472b6'; ctx.fillText((g/5*maxTok).toFixed(1), W-pad+8, y+3); }
+  ctx.fillStyle='#6b7aa0'; ctx.fillText('thinking budget (steps)', W/2-60, H-10);
+  for (const c of C){ ctx.fillStyle='#6b7aa0'; ctx.fillText(c.budget, X(c.budget)-3, H-pad+16); }
+
+  // non-thinking baseline
+  ctx.setLineDash([6,5]); ctx.strokeStyle='#fb7185'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(pad, Yp(D.non_thinking_accuracy)); ctx.lineTo(W-pad, Yp(D.non_thinking_accuracy)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const plot = (key, color, yfn) => {
+    ctx.beginPath();
+    C.forEach((c,i)=>{ const x=X(c.budget), y=yfn(c[key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    ctx.strokeStyle=color; ctx.lineWidth=2.8; ctx.stroke();
+    C.forEach(c=>{ ctx.beginPath(); ctx.arc(X(c.budget), yfn(c[key]), 3, 0, 7); ctx.fillStyle=color; ctx.fill(); });
+  };
+  plot('avg_tokens', '#f472b6', Yt);
+  plot('accuracy', '#22d3ee', Yp);
+
+  // active budget marker
+  const a = C[activeBudget];
+  ctx.strokeStyle='#f59e0b'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(X(a.budget), pad-6); ctx.lineTo(X(a.budget), H-pad); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(X(a.budget), Yp(a.accuracy), 6, 0, 7); ctx.fillStyle='#f59e0b'; ctx.fill();
+}
+
+document.querySelectorAll('#toggle button').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#toggle button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); mode=b.dataset.mode; renderMode();
+  });
+});
+document.getElementById('budget').addEventListener('input', updateBudget);
+
+function init(){
+  document.getElementById('budget').max = D.budget_curve.length-1;
+  document.getElementById('cfg-note').textContent =
+    `${D.config.n_test} held-out problems · chain length 1..${D.config.max_len} (mod ${D.config.mod}) · ~${D.config.seconds}s on CPU.`;
+  renderMode(); updateBudget();
+}
+
+(async function(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/qwen3_results.json',{cache:'no-store'});
+      if (r.ok) { D = await r.json(); } } catch(e){}
+  }
+  init();
+})();
+</script>
+</body>
+</html>

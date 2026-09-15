@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>s1 — Simple Test-Time Scaling (Budget Forcing)</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --wait:#f59e0b; --step:#a78bfa; --acc:#22d3ee; --good:#34d399; --bad:#fb7185; --start:#22d3ee;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #3a2410 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #201a40 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--acc); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(245,158,11,.16), rgba(167,139,250,.14) 50%, rgba(34,211,238,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#f59e0b,#a78bfa 50%,#22d3ee); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1160px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  canvas { width:100%; height:320px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .legend-row { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; align-items:center; }
+  .sliderbox { display:flex; align-items:center; gap:14px; margin:6px 0 12px; }
+  input[type=range] { flex:1; accent-color:var(--wait); }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; }
+  .kpi .box { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:10px 16px; text-align:center; min-width:110px; }
+  .kpi .num { font-size:23px; font-weight:800; } .kpi .cap { font-size:12px; color:var(--muted); }
+  .trace { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-family:ui-monospace,monospace; }
+  .chip { padding:6px 11px; border-radius:9px; border:1px solid var(--line); background:var(--panel-2); }
+  .chip.start { border-color:var(--start); color:var(--start); }
+  .chip.step { border-color:var(--step); color:var(--step); }
+  .chip.wait { border-color:var(--wait); color:var(--wait); font-weight:700; background:rgba(245,158,11,.12); }
+  .chip.stop { border-color:var(--muted); color:var(--muted); }
+  .chip.ans { border-color:var(--good); color:var(--good); font-weight:700; }
+  .chip.bad { border-color:var(--bad); color:var(--bad); font-weight:700; }
+  .think-wrap { border:1px dashed var(--step); border-radius:12px; padding:12px 14px; margin-top:12px; background:rgba(167,139,250,.06); }
+  .think-tag { color:var(--step); font-family:ui-monospace,monospace; font-size:12px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>s1 · Budget Forcing</h1>
+  <p>Control how long a model thinks with one trick: when it tries to stop early, suppress the end token and append
+  <b style="color:var(--wait)">"Wait"</b> to force another reasoning step. More forced thinking → higher accuracy.</p>
+  <div class="badges">
+    <span class="badge">Muennighoff et al., 2025</span>
+    <span class="badge">arXiv:2501.19393</span>
+    <span class="badge">Budget forcing ("Wait")</span>
+    <span class="badge">~1K curated SFT</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Budget forcing on a real trace</h2>
+  <p class="section-sub">This model was SFT'd on a curated set skewed toward short chains, so it naturally stops after ~<span id="nstop"></span> steps. Slide the forced minimum: each "Wait" cancels an early stop and buys another step.</p>
+  <div class="card">
+    <div style="font-family:ui-monospace,monospace;font-size:16px" id="ex-problem"></div>
+    <div class="sliderbox" style="margin-top:12px">
+      <span style="color:var(--wait);font-weight:700">force ≥</span>
+      <input type="range" id="force" min="0" max="8" step="1" value="0" />
+      <span id="force-val" style="font-family:ui-monospace,monospace;color:var(--wait);width:2ch;text-align:right">0</span>
+      <span style="color:var(--muted)">steps</span>
+    </div>
+    <div class="kpi" style="margin-bottom:6px">
+      <div class="box"><div class="num" style="color:var(--acc)" id="k-acc">—</div><div class="cap">accuracy (400 problems)</div></div>
+      <div class="box"><div class="num" style="color:var(--wait)" id="k-wait">—</div><div class="cap">avg 'Wait's forced</div></div>
+      <div class="box"><div class="num" style="color:var(--step)" id="k-steps">—</div><div class="cap">avg thinking steps</div></div>
+    </div>
+    <div class="think-wrap">
+      <span class="think-tag">&lt;think&gt;</span>
+      <div class="trace" id="live-trace"></div>
+      <span class="think-tag">&lt;/think&gt;</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Accuracy vs forced thinking</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. <span id="cfg-note"></span></p>
+  <div class="card">
+    <canvas id="curve" width="1080" height="320"></canvas>
+    <div class="legend-row">
+      <span><span style="color:var(--acc)">■</span> accuracy</span>
+      <span><span style="color:var(--wait)">■</span> avg 'Wait's forced</span>
+      <span><span style="color:var(--wait)">●</span> selected budget</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">The mechanism</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Think more: append "Wait"</h4>
+      <div style="background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13px;color:#cfe8ff;white-space:pre-wrap">while steps &lt; min_budget:
+    if model wants to stop:
+        suppress &lt;/think&gt;
+        emit "Wait"   ← keep thinking
+    take one more reasoning step</div>
+      <ul><li>Overrides the model's premature stop and extends the reasoning chain.</li>
+          <li>Each "Wait" is one more unit of test-time compute.</li></ul>
+    </div>
+    <div class="card">
+      <h4>Think less: force the end token</h4>
+      <div style="background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13px;color:#cfe8ff;white-space:pre-wrap">if steps ≥ max_budget:
+    emit &lt;/think&gt;   ← stop now
+    commit the current answer</div>
+      <ul><li>Caps compute for speed — the other half of budget forcing.</li>
+          <li>Together they make test-time compute a simple dial.</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“s1: Simple test-time scaling”</b> (Muennighoff et al., 2025, arXiv:2501.19393).
+    The reasoner is small; the mechanism — curated SFT + "Wait" budget forcing — is the paper's.
+    Data from <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"max_len":8,"curated_size":1000,"n_test":400,"avg_curated_len":2.29,"natural_stop":3,"seconds":2.3},
+  "curve": [
+    {"min_think":0,"accuracy":0.425,"avg_steps":2.59,"avg_waits":0.0},
+    {"min_think":1,"accuracy":0.425,"avg_steps":2.59,"avg_waits":0.0},
+    {"min_think":2,"accuracy":0.425,"avg_steps":2.59,"avg_waits":0.0},
+    {"min_think":3,"accuracy":0.425,"avg_steps":2.59,"avg_waits":0.0},
+    {"min_think":4,"accuracy":0.535,"avg_steps":3.22,"avg_waits":0.62},
+    {"min_think":5,"accuracy":0.645,"avg_steps":3.73,"avg_waits":1.13},
+    {"min_think":6,"accuracy":0.75,"avg_steps":4.12,"avg_waits":1.53},
+    {"min_think":7,"accuracy":0.8825,"avg_steps":4.4,"avg_waits":1.81},
+    {"min_think":8,"accuracy":1.0,"avg_steps":4.53,"avg_waits":1.94}
+  ],
+  "natural_accuracy":0.425,"forced_accuracy":1.0,
+  "example": {
+    "problem":"0 -2 +2 *3 -1 +4 -1 -3 +4 = ?","true":3,
+    "natural":{"trace":"start=0 -2->8 +2->0 *3->0","answer":0,"steps":3},
+    "forced":{"trace":"start=0 -2->8 +2->0 *3->0 Wait -1->9 Wait +4->3 Wait -1->2 Wait -3->9 Wait +4->3","answer":3,"steps":8,"waits":5}
+  }
+};
+let D = BAKED;
+
+function opsFromProblem(p){ return p.replace(" = ?","").trim().split(/\s+/).slice(1); }
+
+// Build the full running-value sequence from the forced (complete) trace tokens.
+function fullValues() {
+  const toks = D.example.forced.trace.split(/\s+/);
+  const vals = []; // value after each applied op, index 0 = start
+  toks.forEach(t => {
+    if (t.startsWith("start=")) vals.push(+t.split("=")[1]);
+    else if (t.includes("->")) vals.push(+t.split("->")[1]);
+  });
+  return vals; // length = ops+1
+}
+
+function renderTrace(budget) {
+  const ex = D.example, ops = opsFromProblem(ex.problem), vals = fullValues();
+  const natural = D.config.natural_stop;
+  const applied = Math.max(natural, Math.min(budget, ops.length));
+  let html = `<span class="chip start">start=${vals[0]}</span>`;
+  for (let i=0;i<applied;i++){
+    if (i >= natural) html += `<span class="chip wait">Wait</span>`;
+    html += `<span class="chip step">${ops[i]} → ${vals[i+1]}</span>`;
+  }
+  const ans = vals[applied], ok = ans === ex.true;
+  html += `<span class="chip ${ok?'ans':'bad'}">&lt;/think&gt; answer=${ans} ${ok?'✓':'✗'}</span>`;
+  document.getElementById('live-trace').innerHTML = html;
+}
+
+function update() {
+  const b = +document.getElementById('force').value;
+  document.getElementById('force-val').textContent = b;
+  const pt = D.curve[b];
+  document.getElementById('k-acc').textContent = Math.round(pt.accuracy*100)+'%';
+  document.getElementById('k-wait').textContent = pt.avg_waits.toFixed(1);
+  document.getElementById('k-steps').textContent = pt.avg_steps.toFixed(1);
+  renderTrace(b);
+  drawCurve(b);
+}
+
+function drawCurve(active) {
+  const cv=document.getElementById('curve'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=48; ctx.clearRect(0,0,W,H);
+  const C=D.curve, maxB=Math.max(...C.map(c=>c.min_think));
+  const maxW=Math.max(...C.map(c=>c.avg_waits),1);
+  const X=b=>pad+(b/maxB)*(W-2*pad);
+  const Yp=p=>H-pad-p*(H-2*pad);
+  const Yw=w=>H-pad-(w/maxW)*(H-2*pad);
+  ctx.strokeStyle='#1e2946'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for(let g=0;g<=5;g++){const y=Yp(g/5);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();
+    ctx.fillStyle='#22d3ee';ctx.fillText((g*20)+'%',6,y+3);
+    ctx.fillStyle='#f59e0b';ctx.fillText((g/5*maxW).toFixed(1),W-pad+8,y+3);}
+  ctx.fillStyle='#6b7aa0'; ctx.fillText('forced minimum thinking (steps)', W/2-90, H-10);
+  C.forEach(c=>{ctx.fillStyle='#6b7aa0';ctx.fillText(c.min_think,X(c.min_think)-3,H-pad+16);});
+
+  const plot=(key,color,yfn)=>{ctx.beginPath();
+    C.forEach((c,i)=>{const x=X(c.min_think),y=yfn(c[key]);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=color;ctx.lineWidth=2.8;ctx.stroke();
+    C.forEach(c=>{ctx.beginPath();ctx.arc(X(c.min_think),yfn(c[key]),3,0,7);ctx.fillStyle=color;ctx.fill();});};
+  plot('avg_waits','#f59e0b',Yw);
+  plot('accuracy','#22d3ee',Yp);
+
+  const a=C[active];
+  ctx.strokeStyle='#f59e0b';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(X(a.min_think),pad-6);ctx.lineTo(X(a.min_think),H-pad);ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ctx.arc(X(a.min_think),Yp(a.accuracy),6,0,7);ctx.fillStyle='#f59e0b';ctx.fill();
+}
+
+function init(){
+  document.getElementById('nstop').textContent = D.config.natural_stop;
+  document.getElementById('cfg-note').textContent =
+    `curated ${D.config.curated_size}-example SFT (avg length ${D.config.avg_curated_len}) · ${D.config.n_test} test problems · ~${D.config.seconds}s on CPU.`;
+  document.getElementById('ex-problem').innerHTML =
+    `<span style="color:var(--start)">${D.example.problem}</span>  <span style="color:var(--muted)">true = ${D.example.true}</span>`;
+  document.getElementById('force').max = D.curve.length-1;
+  update();
+}
+document.getElementById('force').addEventListener('input', update);
+
+(async function(){
+  if (location.protocol.startsWith('http')) {
+    try{ const r=await fetch('../data/s1_results.json',{cache:'no-store'});
+      if(r.ok){ D=await r.json(); } }catch(e){}
+  }
+  init();
+})();
+</script>
+</body>
+</html>

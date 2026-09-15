@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gemini 1.5 — MoE &amp; Long-Context Recall</title>
+<style>
+  :root{--bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;--line:#2a3352;
+    --a:#22d3ee;--b:#a78bfa;--c:#fb7185;--d:#34d399;--e:#f59e0b;--shadow:0 10px 30px rgba(0,0,0,.35);}
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 15% -10%, #10233f 0%, transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, #241146 0%, transparent 60%), var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14));border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:800px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}.section-sub{color:var(--muted);margin:0 0 18px}
+  .grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .formula{margin:10px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;white-space:pre-wrap;overflow-x:auto}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+  /* heatmap */
+  .heat{display:grid;gap:4px}
+  .hrow{display:grid;grid-auto-flow:column;gap:4px}
+  .hcell{aspect-ratio:1.6/1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#03140c}
+  .hgrid{display:grid;grid-template-columns:64px 1fr;gap:6px;align-items:center}
+  .ylab{display:grid;gap:4px}.ylab div{display:flex;align-items:center;justify-content:flex-end;font-size:11px;color:var(--muted)}
+  .xlab{display:grid;grid-auto-flow:column;gap:4px;text-align:center;font-size:11px;color:var(--muted);margin-left:70px}
+  .legend{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--muted);font-size:12px}
+  .legbar{height:10px;flex:1;border-radius:6px;background:linear-gradient(90deg,#3b0d24,#7a1030,#c2410c,#f59e0b,#a3e635,#34d399)}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+  .kpi div{background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex:1;min-width:120px}
+  .kpi b{font-size:22px;color:var(--d)}.kpi span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  /* MoE routing */
+  .route{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .tokrow,.exprow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .tok{width:46px;height:34px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .exp{width:120px;border-radius:10px;border:1px solid var(--line);padding:8px;text-align:center}
+  .expbar{height:10px;border-radius:6px;margin-top:6px;background:linear-gradient(90deg,#22d3ee,#a78bfa)}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Gemini 1.5</h1>
+  <p>Two headline documented ideas, reproduced honestly at tiny scale: a <b>sparse Mixture-of-Experts</b> Transformer, and <b>long-context near-perfect recall</b> measured with a needle-in-a-haystack retrieval test.</p>
+  <div class="badges">
+    <span class="badge">Google, 2024</span>
+    <span class="badge">arXiv:2403.05530</span>
+    <span class="badge">Sparse MoE</span>
+    <span class="badge">Needle-in-a-haystack</span>
+    <span class="badge">Closed model — tiny repro</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">Needle-in-a-haystack recall</h2>
+  <p class="section-sub">A single planted fact (<code class="k">&lt;NEEDLE&gt; value</code>) is hidden among distractor tokens; the model must recall it at the query. Recall is measured across <b>needle depth</b> (rows) and <b>haystack length</b> (columns). Greener = higher recall.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Recall heatmap (from the demo run)</h4>
+      <div class="kpi">
+        <div><b id="kpi-trained"></b><span>recall within trained lengths</span></div>
+        <div><b id="kpi-overall"></b><span>overall recall (incl. extrapolation)</span></div>
+      </div>
+      <div id="heat"></div>
+      <div class="legend"><span>0%</span><span class="legbar"></span><span>100%</span></div>
+      <p class="small" id="heat-note" style="margin-top:10px"></p>
+    </div>
+    <div class="card">
+      <h4>The retrieval task</h4>
+      <div class="formula">d d d ... &lt;NEEDLE&gt; v ... d d  &lt;QUERY&gt;   →  v
+
+• haystack = random distractor tokens
+• needle   = &lt;NEEDLE&gt; marker + a secret value
+• the model must locate the marker anywhere
+  in the context and copy the token after it</div>
+      <p class="small">RoPE attention lets the model resolve positions in contexts longer than any it trained on — the last two columns are longer-than-trained haystacks. Implemented in <code class="k">src/task.py</code> and <code class="k">src/model.py</code>.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Sparse Mixture-of-Experts routing</h2>
+  <p class="section-sub">Each token is routed to <b>top-k</b> of the experts by a learned router; the load-balancing loss keeps the router from collapsing onto a few experts. Bars show the measured per-expert load.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Top-k routing</h4>
+      <p class="small">Tokens (top) are dispatched to their top-k experts (bottom). Per-token compute stays fixed as experts are added.</p>
+      <div class="route">
+        <div class="tokrow" id="tokrow"></div>
+        <div style="color:var(--muted);font-size:12px">↓ router picks top-<span id="topk"></span> ↓</div>
+        <div class="exprow" id="exprow"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Load balancing <span class="small">(ideal = <span id="ideal"></span> each)</span></h4>
+      <div class="formula">route:  probs = softmax(x · W_router)
+        top-k experts, gated by renormalized probs
+loss_aux = α · E · Σ_i  load_i · importance_i
+        (minimized when load is uniform)</div>
+      <p class="small">Measured loads are near the ideal, so no expert is starved or overloaded. Implemented in <code class="k">src/moe.py</code> → <code class="k">SparseMoE</code>.</p>
+    </div>
+  </div>
+
+  <div class="footer">Interactive companion to <b>Gemini 1.5</b> (Google, 2024). A tiny from-scratch reproduction; data generated by <code class="k">demo/run_demo.py</code>.</div>
+</div>
+
+<script>
+const BAKED = {"config":{"params":168960,"n_experts":4,"top_k":2,"trained_pairs":[4,32],"seconds":15.3},
+"heatmap":{"lengths":[6,12,20,28,36,44],"pos_fracs":[0.0,0.25,0.5,0.75,1.0],
+"recall":[[1.0,1.0,1.0,1.0,0.0586,0.3555],[1.0,1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0,1.0]]},
+"overall_recall":0.9471,"trained_recall":1.0,"expert_load":[0.4818,0.5149,0.5281,0.4753],"ideal_load":0.5};
+
+const el=id=>document.getElementById(id);
+function heatColor(t){const s=[[59,13,36],[122,16,48],[194,65,12],[245,158,11],[163,230,53],[52,211,153]];
+  const x=Math.max(0,Math.min(1,t))*(s.length-1);const i=Math.floor(x),f=x-i;const a=s[i],b=s[Math.min(i+1,s.length-1)];
+  return `rgb(${a.map((v,k)=>Math.round(v+(b[k]-v)*f)).join(',')})`;}
+
+function render(d){
+  el('kpi-trained').textContent=(d.trained_recall*100).toFixed(0)+'%';
+  el('kpi-overall').textContent=(d.overall_recall*100).toFixed(1)+'%';
+  const hm=d.heatmap, trained=d.config.trained_pairs[1];
+  const heat=el('heat'); heat.innerHTML='';
+  const grid=document.createElement('div'); grid.className='hgrid';
+  const ylab=document.createElement('div'); ylab.className='ylab';
+  ylab.style.gridTemplateRows=`repeat(${hm.pos_fracs.length},1fr)`;
+  hm.pos_fracs.forEach(pf=>{const dv=document.createElement('div');dv.textContent='depth '+Math.round(pf*100)+'%';ylab.appendChild(dv);});
+  const body=document.createElement('div'); body.className='heat';
+  body.style.gridTemplateRows=`repeat(${hm.recall.length},1fr)`;
+  hm.recall.forEach(row=>{const r=document.createElement('div');r.className='hrow';
+    r.style.gridTemplateColumns=`repeat(${row.length},1fr)`;
+    row.forEach(v=>{const c=document.createElement('div');c.className='hcell';c.style.background=heatColor(v);
+      c.textContent=Math.round(v*100);c.title=(v*100).toFixed(1)+'%';r.appendChild(c);});
+    body.appendChild(r);});
+  grid.appendChild(ylab);grid.appendChild(body);heat.appendChild(grid);
+  const xlab=document.createElement('div'); xlab.className='xlab';
+  xlab.style.gridTemplateColumns=`repeat(${hm.lengths.length},1fr)`;
+  hm.lengths.forEach(L=>{const dv=document.createElement('div');dv.textContent=L+(L>trained?'*':'');xlab.appendChild(dv);});
+  heat.appendChild(xlab);
+  el('heat-note').innerHTML=`Columns marked * (${hm.lengths.filter(L=>L>trained).join(', ')}) are longer than the ${d.config.trained_pairs[0]}–${trained} distractor haystacks seen in training — recall holds except at the very start of the longest contexts.`;
+
+  // MoE routing
+  el('topk').textContent=d.config.top_k; el('ideal').textContent=d.ideal_load.toFixed(3);
+  const tr=el('tokrow'); tr.innerHTML=''; for(let i=0;i<6;i++){const t=document.createElement('div');t.className='tok';t.textContent='tok'+i;tr.appendChild(t);}
+  const er=el('exprow'); er.innerHTML='';
+  const maxL=Math.max(...d.expert_load);
+  d.expert_load.forEach((L,i)=>{const e=document.createElement('div');e.className='exp';
+    e.innerHTML=`<div>Expert ${i}</div><div style="color:var(--muted);font-size:12px">load ${L.toFixed(3)}</div><div class="expbar" style="width:${Math.round(L/maxL*100)}%"></div>`;
+    er.appendChild(e);});
+}
+(async function init(){
+  if(location.protocol.startsWith('http')){try{const r=await fetch('../data/gemini_results.json',{cache:'no-store'});if(r.ok){render(await r.json());return;}}catch(e){}}
+  render(BAKED);
+})();
+</script>
+</body>
+</html>

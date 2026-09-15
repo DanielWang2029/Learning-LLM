@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gemma 2 — Alternating Attention &amp; Logit Soft-Capping</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340;
+    --ink: #e8ecf7; --muted: #93a0c0; --line: #2a3352;
+    --embed: #22d3ee; --norm: #a78bfa; --local: #fb7185; --global: #f59e0b;
+    --ffn: #34d399; --cap: #f472b6; --gqa: #60a5fa;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--embed); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(251,113,133,.14), rgba(245,158,11,.14) 45%, rgba(244,114,182,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #fb7185, #f59e0b 40%, #f472b6 75%, #a78bfa);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  /* Architecture */
+  .arch { display: grid; grid-template-columns: 1.1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 900px) { .arch { grid-template-columns: 1fr; } }
+  .stack { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow); }
+  .stack h3 { margin: 2px 0 12px; text-align: center; font-size: 13px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); }
+  .block { display: flex; align-items: center; gap: 10px; padding: 11px 13px; margin: 9px 0;
+    border-radius: 11px; cursor: pointer; border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    background: var(--panel-2); user-select: none; }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .block .label { font-weight: 600; }
+  .block .sec { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .arrow { text-align: center; color: var(--line); font-size: 18px; line-height: 1; margin: -3px 0; }
+  .layerbox { border: 1px dashed var(--line); border-radius: 12px; padding: 10px; margin: 8px 0;
+    position: relative; background: rgba(255,255,255,.015); }
+  .layerbox .tagl { position: absolute; top: -11px; left: 14px; background: var(--panel);
+    padding: 0 8px; font-size: 11px; border: 1px solid var(--line); border-radius: 6px; }
+  .c-embed { background: linear-gradient(90deg, rgba(34,211,238,.16), transparent); }
+  .c-norm  { background: linear-gradient(90deg, rgba(167,139,250,.16), transparent); }
+  .c-local { background: linear-gradient(90deg, rgba(251,113,133,.18), transparent); }
+  .c-global{ background: linear-gradient(90deg, rgba(245,158,11,.18), transparent); }
+  .c-ffn   { background: linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .c-cap   { background: linear-gradient(90deg, rgba(244,114,182,.18), transparent); }
+  .io { text-align: center; color: var(--muted); font-size: 13px; border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px; margin: 8px 0; background: rgba(255,255,255,.02); }
+  .detail { position: sticky; top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 260px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .formula { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a;
+    border: 1px solid var(--line); font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; } .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* Masks */
+  .maskgrid { display: grid; gap: 3px; }
+  .maskgrid .mrow { display: grid; gap: 3px; grid-auto-flow: column; }
+  .mcell { width: 100%; aspect-ratio: 1/1; border-radius: 4px; }
+  .legend-row { display:flex; align-items:center; gap:10px; margin-top:10px; color:var(--muted); font-size:12px; }
+  .swatch { width: 14px; height: 14px; border-radius: 4px; display:inline-block; }
+  .schedule { display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 14px; }
+  .pill { font-size:12px; padding:5px 11px; border-radius:999px; border:1px solid var(--line); }
+  .pill.local { background: rgba(251,113,133,.18); color:#ffd7de; }
+  .pill.global { background: rgba(245,158,11,.18); color:#ffe9c2; }
+
+  canvas { width: 100%; height: 260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .metrics { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top: 6px; }
+  .metric { background: var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .metric .big { font-size:22px; font-weight:700; }
+  .metric .lbl { color: var(--muted); font-size:12px; }
+  .good { color: #34d399; } .bad { color: #fb7185; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Gemma 2</h1>
+  <p>An interactive tour of Gemma 2's distinctive design: <b>alternating local &amp; global attention</b>,
+  <b>logit soft-capping</b>, grouped-query attention, and RMSNorm — reproduced from scratch at laptop scale.
+  All charts below use <b>real data</b> from this folder's demo run.</p>
+  <div class="badges">
+    <span class="badge">Google, 2024</span>
+    <span class="badge">arXiv 2408.00118</span>
+    <span class="badge">Sliding-Window + Global</span>
+    <span class="badge">Soft-Capping</span>
+    <span class="badge">GQA · RMSNorm</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The decoder block, end to end</h2>
+  <p class="section-sub">A stack of <b id="nlayers">N</b> decoder blocks whose attention layers
+  <b>alternate</b> between local (sliding-window) and global (full-causal). Every sub-block is wrapped in
+  <b>pre-norm + post-norm</b> RMSNorm. Click any block for details.</p>
+
+  <div class="arch">
+    <div class="stack">
+      <h3>One decoder block</h3>
+      <div class="io">token ids → Embedding × √d_model</div>
+      <div class="block c-embed" data-key="embed"><span class="dot" style="background:var(--embed)"></span><span class="label">Embedding (scaled)</span><span class="sec">§2</span></div>
+      <div class="arrow">↓</div>
+      <div class="layerbox"><span class="tagl">attention sub-block</span>
+        <div class="block c-norm" data-key="prenorm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm (pre)</span><span class="sec">§2</span></div>
+        <div class="block c-local" data-key="attn"><span class="dot" style="background:var(--local)"></span><span class="label">GQA — local OR global</span><span class="sec">§2</span></div>
+        <div class="block c-norm" data-key="postnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm (post)</span><span class="sec">§2</span></div>
+        <div class="io">+ residual</div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="layerbox"><span class="tagl">MLP sub-block</span>
+        <div class="block c-norm" data-key="prenorm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm (pre)</span><span class="sec">§2</span></div>
+        <div class="block c-ffn" data-key="ffn"><span class="dot" style="background:var(--ffn)"></span><span class="label">GeGLU Feed-Forward</span><span class="sec">§2</span></div>
+        <div class="block c-norm" data-key="postnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm (post)</span><span class="sec">§2</span></div>
+        <div class="io">+ residual</div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="block c-norm" data-key="finalnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Final RMSNorm</span><span class="sec">§2</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-cap" data-key="softcap"><span class="dot" style="background:var(--cap)"></span><span class="label">Logits → Soft-Cap</span><span class="sec">§2</span></div>
+      <div class="io">output probabilities</div>
+    </div>
+
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a block</h3>
+      <div class="tag" id="d-tag">Every colored block is interactive.</div>
+      <div class="formula" id="d-formula">Select any component to reveal its role, equations, and where it lives in the paper.</div>
+      <ul id="d-points"></ul>
+      <p class="hint" id="d-file"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Alternating local &amp; global attention</h2>
+  <p class="section-sub">Gemma 2 interleaves <b class="local-c">local</b> sliding-window layers (attend only to the
+  last <span id="win"></span> tokens) with <b class="global-c">global</b> layers (attend to all past tokens).
+  This keeps most layers cheap while a few provide long-range reach. The masks below are the exact tensors used
+  by the demo.</p>
+  <div class="schedule" id="schedule"></div>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--local)">Local — sliding-window mask</h4>
+      <p class="small">Query <i>i</i> may attend to keys in <code class="k">(i−window, i]</code>. Note the banded diagonal.</p>
+      <div id="mask-local" class="maskgrid"></div>
+      <div class="legend-row"><span class="swatch" style="background:var(--local)"></span> attend
+        <span class="swatch" style="background:#0d132a;border:1px solid var(--line)"></span> masked</div>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--global)">Global — full causal mask</h4>
+      <p class="small">Query <i>i</i> may attend to every key <code class="k">j ≤ i</code>: the full lower triangle.</p>
+      <div id="mask-global" class="maskgrid"></div>
+      <div class="legend-row"><span class="swatch" style="background:var(--global)"></span> attend
+        <span class="swatch" style="background:#0d132a;border:1px solid var(--line)"></span> masked</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Logit soft-capping</h2>
+  <p class="section-sub">Instead of letting scores grow without bound, Gemma 2 squashes them with
+  <code class="k">cap · tanh(x / cap)</code>. Small values pass through almost unchanged; large values saturate
+  toward ±cap. The paper uses <b>50</b> for attention scores and <b>30</b> for the final logits.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--cap)">The soft-cap transfer function</h4>
+      <p class="small">Dashed = identity (no cap). Solid curves = <code class="k">cap·tanh(x/cap)</code> for cap = 30 and 50.</p>
+      <canvas id="cap-canvas" width="1100" height="260"></canvas>
+    </div>
+    <div class="card">
+      <h4>Does it matter? (real demo run)</h4>
+      <p class="small">Two identical tiny models trained on a copy task — one WITH soft-capping, one WITHOUT.</p>
+      <div class="metrics">
+        <div class="metric"><div class="lbl">WITH cap — copy accuracy</div><div class="big good" id="m-acc-cap"></div></div>
+        <div class="metric"><div class="lbl">WITHOUT cap — copy accuracy</div><div class="big bad" id="m-acc-nocap"></div></div>
+        <div class="metric"><div class="lbl">WITH cap — peak |output logit|</div><div class="big good" id="m-lg-cap"></div></div>
+        <div class="metric"><div class="lbl">WITHOUT cap — peak |output logit|</div><div class="big bad" id="m-lg-nocap"></div></div>
+      </div>
+      <p class="small" id="cap-takeaway" style="margin-top:14px"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Training dynamics (real data)</h2>
+  <p class="section-sub">Left: the max output-logit magnitude per checkpoint — capping pins it under the cap line;
+  without capping it spikes. Right: copy accuracy — only the capped run converges.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Max |output logit| over training</h4>
+      <canvas id="logit-canvas" width="1100" height="240"></canvas>
+    </div>
+    <div class="card">
+      <h4>Copy accuracy over training</h4>
+      <canvas id="acc-canvas" width="1100" height="240"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">Grouped-query attention (GQA)</h2>
+  <p class="section-sub">Many query heads share a smaller set of key/value heads — shrinking the KV cache with
+  little quality loss.</p>
+  <div class="card">
+    <div id="gqa-diagram" style="display:flex;flex-direction:column;gap:14px"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Gemma 2</b> (Google, 2024 · arXiv 2408.00118).
+    All numbers are baked from <code class="k">data/gemma2_results.json</code> — regenerate with
+    <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config": {"d_model": 96, "n_layers": 4, "n_heads": 6, "n_kv_heads": 2, "n_rep": 3, "sliding_window": 6, "attn_cap": 50.0, "final_cap": 30.0, "params": 397920}, "layer_schedule": ["local", "global", "local", "global"], "local_mask": [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0], [0, 1, 1, 1, 1, 1, 1, 0, 0, 0], [0, 0, 1, 1, 1, 1, 1, 1, 0, 0], [0, 0, 0, 1, 1, 1, 1, 1, 1, 0], [0, 0, 0, 0, 1, 1, 1, 1, 1, 1]], "global_mask": [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], "sliding_window_demo_len": 10, "softcap_curve": {"x": [-120.0, -118.0, -116.0, -114.0, -112.0, -110.0, -108.0, -106.0, -104.0, -102.0, -100.0, -98.0, -96.0, -94.0, -92.0, -90.0, -88.0, -86.0, -84.0, -82.0, -80.0, -78.0, -76.0, -74.0, -72.0, -70.0, -68.0, -66.0, -64.0, -62.0, -60.0, -58.0, -56.0, -54.0, -52.0, -50.0, -48.0, -46.0, -44.0, -42.0, -40.0, -38.0, -36.0, -34.0, -32.0, -30.0, -28.0, -26.0, -24.0, -22.0, -20.0, -18.0, -16.0, -14.0, -12.0, -10.0, -8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0, 32.0, 34.0, 36.0, 38.0, 40.0, 42.0, 44.0, 46.0, 48.0, 50.0, 52.0, 54.0, 56.0, 58.0, 60.0, 62.0, 64.0, 66.0, 68.0, 70.0, 72.0, 74.0, 76.0, 78.0, 80.0, 82.0, 84.0, 86.0, 88.0, 90.0, 92.0, 94.0, 96.0, 98.0, 100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0, 116.0, 118.0, 120.0], "cap30": [-29.98, -29.977, -29.974, -29.97, -29.966, -29.961, -29.955, -29.949, -29.942, -29.933, -29.924, -29.913, -29.9, -29.886, -29.87, -29.852, -29.831, -29.806, -29.779, -29.748, -29.712, -29.671, -29.624, -29.571, -29.51, -29.441, -29.362, -29.272, -29.17, -29.053, -28.921, -28.77, -28.599, -28.404, -28.183, -27.933, -27.65, -27.33, -26.968, -26.561, -26.102, -25.587, -25.01, -24.365, -23.646, -22.848, -21.964, -20.99, -19.921, -18.753, -17.483, -16.111, -14.638, -13.065, -11.398, -9.645, -7.816, -5.921, -3.976, -1.997, 0.0, 1.997, 3.976, 5.921, 7.816, 9.645, 11.398, 13.065, 14.638, 16.111, 17.483, 18.753, 19.921, 20.99, 21.964, 22.848, 23.646, 24.365, 25.01, 25.587, 26.102, 26.561, 26.968, 27.33, 27.65, 27.933, 28.183, 28.404, 28.599, 28.77, 28.921, 29.053, 29.17, 29.272, 29.362, 29.441, 29.51, 29.571, 29.624, 29.671, 29.712, 29.748, 29.779, 29.806, 29.831, 29.852, 29.87, 29.886, 29.9, 29.913, 29.924, 29.933, 29.942, 29.949, 29.955, 29.961, 29.966, 29.97, 29.974, 29.977, 29.98], "cap50": [-49.184, -49.116, -49.043, -48.965, -48.879, -48.787, -48.687, -48.58, -48.463, -48.337, -48.201, -48.054, -47.896, -47.725, -47.54, -47.34, -47.125, -46.893, -46.643, -46.374, -46.083, -45.771, -45.435, -45.073, -44.685, -44.268, -43.82, -43.339, -42.824, -42.273, -41.683, -41.052, -40.378, -39.66, -38.894, -38.08, -37.214, -36.295, -35.321, -34.29, -33.202, -32.054, -30.845, -29.576, -28.245, -26.852, -25.399, -23.885, -22.312, -20.682, -18.997, -17.261, -15.475, -13.645, -11.775, -9.869, -7.932, -5.971, -3.991, -1.999, 0.0, 1.999, 3.991, 5.971, 7.932, 9.869, 11.775, 13.645, 15.475, 17.261, 18.997, 20.682, 22.312, 23.885, 25.399, 26.852, 28.245, 29.576, 30.845, 32.054, 33.202, 34.29, 35.321, 36.295, 37.214, 38.08, 38.894, 39.66, 40.378, 41.052, 41.683, 42.273, 42.824, 43.339, 43.82, 44.268, 44.685, 45.073, 45.435, 45.771, 46.083, 46.374, 46.643, 46.893, 47.125, 47.34, 47.54, 47.725, 47.896, 48.054, 48.201, 48.337, 48.463, 48.58, 48.687, 48.787, 48.879, 48.965, 49.043, 49.116, 49.184]}, "training": {"with_cap": {"step": [1, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260], "loss": [28.3083, 15.8668, 10.9891, 7.4368, 4.3637, 2.9171, 2.3546, 1.9896, 1.8135, 1.7095, 1.6745, 1.5897, 1.5707, 1.5432], "acc": [0.0342, 0.0342, 0.0342, 0.0342, 0.1045, 0.2568, 0.4727, 0.7148, 0.8857, 0.9268, 0.9385, 0.9609, 0.9844, 0.9863], "max_out_logit": [29.966, 29.905, 29.91, 29.921, 29.959, 29.963, 29.972, 29.954, 29.941, 29.964, 29.968, 29.945, 29.714, 29.613]}, "without_cap": {"step": [1, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 220, 240, 260], "loss": [88.1759, 47.2177, 24.1524, 6.2912, 3.7713, 3.5623, 3.5399, 3.5246, 3.3551, 3.3799, 3.3782, 3.3307, 3.2979, 3.2187], "acc": [0.0342, 0.0342, 0.0352, 0.0352, 0.0225, 0.0254, 0.0371, 0.0244, 0.0352, 0.0498, 0.04, 0.0371, 0.043, 0.0664], "max_out_logit": [112.266, 83.907, 70.774, 50.158, 25.832, 19.207, 19.644, 18.881, 18.967, 19.346, 22.566, 19.502, 20.791, 20.008]}}, "results": {"acc_with_cap": 0.986328125, "acc_without_cap": 0.06640625, "peak_out_logit_with_cap": 29.972, "peak_out_logit_without_cap": 112.266, "initial_loss_with_cap": 28.308, "initial_loss_without_cap": 88.176}};
+
+const DETAILS = {
+  embed: { title: "Scaled Token Embedding", tag: "Paper §2",
+    formula: "x = Embedding(token) · √d_model",
+    points: ["Learned lookup table maps token ids to vectors.",
+             "Scaled by √d_model (the Gemma 'normalizer') so magnitudes match the residual stream.",
+             "The same embedding matrix is TIED to the output projection."],
+    file: "src/model.py → Gemma2Model.embed" },
+  prenorm: { title: "RMSNorm — pre-norm", tag: "Paper §2",
+    formula: "RMSNorm(x) = x / sqrt(mean(x²)+ε) · (1 + w)",
+    points: ["Root-mean-square norm: no mean subtraction, one learned scale.",
+             "Applied BEFORE the sub-block (standard pre-norm).",
+             "Scale is stored as (1 + w), matching the Gemma reference."],
+    file: "src/norm.py → RMSNorm" },
+  postnorm: { title: "RMSNorm — post-norm", tag: "Paper §2 (distinctive)",
+    formula: "x = x + RMSNorm_post( SubBlock( RMSNorm_pre(x) ) )",
+    points: ["Gemma 2 adds a SECOND RMSNorm AFTER each sub-block's output.",
+             "This 'pre + post norm' sandwich further stabilizes deep training.",
+             "Both attention and MLP sub-blocks are wrapped this way."],
+    file: "src/model.py → DecoderBlock" },
+  attn: { title: "Grouped-Query Attention (local or global)", tag: "Paper §2",
+    formula: "scores = QKᵀ/√d ;  soft-cap(50) ;  mask ;  softmax ;  · V\nlocal layers: sliding-window mask   global layers: full causal",
+    points: ["Even layers use a sliding-window (local) mask; odd layers are global.",
+             "GQA: query heads share fewer key/value heads (see the diagram below).",
+             "Attention scores are soft-capped at 50 before the softmax."],
+    file: "src/attention.py → GemmaAttention" },
+  ffn: { title: "GeGLU Feed-Forward", tag: "Paper §2",
+    formula: "FFN(x) = ( GELU(x·W_gate) ⊙ (x·W_up) ) · W_down",
+    points: ["Gated MLP with a GELU gate (GeGLU), as used by Gemma.",
+             "Expands to d_ff then projects back to d_model.",
+             "Applied per position, identically across the sequence."],
+    file: "src/model.py → GeGLU" },
+  finalnorm: { title: "Final RMSNorm", tag: "Paper §2",
+    formula: "x = RMSNorm(x)   (before the output projection)",
+    points: ["Normalizes the residual stream before computing logits."],
+    file: "src/model.py → Gemma2Model.final_norm" },
+  softcap: { title: "Final Logit Soft-Capping", tag: "Paper §2 / Table 1",
+    formula: "logits = 30 · tanh( (x·Eᵀ) / 30 )",
+    points: ["Bounds every output logit into (−30, 30).",
+             "Prevents runaway confidence and tames the initial-loss spike.",
+             "The demo shows the capped run converges while the uncapped run does not."],
+    file: "src/model.py → soft_cap()" },
+};
+
+// ---- detail panel
+const blocks = document.querySelectorAll('.block');
+function show(key, el){ const d=DETAILS[key]; if(!d) return;
+  blocks.forEach(b=>b.classList.remove('active')); if(el) el.classList.add('active');
+  document.getElementById('d-title').textContent=d.title;
+  document.getElementById('d-tag').textContent=d.tag;
+  document.getElementById('d-formula').textContent=d.formula;
+  document.getElementById('d-points').innerHTML=d.points.map(p=>`<li>${p}</li>`).join('');
+  document.getElementById('d-file').textContent=d.file; }
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function render(data){
+  const cfg = data.config;
+  document.getElementById('nlayers').textContent = cfg.n_layers;
+  document.getElementById('win').textContent = cfg.sliding_window;
+
+  // schedule pills
+  const sched = document.getElementById('schedule');
+  data.layer_schedule.forEach((s,i)=>{ const p=document.createElement('span');
+    p.className='pill '+s; p.textContent=`layer ${i}: ${s}`; sched.appendChild(p); });
+
+  // masks
+  function drawMask(id, m, color){
+    const el=document.getElementById(id); const n=m.length; el.innerHTML='';
+    el.style.gridTemplateRows=`repeat(${n},1fr)`;
+    m.forEach(row=>{ const r=document.createElement('div'); r.className='mrow';
+      r.style.gridTemplateColumns=`repeat(${row.length},1fr)`;
+      row.forEach(v=>{ const c=document.createElement('div'); c.className='mcell';
+        c.style.background = v ? color : '#0d132a';
+        if(!v) c.style.border='1px solid #1b2440';
+        r.appendChild(c); });
+      el.appendChild(r); }); }
+  drawMask('mask-local', data.local_mask, '#fb7185');
+  drawMask('mask-global', data.global_mask, '#f59e0b');
+
+  // metrics
+  const r=data.results;
+  document.getElementById('m-acc-cap').textContent=(r.acc_with_cap*100).toFixed(1)+'%';
+  document.getElementById('m-acc-nocap').textContent=(r.acc_without_cap*100).toFixed(1)+'%';
+  document.getElementById('m-lg-cap').textContent=r.peak_out_logit_with_cap.toFixed(1);
+  document.getElementById('m-lg-nocap').textContent=r.peak_out_logit_without_cap.toFixed(1);
+  document.getElementById('cap-takeaway').innerHTML =
+    `Soft-capping bounds output logits to <b>±${cfg.final_cap}</b> (peak `+
+    `${r.peak_out_logit_with_cap.toFixed(0)}) and cuts the initial-loss spike `+
+    `<b>${r.initial_loss_without_cap.toFixed(0)} → ${r.initial_loss_with_cap.toFixed(0)}</b>, `+
+    `so the capped model converges while the uncapped one stalls.`;
+
+  // soft-cap transfer curve
+  drawCapCurve(data.softcap_curve, cfg.final_cap);
+  // training curves
+  drawLine('logit-canvas', data.training, 'max_out_logit', cfg.final_cap, 'cap line = '+cfg.final_cap);
+  drawLine('acc-canvas', data.training, 'acc', null, null, true);
+  // GQA diagram
+  drawGQA(cfg);
+}
+
+function axes(ctx,W,H,pad){ ctx.strokeStyle='#33406a'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-6,H-pad); ctx.moveTo(pad,H-pad); ctx.lineTo(pad,8); ctx.stroke(); }
+
+function drawCapCurve(curve, finalCap){
+  const cv=document.getElementById('cap-canvas'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=34; ctx.clearRect(0,0,W,H);
+  const xs=curve.x, xmin=Math.min(...xs), xmax=Math.max(...xs);
+  const ymax=60; // display range
+  const X=x=>pad+(x-xmin)/(xmax-xmin)*(W-pad-6);
+  const Y=y=>H-pad-(y+ymax)/(2*ymax)*(H-pad-8);
+  // grid
+  ctx.strokeStyle='#1e2946';
+  for(let g=-60;g<=60;g+=20){ const y=Y(g); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-6,y); ctx.stroke();
+    ctx.fillStyle='#5b678a'; ctx.font='10px monospace'; ctx.fillText(g, 4, y+3); }
+  axes(ctx,W,H,pad);
+  // identity dashed
+  ctx.setLineDash([5,4]); ctx.strokeStyle='#64748b'; ctx.beginPath();
+  xs.forEach((x,i)=>{ const yy=Math.max(-ymax,Math.min(ymax,x)); i?ctx.lineTo(X(x),Y(yy)):ctx.moveTo(X(x),Y(yy)); }); ctx.stroke();
+  ctx.setLineDash([]);
+  function plot(ys,color,label,ly){ ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+    xs.forEach((x,i)=>{ i?ctx.lineTo(X(x),Y(ys[i])):ctx.moveTo(X(x),Y(ys[i])); }); ctx.stroke();
+    ctx.fillStyle=color; ctx.font='12px monospace'; ctx.fillText(label, W-140, ly); }
+  plot(curve.cap50,'#f59e0b','cap = 50', 22);
+  plot(curve.cap30,'#f472b6','cap = 30', 40);
+  ctx.fillStyle='#64748b'; ctx.fillText('identity', W-140, 58);
+}
+
+function drawLine(id, training, key, hline, hlabel, asPct){
+  const cv=document.getElementById(id), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=40; ctx.clearRect(0,0,W,H);
+  const a=training.with_cap, b=training.without_cap;
+  const steps=a.step; const xmax=Math.max(...steps);
+  let vals=[...a[key],...b[key]]; if(hline!=null) vals.push(hline);
+  let ymax=Math.max(...vals)*1.1, ymin=0;
+  const X=s=>pad+s/xmax*(W-pad-8);
+  const Y=v=>H-pad-(v-ymin)/(ymax-ymin)*(H-pad-10);
+  ctx.strokeStyle='#1e2946';
+  for(let g=0;g<=4;g++){ const v=ymin+(ymax-ymin)*g/4; const y=Y(v); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-8,y); ctx.stroke();
+    ctx.fillStyle='#5b678a'; ctx.font='10px monospace'; ctx.fillText(asPct?(v*100).toFixed(0)+'%':v.toFixed(0), 4, y+3); }
+  axes(ctx,W,H,pad);
+  if(hline!=null){ ctx.setLineDash([6,4]); ctx.strokeStyle='#f472b6'; ctx.beginPath();
+    ctx.moveTo(pad,Y(hline)); ctx.lineTo(W-8,Y(hline)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#f472b6'; ctx.font='11px monospace'; ctx.fillText(hlabel, pad+8, Y(hline)-5); }
+  function plot(series,color,label,ly){ ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+    steps.forEach((s,i)=>{ i?ctx.lineTo(X(s),Y(series[i])):ctx.moveTo(X(s),Y(series[i])); }); ctx.stroke();
+    ctx.fillStyle=color; ctx.font='12px monospace'; ctx.fillText(label, W-150, ly); }
+  plot(a[key],'#34d399','with cap', 20);
+  plot(b[key],'#fb7185','without cap', 38);
+}
+
+function drawGQA(cfg){
+  const host=document.getElementById('gqa-diagram'); host.innerHTML='';
+  const wrap=document.createElement('div'); wrap.style.display='grid';
+  wrap.style.gridTemplateColumns=`repeat(${cfg.n_heads}, 1fr)`; wrap.style.gap='8px';
+  const qrow=document.createElement('div'); qrow.style.cssText='display:grid;gap:8px;grid-template-columns:repeat('+cfg.n_heads+',1fr)';
+  const krow=document.createElement('div'); krow.style.cssText='display:grid;gap:8px;grid-template-columns:repeat('+cfg.n_heads+',1fr)';
+  const kvColors=['#60a5fa','#34d399','#f59e0b','#f472b6','#a78bfa','#22d3ee'];
+  for(let q=0;q<cfg.n_heads;q++){ const kv=Math.floor(q/cfg.n_rep);
+    const qc=document.createElement('div'); qc.textContent='Q'+q;
+    qc.style.cssText='padding:10px;border-radius:8px;text-align:center;font-weight:600;border:2px solid '+kvColors[kv%kvColors.length]+';background:rgba(255,255,255,.03)';
+    qrow.appendChild(qc); }
+  for(let q=0;q<cfg.n_heads;q++){ const kv=Math.floor(q/cfg.n_rep);
+    const kc=document.createElement('div');
+    kc.textContent = (q % cfg.n_rep===Math.floor(cfg.n_rep/2)) ? ('KV'+kv) : '↑';
+    kc.style.cssText='padding:10px;border-radius:8px;text-align:center;font-weight:600;color:#00121f;background:'+kvColors[kv%kvColors.length];
+    krow.appendChild(kc); }
+  const l1=document.createElement('div'); l1.className='hint'; l1.textContent=cfg.n_heads+' query heads';
+  const l2=document.createElement('div'); l2.className='hint'; l2.textContent=cfg.n_kv_heads+' key/value heads (each shared by '+cfg.n_rep+' query heads)';
+  host.appendChild(l1); host.appendChild(qrow); host.appendChild(l2); host.appendChild(krow);
+}
+
+// Try live fetch when served over http; else use baked snapshot.
+(async function init(){
+  let data = BAKED;
+  if (location.protocol.startsWith('http')) {
+    try { const res=await fetch('../data/gemma2_results.json',{cache:'no-store'});
+      if(res.ok) data=await res.json(); } catch(e){}
+  }
+  render(data);
+  show('softcap', document.querySelector('.block[data-key="softcap"]'));
+})();
+</script>
+</body>
+</html>

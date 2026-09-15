@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>GPT-4 — Predictable Scaling</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340; --ink: #e8ecf7;
+    --muted: #93a0c0; --line: #2a3352;
+    --c1: #22d3ee; --c2: #a78bfa; --c3: #fb7185; --c4: #f59e0b; --c5: #34d399;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--c1); }
+  header.hero { padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(244,114,182,.14));
+    border-bottom: 1px solid var(--line); }
+  header.hero h1 { margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 40%, #fb7185 75%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+    background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  canvas { width: 100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .formula { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background:#0d132a;
+    border:1px solid var(--line); font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 14px; color:#cfe8ff; overflow-x:auto; white-space: pre-wrap; }
+  .pipe { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+  .step { flex:1 1 150px; background: var(--panel-2); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin:6px; position:relative; }
+  .step .n { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .step .t { font-weight:600; margin-top:4px; }
+  .step .d { color:var(--muted); font-size:12.5px; margin-top:6px; }
+  table { width:100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align:right; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  th { color: var(--muted); font-weight:600; }
+  tr.held td { color:#fde68a; font-weight:600; }
+  .kpi { display:flex; gap:18px; flex-wrap:wrap; margin: 6px 0 2px; }
+  .kpi .box { background: var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+  .kpi .v { font-size:22px; font-weight:700; }
+  .kpi .k { color: var(--muted); font-size:12px; }
+  .legend-row { display:flex; align-items:center; gap:14px; margin-top:10px; color:var(--muted); font-size:12.5px; flex-wrap:wrap; }
+  .sw { display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:6px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .note { color: var(--muted); font-size: 12.5px; margin-top:10px; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  .callout { background: linear-gradient(90deg, rgba(245,158,11,.12), transparent);
+    border:1px solid var(--line); border-left:3px solid var(--c4); border-radius: 10px; padding: 12px 16px; margin: 10px 0; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>GPT-4 · Predictable Scaling</h1>
+  <p>GPT-4 is a <b>closed</b> model — no weights, architecture, or training data were released. The one methodological
+  claim in the Technical Report that anyone can reproduce is <b>predictable scaling</b>: fit a power law on small models
+  and use it to predict a much larger model's loss <i>before training it</i>. This page shows that experiment run end-to-end on a CPU.</p>
+  <div class="badges">
+    <span class="badge">OpenAI, 2023</span>
+    <span class="badge">arXiv 2303.08774</span>
+    <span class="badge">Scaling Law: L(N)=aN⁻ᵅ+E</span>
+    <span class="badge">Closed model — documented technique only</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="callout">
+    <b>Honesty note.</b> Nothing here reproduces GPT-4's actual weights or capabilities. It reproduces the
+    <i>documented, verifiable</i> methodology — predictable scaling and capability-vs-scale tracking — with tiny GPTs
+    on a synthetic language, so the mechanism is fully transparent.
+  </div>
+
+  <h2 class="section-title">The methodology, end to end</h2>
+  <p class="section-sub">Exactly the recipe the report describes: fit on the cheap models, extrapolate to the expensive one.</p>
+  <div class="pipe">
+    <div class="step"><div class="n">Step 1</div><div class="t">Train a family</div><div class="d">Small GPTs of increasing size N on one fixed synthetic language; record each validation loss.</div></div>
+    <div class="step"><div class="n">Step 2</div><div class="t">Fit a scaling law</div><div class="d">Fit L(N)=a·N⁻ᵅ+E on the <b>smaller</b> models only.</div></div>
+    <div class="step"><div class="n">Step 3</div><div class="t">Predict</div><div class="d">Extrapolate the fit to the large, held-out model — before training it.</div></div>
+    <div class="step"><div class="n">Step 4</div><div class="t">Verify</div><div class="d">Train the large model and compare predicted vs. actual loss.</div></div>
+  </div>
+
+  <div class="kpi" id="kpi"></div>
+
+  <div style="height:12px"></div>
+  <div class="grid2">
+    <div class="card">
+      <h4>Predictable-scaling curve <span style="color:var(--muted);font-size:12px">predicted vs. actual</span></h4>
+      <p class="small">The fitted power law (line) is built from the four smaller models (circles). The star is the
+      held-out model's <i>actual</i> loss — it lands right on the extrapolated curve.</p>
+      <canvas id="scalingCanvas" width="620" height="380"></canvas>
+      <div class="legend-row">
+        <span><span class="sw" style="background:var(--c2)"></span>fit models</span>
+        <span><span class="sw" style="background:var(--c4)"></span>held-out actual</span>
+        <span><span class="sw" style="background:var(--c1)"></span>power-law fit</span>
+        <span><span class="sw" style="background:var(--muted)"></span>irreducible floor E*</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Capability vs. scale <span style="color:var(--muted);font-size:12px">multiple-choice accuracy</span></h4>
+      <p class="small">Loss is not the only thing that scales predictably. A 4-way multiple-choice probe shows accuracy
+      climbing far above chance as the models grow.</p>
+      <canvas id="capCanvas" width="620" height="380"></canvas>
+      <div class="legend-row">
+        <span><span class="sw" style="background:var(--c5)"></span>MC accuracy</span>
+        <span><span class="sw" style="background:var(--c3)"></span>chance (25%)</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The numbers</h2>
+  <p class="section-sub">Straight from a demo run (<code class="k">python demo/run_demo.py</code>). N = non-embedding parameters.</p>
+  <div class="card">
+    <table id="resultsTable"></table>
+    <p class="note" id="tableNote"></p>
+  </div>
+
+  <h2 class="section-title">Why a power law?</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>The scaling law</h4>
+      <div class="formula">L(N) = a · N^(-alpha) + E
+
+N     model size (non-embedding params)
+E     irreducible loss  (data's own entropy)
+a,alpha   reducible term fit on small models</div>
+      <ul style="color:var(--ink);padding-left:18px">
+        <li><b>E</b> is the loss even an infinite model can't beat — the entropy of the source itself.</li>
+        <li>The reducible part falls as a straight line on a log–log plot, which is what makes extrapolation reliable.</li>
+        <li>OpenAI fit this on models using up to <b>10,000× less compute</b> than GPT-4 and hit the target.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Multiple-choice scoring</h4>
+      <div class="formula">score(choice) = mean_t  log p(token_t | context)
+answer = argmax_choice  score(choice)</div>
+      <ul style="color:var(--ink);padding-left:18px">
+        <li>Each question: one true continuation of the language + several distractors.</li>
+        <li>The model picks the completion it finds most likely — the same length-normalized cloze scoring used by real MC benchmarks.</li>
+        <li>Emergent-looking capability, measured transparently at tiny scale.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to the <b>GPT-4 Technical Report</b> (OpenAI, 2023 · arXiv 2303.08774).
+    Data baked in from <code class="k">demo/run_demo.py</code> → <code class="k">data/scaling_results.json</code>.
+    Serve the folder over http to load live results.
+  </div>
+</div>
+
+<script>
+const BAKED = {"source":{"vocab":24,"order":2,"block":32,"entropy_floor":2.226521072488225},"models":[{"name":"XS","N":1080,"loss":3.142723798751831,"mc_acc":0.25833333333333336},{"name":"S","N":3696,"loss":3.122999906539917,"mc_acc":0.275},{"name":"M","N":15072,"loss":3.1044421195983887,"mc_acc":0.3416666666666667},{"name":"L","N":26240,"loss":3.0041697025299072,"mc_acc":0.4166666666666667},{"name":"XL (held out)","N":86064,"loss":2.956746816635132,"mc_acc":0.44166666666666665}],"fit":{"a":1.7204091598537288,"alpha":0.0263668756191558,"E":1.7265210724882252},"held_out":{"N":86064,"predicted":3.001537912320438,"actual":2.956746816635132,"rel_err_pct":1.5148776159427815},"chance":0.25,
+"curve":[{"N":764.58,"loss":3.1706},{"N":907.92,"loss":3.1641},{"N":1078.13,"loss":3.1576},{"N":1280.25,"loss":3.1512},{"N":1520.26,"loss":3.1447},{"N":1805.27,"loss":3.1383},{"N":2143.71,"loss":3.1319},{"N":2545.6,"loss":3.1256},{"N":3022.82,"loss":3.1192},{"N":3589.52,"loss":3.1129},{"N":4262.46,"loss":3.1067},{"N":5061.55,"loss":3.1004},{"N":6010.46,"loss":3.0942},{"N":7137.26,"loss":3.088},{"N":8475.3,"loss":3.0819},{"N":10064.18,"loss":3.0758},{"N":11950.94,"loss":3.0697},{"N":14191.42,"loss":3.0636},{"N":16851.92,"loss":3.0576},{"N":20011.2,"loss":3.0515},{"N":23762.76,"loss":3.0455},{"N":28217.63,"loss":3.0396},{"N":33507.66,"loss":3.0336},{"N":39789.44,"loss":3.0277},{"N":47248.87,"loss":3.0219},{"N":56106.75,"loss":3.016},{"N":66625.23,"loss":3.0102},{"N":79115.65,"loss":3.0044},{"N":93947.68,"loss":2.9986},{"N":111560.31,"loss":2.9928},{"N":121568.63,"loss":2.99}]};
+
+let DATA = BAKED;
+
+function fmt(n){ return n>=1000 ? (n/1000).toFixed(n>=100000?0:1)+'k' : String(n); }
+
+function drawKPIs(){
+  const h = DATA.held_out, f = DATA.fit;
+  const box = (v,k)=>`<div class="box"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  document.getElementById('kpi').innerHTML =
+    box(h.predicted.toFixed(3), 'predicted XL loss') +
+    box(h.actual.toFixed(3), 'actual XL loss') +
+    box(h.rel_err_pct.toFixed(2)+'%', 'prediction error') +
+    box('α = '+f.alpha.toFixed(3), 'scaling exponent') +
+    box(f.E.toFixed(3), 'irreducible floor E');
+}
+
+function drawScaling(){
+  const cv = document.getElementById('scalingCanvas'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, ml=58, mr=18, mt=18, mb=44;
+  ctx.clearRect(0,0,W,H);
+  const models = DATA.models, curve = DATA.curve;
+  const allN = models.map(m=>m.N).concat(curve.map(c=>c.N));
+  const allL = models.map(m=>m.loss).concat(curve.map(c=>c.loss)).concat([DATA.fit.E]);
+  const xmin=Math.log10(Math.min(...allN)), xmax=Math.log10(Math.max(...allN));
+  let ymin=Math.min(...allL)-0.02, ymax=Math.max(...allL)+0.02;
+  const X = lx => ml + (lx-xmin)/(xmax-xmin)*(W-ml-mr);
+  const Y = l => mt + (ymax-l)/(ymax-ymin)*(H-mt-mb);
+  // grid + axes
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for(let e=Math.ceil(xmin); e<=Math.floor(xmax); e++){ const x=X(e); ctx.beginPath(); ctx.moveTo(x,mt); ctx.lineTo(x,H-mb); ctx.stroke(); ctx.fillText('10^'+e, x-12, H-mb+16); }
+  for(let g=0; g<=4; g++){ const l=ymin+(ymax-ymin)*g/4; const y=Y(l); ctx.strokeStyle='#1e2946'; ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(W-mr,y); ctx.stroke(); ctx.fillText(l.toFixed(2), 6, y+3); }
+  ctx.fillText('loss (nats)', 6, mt-4);
+  ctx.fillText('parameters N (log scale)', W-190, H-6);
+  // irreducible floor
+  const yE=Y(DATA.fit.E);
+  ctx.strokeStyle='#64748b'; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(ml,yE); ctx.lineTo(W-mr,yE); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='#64748b'; ctx.fillText('E* (irreducible)', W-mr-120, yE-5);
+  // fit curve
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2.5; ctx.beginPath();
+  curve.forEach((c,i)=>{ const x=X(Math.log10(c.N)), y=Y(c.loss); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  // fit models
+  models.slice(0,4).forEach(m=>{ const x=X(Math.log10(m.N)), y=Y(m.loss);
+    ctx.fillStyle='#a78bfa'; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.fill();
+    ctx.strokeStyle='#0b1020'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#c9d3ec'; ctx.fillText(m.name, x-6, y-11); });
+  // held-out: predicted (ring) + actual (star)
+  const h = DATA.held_out; const hx=X(Math.log10(h.N));
+  const yp=Y(h.predicted);
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(hx,yp,8,0,7); ctx.stroke();
+  const ya=Y(h.actual); star(ctx,hx,ya,9,'#f59e0b');
+  ctx.fillStyle='#fde68a'; ctx.fillText('XL actual', hx-46, ya+4);
+  ctx.fillStyle='#8fd7ea'; ctx.fillText('predicted', hx+12, yp-4);
+}
+
+function star(ctx,cx,cy,r,color){
+  ctx.beginPath();
+  for(let i=0;i<10;i++){ const ang=Math.PI/5*i - Math.PI/2; const rad=(i%2===0)?r:r/2.3;
+    const x=cx+Math.cos(ang)*rad, y=cy+Math.sin(ang)*rad; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.closePath(); ctx.fillStyle=color; ctx.fill(); ctx.strokeStyle='#0b1020'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+function drawCap(){
+  const cv = document.getElementById('capCanvas'), ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, ml=48, mr=18, mt=18, mb=44;
+  ctx.clearRect(0,0,W,H);
+  const models=DATA.models, n=models.length;
+  const ymax=Math.max(0.6, Math.max(...models.map(m=>m.mc_acc))+0.08);
+  const Y=v=>mt+(ymax-v)/ymax*(H-mt-mb);
+  const bw=(W-ml-mr)/n*0.55;
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let g=0; g<=5; g++){ const v=ymax*g/5; const y=Y(v); ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(W-mr,y); ctx.stroke(); ctx.fillText((v*100).toFixed(0)+'%',6,y+3); }
+  // chance line
+  const yc=Y(DATA.chance); ctx.strokeStyle='#fb7185'; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(ml,yc); ctx.lineTo(W-mr,yc); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='#fb7185'; ctx.fillText('chance', W-mr-52, yc-5);
+  // bars + trend
+  const cx = i => ml + (W-ml-mr)*(i+0.5)/n;
+  models.forEach((m,i)=>{ const x=cx(i), y=Y(m.mc_acc);
+    const grad=ctx.createLinearGradient(0,y,0,H-mb); grad.addColorStop(0,'#34d399'); grad.addColorStop(1,'rgba(52,211,153,.15)');
+    ctx.fillStyle=grad; ctx.fillRect(x-bw/2, y, bw, H-mb-y);
+    ctx.fillStyle='#e8ecf7'; ctx.fillText((m.mc_acc*100).toFixed(0)+'%', x-11, y-6);
+    ctx.fillStyle='#93a0c0'; ctx.fillText(m.name.split(' ')[0], x-9, H-mb+16);
+  });
+  ctx.strokeStyle='#a7f3d0'; ctx.lineWidth=1.5; ctx.beginPath();
+  models.forEach((m,i)=>{ const x=cx(i), y=Y(m.mc_acc); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  ctx.fillStyle='#93a0c0'; ctx.fillText('accuracy', 4, mt-4);
+  ctx.fillText('model size →', W-120, H-6);
+}
+
+function drawTable(){
+  const rows = DATA.models.map((m,i)=>{
+    const held = i===DATA.models.length-1;
+    return `<tr class="${held?'held':''}"><td>${m.name}</td><td>${m.N.toLocaleString()}</td><td>${m.loss.toFixed(4)}</td><td>${(m.mc_acc*100).toFixed(1)}%</td></tr>`;
+  }).join('');
+  document.getElementById('resultsTable').innerHTML =
+    `<tr><th>model</th><th>params N</th><th>val loss</th><th>MC acc</th></tr>${rows}`;
+  document.getElementById('tableNote').innerHTML =
+    `Fit on the four smaller models predicted the XL loss as <code class="k">${DATA.held_out.predicted.toFixed(4)}</code> ` +
+    `vs. actual <code class="k">${DATA.held_out.actual.toFixed(4)}</code> — a ` +
+    `<code class="k">${DATA.held_out.rel_err_pct.toFixed(2)}%</code> error.`;
+}
+
+function renderAll(){ drawKPIs(); drawScaling(); drawCap(); drawTable(); }
+
+(async function init(){
+  if (location.protocol.startsWith('http')){
+    try { const r = await fetch('../data/scaling_results.json',{cache:'no-store'});
+      if (r.ok){ DATA = await r.json(); } } catch(e){}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

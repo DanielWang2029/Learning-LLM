@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LLaDA — Large Language Diffusion Models</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --mask: #64748b;
+    --commit: #34d399;
+    --diff: #22d3ee;
+    --ar: #fb7185;
+    --accent: #a78bfa;
+    --warn: #f59e0b;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--diff); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 45%, #34d399);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 820px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; color: #cfe8ff;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* token cells */
+  .seq { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tok {
+    width: 40px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, monospace; font-weight: 700; font-size: 16px; border: 1px solid var(--line);
+    transition: background .25s ease, transform .25s ease, color .25s ease; position: relative;
+  }
+  .tok.mask { background: repeating-linear-gradient(45deg, #263049, #263049 6px, #1c2438 6px, #1c2438 12px); color: var(--mask); }
+  .tok.just { transform: translateY(-4px) scale(1.08); box-shadow: 0 0 0 2px var(--commit)aa, 0 8px 18px rgba(0,0,0,.4); }
+  .pos-lab { font-size: 10px; color: var(--muted); text-align:center; width:40px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin: 14px 0 8px; flex-wrap: wrap; }
+  button {
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 16px; font-size: 14px; cursor: pointer; transition: border-color .15s, transform .1s;
+  }
+  button:hover { border-color: var(--accent); transform: translateY(-1px); }
+  button:disabled { opacity: .4; cursor: default; transform:none; }
+  .stepinfo { color: var(--muted); font-size: 13px; }
+  input[type=range] { flex: 1; min-width: 160px; accent-color: var(--accent); }
+  .bar-track { height: 10px; border-radius: 6px; background: #0d132a; border:1px solid var(--line); overflow:hidden; margin-top:6px; }
+  .bar-fill { height:100%; background: linear-gradient(90deg, var(--commit), var(--diff)); transition: width .25s; }
+
+  /* metrics */
+  .metrics { display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .metrics { grid-template-columns: repeat(2,1fr);} }
+  .metric { text-align:center; background: var(--panel-2); border:1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .metric .v { font-size: 26px; font-weight: 800; background: linear-gradient(90deg,#22d3ee,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .metric .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .cmp { display:grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 860px) { .cmp { grid-template-columns: 1fr; } }
+  .cmp .col { border:1px solid var(--line); border-radius: 12px; padding: 14px; background: rgba(255,255,255,.015); }
+  .cmp h5 { margin: 0 0 8px; font-size: 14px; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; margin-left:6px; }
+  .pill.diff { background: rgba(34,211,238,.16); color: var(--diff); }
+  .pill.ar { background: rgba(251,113,133,.16); color: var(--ar); }
+  .flow { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+  .flowrow { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); font-family:ui-monospace,monospace; }
+  .mini { display:flex; gap:3px; }
+  .mini .m { width:18px; height:18px; border-radius:4px; border:1px solid var(--line); font-size:10px; display:flex;align-items:center;justify-content:center; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  .legend-row { display:flex; align-items:center; gap:14px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .swatch { width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:5px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>LLaDA — Large Language Diffusion Models</h1>
+  <p>A language model that does <b>not</b> generate left-to-right. It learns by <b>masking</b> tokens and predicting them with a bidirectional Transformer, then <b>generates</b> by starting from an all-<code class="k">[MASK]</code> sequence and iteratively unmasking. Everything below is driven by a real model trained on CPU in this folder.</p>
+  <div class="badges">
+    <span class="badge">Nie et al., 2025</span>
+    <span class="badge">arXiv:2502.09992</span>
+    <span class="badge">Masked Diffusion</span>
+    <span class="badge">Non-Autoregressive</span>
+    <span class="badge">Bidirectional</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Masked diffusion vs. autoregressive generation</h2>
+  <p class="section-sub">An autoregressive model (GPT-style) commits tokens strictly left-to-right, each conditioned only on the past. LLaDA instead fills tokens in <b>confidence order</b>, conditioning every prediction on the whole sequence at once — the same forward/reverse idea as image diffusion, but the "noise" is masking.</p>
+  <div class="cmp">
+    <div class="col">
+      <h5>LLaDA <span class="pill diff">masked diffusion</span></h5>
+      <div class="flow" id="flow-diff"></div>
+      <p class="small" style="margin-top:10px">forward: randomly mask a fraction <code class="k">t</code> of tokens · reverse: predict all masked tokens, commit the most confident, re-mask the rest.</p>
+    </div>
+    <div class="col">
+      <h5>Autoregressive <span class="pill ar">left-to-right</span></h5>
+      <div class="flow" id="flow-ar"></div>
+      <p class="small" style="margin-top:10px">each token is produced in order; position <code class="k">i</code> may only look at positions <code class="k">&lt; i</code> (a causal mask).</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">The three equations</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Forward masking process <span class="section-sub" style="font-size:12px">(paper §2.1)</span></h4>
+      <p class="small">Pick a masking ratio, then mask each token independently.</p>
+      <div class="formula">t ~ U(0, 1]
+x_t[i] = [MASK]   with prob. t
+       = x_0[i]   with prob. 1 - t
+
+t = 1  →  fully masked      t → 0  →  original text</div>
+    </div>
+    <div class="card">
+      <h4>Training objective <span class="section-sub" style="font-size:12px">(paper §2.2, Eq. 3)</span></h4>
+      <p class="small">A single bidirectional network predicts the masked tokens; cross-entropy on masked positions, <code class="k">1/t</code> weighted.</p>
+      <div class="formula">L(θ) = − E_t E_x0 E_xt [ (1/t) · Σ_masked log p_θ(x0[i] | x_t) ]
+
+no causal mask → every position sees every other position</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:22px">
+    <h4>Reverse process — iterative unmasking <span class="section-sub" style="font-size:12px">(paper §2.4)</span></h4>
+    <p class="small">Generation runs the network T times. At each step it predicts every masked token, <b>commits</b> the highest-confidence predictions, and leaves the rest masked (“low-confidence remasking”).</p>
+    <div class="formula">x_T = [MASK]…[MASK]
+for step = 1 … T:
+    p = p_θ( x0 | x_current )              # predict ALL masked positions at once
+    commit the most-confident predictions  # they become visible
+    keep the least-confident ones masked    # revisited on later steps
+return x_0</div>
+  </div>
+
+  <h2 class="section-title">Iterative unmasking — a real generated sample</h2>
+  <p class="section-sub">This is an actual trace captured from <code class="k">demo/run_demo.py</code>: the model starts from a fully-masked sequence and unmasks one token per step. Notice it does <b>not</b> go left-to-right — it commits confident tokens first, and the period-3 structure emerges globally. Press play.</p>
+  <div class="card">
+    <div class="controls">
+      <button id="play">▶ Play</button>
+      <button id="prev">◀ Step</button>
+      <button id="next">Step ▶</button>
+      <input type="range" id="scrub" min="0" max="0" value="0" />
+      <span class="stepinfo" id="stepinfo"></span>
+    </div>
+    <div style="margin-top:8px">
+      <div class="seq" id="pos-labels"></div>
+      <div class="seq" id="trace-seq" style="margin-top:6px"></div>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+    <div class="legend-row">
+      <span><span class="swatch" style="background:repeating-linear-gradient(45deg,#263049,#263049 4px,#1c2438 4px,#1c2438 8px)"></span>[MASK] (still masked)</span>
+      <span><span class="swatch" style="background:var(--panel-2)"></span>committed token</span>
+      <span><span class="swatch" style="background:var(--commit)"></span>just committed this step</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Reconstruction — fill the blanks in one shot</h2>
+  <p class="section-sub">A different test: take a real periodic sequence, mask half of it, and let the bidirectional model fill every blank simultaneously. It recovers the original by reading structure from both sides of each gap.</p>
+  <div class="card">
+    <div class="grid2" style="gap:14px">
+      <div>
+        <p class="small">Masked input (50% hidden)</p>
+        <div class="seq" id="recon-masked"></div>
+      </div>
+      <div>
+        <p class="small">Model output (green = a filled blank)</p>
+        <div class="seq" id="recon-filled"></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Results from this folder's model</h2>
+  <p class="section-sub">Captured live from the demo run baked into this page.</p>
+  <div class="metrics" id="metrics"></div>
+
+  <div class="footer">
+    Interactive companion to <b>“Large Language Diffusion Models” (LLaDA)</b>, Nie et al., 2025.
+    Model, data and this trace are produced by <code class="k">python demo/run_demo.py</code> in this folder.
+    Serve the folder (<code class="k">python -m http.server</code>) to load live data from <code class="k">data/llada_run.json</code>.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in real run (data/llada_run.json). Served over http, live data is fetched instead.
+const BAKED = {"meta":{"vocab":10,"mask_id":10,"seq_len":12,"period":3,"steps":12,"params":227819},"metrics":{"recon_token_acc":0.9025641083717346,"recon_seq_acc":0.86328125,"gen_valid_rate":1.0,"distinct":32,"total":256},"trace":[{"step":1,"tokens":[10,10,10,10,10,10,10,10,10,4,10,10],"is_mask":[true,true,true,true,true,true,true,true,true,false,true,true],"kept_masked":11},{"step":2,"tokens":[4,10,10,10,10,10,10,10,10,4,10,10],"is_mask":[false,true,true,true,true,true,true,true,true,false,true,true],"kept_masked":10},{"step":3,"tokens":[4,10,10,4,10,10,10,10,10,4,10,10],"is_mask":[false,true,true,false,true,true,true,true,true,false,true,true],"kept_masked":9},{"step":4,"tokens":[4,10,10,4,10,10,4,10,10,4,10,10],"is_mask":[false,true,true,false,true,true,false,true,true,false,true,true],"kept_masked":8},{"step":5,"tokens":[4,10,10,4,10,10,4,4,10,4,10,10],"is_mask":[false,true,true,false,true,true,false,false,true,false,true,true],"kept_masked":7},{"step":6,"tokens":[4,4,10,4,10,10,4,4,10,4,10,10],"is_mask":[false,false,true,false,true,true,false,false,true,false,true,true],"kept_masked":6},{"step":7,"tokens":[4,4,10,4,4,10,4,4,10,4,10,10],"is_mask":[false,false,true,false,false,true,false,false,true,false,true,true],"kept_masked":5},{"step":8,"tokens":[4,4,10,4,4,10,4,4,10,4,4,10],"is_mask":[false,false,true,false,false,true,false,false,true,false,false,true],"kept_masked":4},{"step":9,"tokens":[4,4,3,4,4,10,4,4,10,4,4,10],"is_mask":[false,false,false,false,false,true,false,false,true,false,false,true],"kept_masked":3},{"step":10,"tokens":[4,4,3,4,4,3,4,4,10,4,4,10],"is_mask":[false,false,false,false,false,false,false,false,true,false,false,true],"kept_masked":2},{"step":11,"tokens":[4,4,3,4,4,3,4,4,3,4,4,10],"is_mask":[false,false,false,false,false,false,false,false,false,false,false,true],"kept_masked":1},{"step":12,"tokens":[4,4,3,4,4,3,4,4,3,4,4,3],"is_mask":[false,false,false,false,false,false,false,false,false,false,false,false],"kept_masked":0}],"reconstruction":{"original":[5,9,4,5,9,4,5,9,4,5,9,4],"masked":[5,10,4,10,9,4,10,10,4,10,9,4],"filled":[5,9,4,5,9,4,5,9,4,5,9,4]}};
+
+const MASK_ID = BAKED.meta.mask_id;
+let DATA = BAKED;
+
+// ---- comparison flows (illustrative)
+function renderFlows() {
+  const target = ["4","4","3","4","4","3"];
+  // diffusion: confidence order (not left to right)
+  const diffOrder = [0,3,1,4,2,5];
+  const arOrder = [0,1,2,3,4,5];
+  function build(el, order) {
+    el.innerHTML = "";
+    const shown = Array(6).fill("·");
+    order.forEach((idx, k) => {
+      const row = document.createElement("div"); row.className = "flowrow";
+      shown[idx] = target[idx];
+      const mini = document.createElement("div"); mini.className = "mini";
+      for (let i=0;i<6;i++){ const m=document.createElement("div"); m.className="m";
+        if (shown[i] === "·"){ m.style.background="#1c2438"; m.style.color="#5b6788"; m.textContent="·"; }
+        else { m.style.background="var(--panel-2)"; m.textContent=shown[i]; if(i===idx){m.style.background="var(--commit)";m.style.color="#04241a";} }
+        mini.appendChild(m); }
+      const lab = document.createElement("span"); lab.textContent = "step "+(k+1)+" → pos "+idx;
+      row.appendChild(mini); row.appendChild(lab); el.appendChild(row);
+    });
+  }
+  build(document.getElementById("flow-diff"), diffOrder);
+  build(document.getElementById("flow-ar"), arOrder);
+}
+
+// ---- trace animation
+const seqEl = document.getElementById("trace-seq");
+const posEl = document.getElementById("pos-labels");
+const scrub = document.getElementById("scrub");
+const stepinfo = document.getElementById("stepinfo");
+const bar = document.getElementById("bar");
+let cur = 0, timer = null, prevMask = null;
+
+function renderStep(i) {
+  const snap = DATA.trace[i];
+  const total = DATA.meta.seq_len;
+  posEl.innerHTML = ""; seqEl.innerHTML = "";
+  snap.tokens.forEach((tk, pos) => {
+    const pl = document.createElement("div"); pl.className="pos-lab"; pl.textContent = pos; posEl.appendChild(pl);
+    const c = document.createElement("div"); c.className = "tok";
+    if (tk === MASK_ID) { c.classList.add("mask"); c.textContent = "▩"; }
+    else {
+      c.textContent = tk;
+      const justNow = prevMask && prevMask[pos] && !snap.is_mask[pos];
+      if (justNow) c.classList.add("just");
+    }
+    seqEl.appendChild(c);
+  });
+  const committed = total - snap.kept_masked;
+  stepinfo.textContent = `step ${snap.step}/${DATA.meta.steps} · ${committed}/${total} tokens committed · ${snap.kept_masked} still masked`;
+  bar.style.width = (committed/total*100) + "%";
+  scrub.value = i;
+  prevMask = snap.is_mask.slice();
+}
+function goto(i) {
+  i = Math.max(0, Math.min(DATA.trace.length-1, i));
+  prevMask = i>0 ? DATA.trace[i-1].is_mask.slice() : DATA.trace[0].tokens.map(()=>true);
+  cur = i; renderStep(i);
+}
+function play() {
+  if (timer) { stopPlay(); return; }
+  document.getElementById("play").textContent = "❚❚ Pause";
+  if (cur >= DATA.trace.length-1) goto(0);
+  timer = setInterval(() => {
+    if (cur >= DATA.trace.length-1) { stopPlay(); return; }
+    goto(cur+1);
+  }, 650);
+}
+function stopPlay(){ clearInterval(timer); timer=null; document.getElementById("play").textContent="▶ Play"; }
+document.getElementById("play").onclick = play;
+document.getElementById("next").onclick = () => { stopPlay(); goto(cur+1); };
+document.getElementById("prev").onclick = () => { stopPlay(); goto(cur-1); };
+scrub.oninput = () => { stopPlay(); goto(+scrub.value); };
+
+// ---- reconstruction
+function renderRecon() {
+  const r = DATA.reconstruction;
+  const m = document.getElementById("recon-masked");
+  const f = document.getElementById("recon-filled");
+  m.innerHTML=""; f.innerHTML="";
+  r.masked.forEach((tk,i)=>{ const c=document.createElement("div"); c.className="tok";
+    if (tk===MASK_ID){c.classList.add("mask");c.textContent="▩";} else c.textContent=tk; m.appendChild(c); });
+  r.filled.forEach((tk,i)=>{ const c=document.createElement("div"); c.className="tok"; c.textContent=tk;
+    if (r.masked[i]===MASK_ID){ c.style.background="var(--commit)"; c.style.color="#04241a"; c.style.borderColor="var(--commit)"; }
+    f.appendChild(c); });
+}
+
+// ---- metrics
+function renderMetrics() {
+  const mm = DATA.metrics;
+  const items = [
+    [(mm.recon_token_acc*100).toFixed(0)+"%", "masked-token accuracy (50% masked)"],
+    [(mm.recon_seq_acc*100).toFixed(0)+"%", "exact-sequence reconstruction"],
+    [(mm.gen_valid_rate*100).toFixed(0)+"%", "valid periodic sequences generated"],
+    [mm.distinct+"/"+mm.total, "distinct sequences (diversity)"],
+  ];
+  const el = document.getElementById("metrics"); el.innerHTML="";
+  items.forEach(([v,l])=>{ const d=document.createElement("div"); d.className="metric";
+    d.innerHTML=`<div class="v">${v}</div><div class="l">${l}</div>`; el.appendChild(d); });
+}
+
+function initAll() {
+  scrub.max = DATA.trace.length-1;
+  renderFlows(); renderRecon(); renderMetrics(); goto(0);
+}
+
+(async function init(){
+  if (location.protocol.startsWith("http")) {
+    try { const res = await fetch("../data/llada_run.json", {cache:"no-store"});
+      if (res.ok) { DATA = await res.json(); } } catch(e) {}
+  }
+  initAll();
+})();
+</script>
+</body>
+</html>

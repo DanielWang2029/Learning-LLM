@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DoRA — Weight-Decomposed Low-Rank Adaptation</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --mag:#22d3ee; --dir:#a78bfa; --lora:#fb7185; --dora:#34d399; --full:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #10233a 0%, transparent 60%),
+                     radial-gradient(1000px 500px at 100% 0%, #201a3a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.12) 45%, rgba(52,211,153,.14));
+    border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#34d399);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1120px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:900px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .formula { margin:12px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace; font-size:14px; color:#cfe8ff; white-space:pre-wrap; overflow-x:auto; }
+
+  /* decomposition diagram */
+  .decomp { display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .chip { border-radius:12px; padding:14px 16px; text-align:center; border:1px solid var(--line); min-width:120px; }
+  .chip .t { font-weight:700; font-size:14px; } .chip .s { color:var(--muted); font-size:12px; margin-top:4px; }
+  .chip.mag { background:rgba(34,211,238,.14); border-color:#2b6b7d; }
+  .chip.dir { background:rgba(167,139,250,.14); border-color:#5b4b8a; }
+  .chip.upd { background:rgba(251,113,133,.14); border-color:#8a3b46; }
+  .chip.frozen { opacity:.75; } .op { font-size:22px; color:var(--muted); }
+  .tag-train { display:inline-block; font-size:10px; padding:2px 7px; border-radius:999px; background:#123; color:#9fe;
+    border:1px solid #275; margin-top:6px; }
+  .tag-frozen { display:inline-block; font-size:10px; padding:2px 7px; border-radius:999px; background:#221; color:#fd9;
+    border:1px solid #653; margin-top:6px; }
+
+  /* bars */
+  .bars { display:flex; flex-direction:column; gap:16px; }
+  .barrow .barlbl { display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; }
+  .bartrack { background:#0d132a; border:1px solid var(--line); border-radius:10px; height:32px; overflow:hidden; }
+  .barfill { height:100%; display:flex; align-items:center; padding-left:12px; font-weight:700; color:#00121f; border-radius:9px 0 0 9px; white-space:nowrap; }
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; }
+  @media (max-width:700px){ .metrics{grid-template-columns:1fr;} }
+  .metric { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; }
+  .metric .big { font-size:20px; font-weight:700; } .metric .lbl { color:var(--muted); font-size:12px; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend-row { display:flex; align-items:center; gap:14px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .sw { width:14px; height:14px; border-radius:4px; display:inline-block; vertical-align:-2px; margin-right:5px; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>DoRA</h1>
+  <p>Weight-Decomposed Low-Rank Adaptation splits each pretrained weight into a <b>magnitude</b> and a
+  <b>direction</b>, then trains the magnitude directly while adapting the direction with a low-rank (LoRA) update.
+  At a matched parameter budget it tracks full fine-tuning more closely than LoRA. All numbers below are <b>real</b>
+  from this folder's demo.</p>
+  <div class="badges">
+    <span class="badge">NVIDIA, 2024</span>
+    <span class="badge">arXiv 2402.09353</span>
+    <span class="badge">Magnitude + Direction</span>
+    <span class="badge">Parameter-Efficient FT</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The decomposition</h2>
+  <p class="section-sub">DoRA rewrites a weight matrix as a per-output <b>magnitude</b> times a normalized
+  <b>direction</b>, and updates them separately (paper Eq. 3).</p>
+  <div class="card">
+    <div class="formula">W = m · ( V / ||V|| )        (decompose the frozen W0: m0 = ||W0||, V0 = W0)
+W' = m · ( V0 + ΔV ) / || V0 + ΔV ||        ΔV = (α/r) · B·A     (LoRA on the direction)</div>
+    <div class="decomp" style="margin-top:16px">
+      <div class="chip mag"><div class="t">m — magnitude</div><div class="s">one scalar / output</div><div class="tag-train">trained directly</div></div>
+      <div class="op">×</div>
+      <div class="chip dir frozen"><div class="t">V₀ / ||V₀||</div><div class="s">direction of W0</div><div class="tag-frozen">frozen</div></div>
+      <div class="op">+</div>
+      <div class="chip upd"><div class="t">ΔV = (α/r)·B·A</div><div class="s">low-rank direction update</div><div class="tag-train">trained (rank r)</div></div>
+      <div class="op">→</div>
+      <div class="chip" style="background:rgba(52,211,153,.14);border-color:#2f6b4f"><div class="t">W′</div><div class="s">adapted weight</div></div>
+    </div>
+    <p class="small" style="margin-top:14px">LoRA, by contrast, has no separate magnitude: it must fold both
+    "how big" and "which way" into the single low-rank term <code class="k">W = W0 + (α/r)·B·A</code>. Giving the
+    magnitude its own parameters is what lets DoRA behave more like full fine-tuning.</p>
+  </div>
+
+  <h2 class="section-title">Accuracy on the new task (held-out)</h2>
+  <p class="section-sub">Pretrain → freeze → adapt. Full fine-tuning is the upper bound; DoRA and LoRA use nearly
+  the same tiny budget.</p>
+  <div class="card">
+    <div class="bars" id="bars"></div>
+    <div class="metrics" id="metrics"></div>
+    <p class="small" id="takeaway" style="margin-top:16px"></p>
+  </div>
+
+  <h2 class="section-title">Adaptation over training (real curves)</h2>
+  <div class="card">
+    <canvas id="curve-canvas" width="1100" height="260"></canvas>
+    <div class="legend-row">
+      <span><span class="sw" style="background:var(--full)"></span>full fine-tuning</span>
+      <span><span class="sw" style="background:var(--dora)"></span>DoRA</span>
+      <span><span class="sw" style="background:var(--lora)"></span>LoRA</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Magnitude vs direction updates (DoRA, layer fc1)</h2>
+  <p class="section-sub">Because the two are decoupled, DoRA can move each output unit's <b>magnitude</b> and its
+  <b>direction</b> by independent amounts — a degree of freedom LoRA lacks. Each pair of bars is one output unit.</p>
+  <div class="card">
+    <canvas id="decomp-canvas" width="1100" height="240"></canvas>
+    <div class="legend-row">
+      <span><span class="sw" style="background:var(--mag)"></span>relative magnitude change (m/m₀ − 1)</span>
+      <span><span class="sw" style="background:var(--dir)"></span>relative direction change (‖ΔV‖/‖W₀‖)</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>DoRA</b> (NVIDIA, 2024 · arXiv 2402.09353).
+    Numbers baked from <code class="k">data/dora_results.json</code> — regenerate with
+    <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config": {"in_dim": 32, "hidden": 256, "classes": 6, "rank": 1, "alpha": 2}, "base_task_accuracy": 0.8450000286102295, "new_task_zero_shot": 0.060499999672174454, "methods": {"full": {"params": 75782, "accuracy": 0.8355000019073486}, "dora": {"params": 1580, "accuracy": 0.7120000123977661}, "lora": {"params": 1062, "accuracy": 0.5770000219345093}}, "wrapped_layers": ["fc1", "fc2", "head"], "curves": {"steps_full": [1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680, 720, 760, 800, 840, 880, 920, 960, 1000, 1040, 1080, 1120, 1160, 1200, 1240, 1280, 1320, 1360, 1400, 1440, 1480], "full": [0.073, 0.667, 0.72, 0.7475, 0.761, 0.776, 0.7865, 0.802, 0.8145, 0.81, 0.817, 0.8215, 0.823, 0.8245, 0.8265, 0.8265, 0.8345, 0.8375, 0.834, 0.829, 0.8355, 0.8305, 0.8295, 0.835, 0.831, 0.8335, 0.8265, 0.8315, 0.8345, 0.835, 0.8325, 0.8335, 0.8315, 0.835, 0.8345, 0.834, 0.8365, 0.8325], "steps_lora": [1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680, 720, 760, 800, 840, 880, 920, 960, 1000, 1040, 1080, 1120, 1160, 1200, 1240, 1280, 1320, 1360, 1400, 1440, 1480], "lora": [0.064, 0.264, 0.412, 0.4645, 0.475, 0.478, 0.49, 0.498, 0.505, 0.5025, 0.5055, 0.505, 0.511, 0.507, 0.5125, 0.511, 0.5085, 0.5135, 0.528, 0.5245, 0.5245, 0.5275, 0.5285, 0.5275, 0.5315, 0.535, 0.5395, 0.5355, 0.5445, 0.551, 0.5455, 0.5635, 0.5505, 0.564, 0.5625, 0.5675, 0.563, 0.579], "steps_dora": [1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680, 720, 760, 800, 840, 880, 920, 960, 1000, 1040, 1080, 1120, 1160, 1200, 1240, 1280, 1320, 1360, 1400, 1440, 1480], "dora": [0.0675, 0.424, 0.494, 0.5275, 0.5465, 0.555, 0.57, 0.582, 0.5945, 0.601, 0.613, 0.606, 0.624, 0.6355, 0.6365, 0.64, 0.6345, 0.6465, 0.642, 0.6585, 0.664, 0.6565, 0.664, 0.6785, 0.681, 0.683, 0.6825, 0.6835, 0.6775, 0.6895, 0.69, 0.693, 0.7015, 0.699, 0.7015, 0.7045, 0.703, 0.711]}, "decomposition_fc1": {"magnitude_change": [0.0239, -0.5232, -0.0019, -0.5223, 0.0623, -0.1894, 0.7977, -0.2453, -0.3158, -0.2301, 1.2111, 0.5168, 0.1502, -0.9778, -0.1272, 0.1809, -0.4364, 0.8312, 1.1967, -0.4173, -0.1758, -0.796, 2.0018, -0.2106], "direction_change": [0.6126, 0.1421, 1.4312, 3.9569, 2.1579, 4.1272, 0.2069, 1.7756, 0.3287, 3.4859, 0.3443, 0.5213, 2.479, 3.7415, 0.3964, 0.8469, 4.7844, 1.3337, 0.1158, 6.2723, 5.9244, 3.9741, 0.0914, 0.5195]}};
+
+function render(d){
+  const m=d.methods;
+  const bars=document.getElementById('bars');
+  function bar(label, val, color, sub){
+    const pct=val*100;
+    return `<div class="barrow"><div class="barlbl"><span>${label}</span><span>${pct.toFixed(1)}%</span></div>
+      <div class="bartrack"><div class="barfill" style="width:${pct}%;background:${color}">${sub}</div></div></div>`;
+  }
+  bars.innerHTML =
+    bar('Full fine-tuning (upper bound)', m.full.accuracy, 'var(--full)', m.full.params.toLocaleString()+' params') +
+    bar('DoRA', m.dora.accuracy, 'var(--dora)', m.dora.params.toLocaleString()+' params') +
+    bar('LoRA', m.lora.accuracy, 'var(--lora)', m.lora.params.toLocaleString()+' params') +
+    bar('No adaptation (zero-shot)', d.new_task_zero_shot, 'var(--muted)', 'frozen W0');
+
+  document.getElementById('metrics').innerHTML =
+    `<div class="metric"><div class="lbl">DoRA − LoRA accuracy</div><div class="big" style="color:var(--dora)">+${((m.dora.accuracy-m.lora.accuracy)*100).toFixed(1)} pts</div></div>
+     <div class="metric"><div class="lbl">DoRA gap to full-FT</div><div class="big">${((m.full.accuracy-m.dora.accuracy)*100).toFixed(1)} pts</div></div>
+     <div class="metric"><div class="lbl">LoRA gap to full-FT</div><div class="big" style="color:var(--lora)">${((m.full.accuracy-m.lora.accuracy)*100).toFixed(1)} pts</div></div>`;
+
+  document.getElementById('takeaway').innerHTML =
+    `At rank <b>r=${d.config.rank}</b>, DoRA (${m.dora.params.toLocaleString()} params) reaches
+     <b style="color:var(--dora)">${(m.dora.accuracy*100).toFixed(0)}%</b> vs LoRA
+     (${m.lora.params.toLocaleString()} params) at <b style="color:var(--lora)">${(m.lora.accuracy*100).toFixed(0)}%</b> —
+     closing most of the gap to full fine-tuning (<b style="color:var(--full)">${(m.full.accuracy*100).toFixed(0)}%</b>,
+     ${m.full.params.toLocaleString()} params) with only ${(m.dora.params-m.lora.params)} extra magnitude scalars.`;
+
+  drawCurves(d.curves);
+  drawDecomp(d.decomposition_fc1);
+}
+
+function drawCurves(c){
+  const cv=document.getElementById('curve-canvas'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=42; ctx.clearRect(0,0,W,H);
+  const xmax=Math.max(...c.steps_full,...c.steps_lora,...c.steps_dora);
+  const X=s=>pad+s/xmax*(W-pad-10), Y=v=>H-pad-v*(H-pad-14);
+  ctx.strokeStyle='#1e2946';
+  for(let g=0;g<=5;g++){ const v=g/5,y=Y(v); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-10,y); ctx.stroke();
+    ctx.fillStyle='#5b678a'; ctx.font='10px monospace'; ctx.fillText((v*100).toFixed(0)+'%',6,y+3); }
+  ctx.strokeStyle='#33406a'; ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-10,H-pad); ctx.stroke();
+  function plot(xs,ys,color){ ctx.strokeStyle=color; ctx.lineWidth=2.6; ctx.beginPath();
+    xs.forEach((s,i)=>{ i?ctx.lineTo(X(s),Y(ys[i])):ctx.moveTo(X(s),Y(ys[i])); }); ctx.stroke(); }
+  plot(c.steps_full,c.full,'#f59e0b'); plot(c.steps_dora,c.dora,'#34d399'); plot(c.steps_lora,c.lora,'#fb7185');
+  ctx.fillStyle='#93a0c0'; ctx.font='11px sans-serif'; ctx.fillText('new-task accuracy vs adaptation step', pad+6, 16);
+}
+
+function drawDecomp(dec){
+  const cv=document.getElementById('decomp-canvas'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=30,mid=H/2; ctx.clearRect(0,0,W,H);
+  const mag=dec.magnitude_change, dir=dec.direction_change; const n=mag.length;
+  const all=mag.concat(dir).map(Math.abs); const ymax=Math.max(...all,0.05)*1.1;
+  const bw=(W-pad*2)/n/2*0.8; const slot=(W-pad*2)/n;
+  ctx.strokeStyle='#33406a'; ctx.beginPath(); ctx.moveTo(pad,mid); ctx.lineTo(W-pad,mid); ctx.stroke();
+  ctx.fillStyle='#5b678a'; ctx.font='10px monospace'; ctx.fillText('+',6,mid-4); ctx.fillText('0',6,mid+3); ctx.fillText('−',6,mid+14);
+  for(let i=0;i<n;i++){ const x0=pad+i*slot+slot*0.1;
+    const hm=mag[i]/ymax*(mid-14); ctx.fillStyle='#22d3ee';
+    ctx.fillRect(x0, hm>=0?mid-hm:mid, bw, Math.abs(hm));
+    const hd=dir[i]/ymax*(mid-14); ctx.fillStyle='#a78bfa';
+    ctx.fillRect(x0+bw+1, hd>=0?mid-hd:mid, bw, Math.abs(hd)); }
+  ctx.fillStyle='#93a0c0'; ctx.font='11px sans-serif';
+  ctx.fillText('each pair = one output unit of fc1 (first '+n+' shown)', pad, 14);
+}
+
+(async function init(){
+  let d=BAKED;
+  if(location.protocol.startsWith('http')){ try{ const res=await fetch('../data/dora_results.json',{cache:'no-store'});
+    if(res.ok) d=await res.json(); }catch(e){} }
+  render(d);
+})();
+</script>
+</body>
+</html>
