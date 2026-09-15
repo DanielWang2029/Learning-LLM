@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DeepSeek-V3 — MLA, DeepSeekMoE &amp; MTP</title>
+<style>
+  :root{--bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;--line:#2a3352;
+    --mla:#22d3ee;--moe:#a78bfa;--mtp:#f59e0b;--good:#34d399;--bad:#fb7185;--shadow:0 10px 30px rgba(0,0,0,.35);}
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 15% -10%, #10233f 0%, transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, #241146 0%, transparent 60%), var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(245,158,11,.14));border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:820px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}.section-sub{color:var(--muted);margin:0 0 18px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .formula{margin:10px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13px;color:#cfe8ff;white-space:pre-wrap;overflow-x:auto}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0}
+  .kpi div{background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex:1;min-width:120px}
+  .kpi b{font-size:22px}.kpi span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  /* MLA flow */
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+  .node{border-radius:10px;padding:10px 12px;border:1px solid var(--line);text-align:center;font-size:12px;background:var(--panel-2)}
+  .node b{display:block;font-size:13px}
+  .node.small{background:linear-gradient(135deg,rgba(34,211,238,.3),rgba(34,211,238,.08));border-color:rgba(34,211,238,.5)}
+  .node.cache{background:linear-gradient(135deg,rgba(52,211,153,.28),rgba(52,211,153,.08));border-color:rgba(52,211,153,.5)}
+  .ar{color:var(--muted);font-size:18px}
+  /* MoE experts */
+  .experts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .ex{border-radius:10px;border:1px solid var(--line);padding:8px;width:calc(25% - 6px);text-align:center;font-size:11px}
+  .ex.shared{background:linear-gradient(135deg,rgba(245,158,11,.28),rgba(245,158,11,.06));border-color:rgba(245,158,11,.5)}
+  .exbar{height:8px;border-radius:5px;margin-top:5px;background:linear-gradient(90deg,#a78bfa,#22d3ee)}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}th{color:var(--muted)}
+  /* MTP */
+  .mtp{display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  .tokbox{border-radius:10px;padding:10px 14px;border:1px solid var(--line);background:var(--panel-2);text-align:center;font-size:13px}
+  .tokbox.h1{border-color:rgba(34,211,238,.5)} .tokbox.h2{border-color:rgba(245,158,11,.5)}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>DeepSeek-V3</h1>
+  <p>Three signature components, reproduced at tiny scale: <b>Multi-Head Latent Attention</b> (a compressed, cheap KV cache), <b>DeepSeekMoE</b> (fine-grained + shared experts), and <b>Multi-Token Prediction</b> (predict two tokens at once).</p>
+  <div class="badges">
+    <span class="badge">DeepSeek-AI, 2024</span>
+    <span class="badge">arXiv:2412.19437</span>
+    <span class="badge">MLA</span>
+    <span class="badge">DeepSeekMoE</span>
+    <span class="badge">Multi-Token Prediction</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">Multi-Head Latent Attention (MLA)</h2>
+  <p class="section-sub">Keys and values are compressed into a small latent that is what gets cached, then up-projected on the fly. A decoupled RoPE key carries position. Result: a much smaller KV cache at matched quality.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Latent compression flow</h4>
+      <div class="flow">
+        <div class="node"><b>x</b>token (dim <span id="mla-dim"></span>)</div>
+        <div class="ar">→</div>
+        <div class="node small"><b>c_KV</b>latent <span id="mla-latent"></span></div>
+        <div class="ar">→</div>
+        <div class="node"><b>K,V</b>up-projected<br>per head</div>
+      </div>
+      <div class="flow" style="margin-top:10px">
+        <div class="node cache"><b>cached</b>c_KV + k_rope<br>= <span id="mla-cache"></span> floats</div>
+        <div class="ar">vs</div>
+        <div class="node"><b>MHA caches</b>full K,V<br>= <span id="mha-cache"></span> floats</div>
+      </div>
+      <div class="formula" style="margin-top:12px">cache/token/layer:
+  MHA = 2 · n_heads · head_dim = <span id="mha-f"></span>
+  MLA = d_c + d_rope           = <span id="mla-f"></span></div>
+    </div>
+    <div class="card">
+      <h4>KV cache: MLA vs MHA</h4>
+      <p class="small">Same task, same budget. MLA matches accuracy while caching far less.</p>
+      <div class="kpi">
+        <div><b class="good" id="kpi-save"></b><span>smaller KV cache</span></div>
+        <div><b id="kpi-mla-acc" style="color:var(--mla)"></b><span>MLA next-token acc</span></div>
+        <div><b id="kpi-mha-acc" style="color:var(--muted)"></b><span>MHA next-token acc</span></div>
+      </div>
+      <canvas id="cache-canvas" height="180"></canvas>
+    </div>
+  </div>
+
+  <h2 class="section-title">DeepSeekMoE</h2>
+  <p class="section-sub">Many <b>fine-grained</b> experts (top-k routed) plus an always-on <b>shared</b> expert. Balanced without an auxiliary loss via a per-expert routing bias. Bars show the measured routed-expert load.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Experts &amp; routing</h4>
+      <p class="small"><span id="moe-shared"></span> shared (always on) + <span id="moe-routed"></span> routed (top-<span id="moe-topk"></span>). Ideal routed load ≈ <span id="moe-ideal"></span> each.</p>
+      <div class="experts" id="experts"></div>
+    </div>
+    <div class="card">
+      <h4>Why fine-grained + shared</h4>
+      <div class="formula">output = Σ_shared expert_s(x)          (common knowledge)
+       + Σ_{routed top-k} gate · expert_r(x)  (specialists)
+
+balance:  route_bias += speed · (target − load)
+          (auxiliary-loss-free; no gradient)</div>
+      <p class="small">Fine slicing lets the router compose precise per-token expert mixtures; the shared expert absorbs common patterns so routed experts specialize. In <code class="k">src/moe.py</code>.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Multi-Token Prediction (MTP)</h2>
+  <p class="section-sub">Besides the usual next-token head, an MTP module predicts the token <b>two</b> steps ahead from the same position — densifying the signal and enabling speculative decoding.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Two heads, two horizons</h4>
+      <div class="mtp">
+        <div class="tokbox">position <b>t</b><br><span class="small">trunk hidden</span></div>
+        <div class="ar">→</div>
+        <div class="tokbox h1"><b>next-token head</b><br>predicts <b>t+1</b></div>
+        <div class="tokbox h2"><b>MTP head</b><br>predicts <b>t+2</b></div>
+      </div>
+      <p class="small" style="margin-top:12px">The MTP module combines the trunk hidden state with the embedding of the (known) t+1 token, then shares the main output head.</p>
+    </div>
+    <div class="card">
+      <h4>Training accuracy</h4>
+      <div class="kpi">
+        <div><b class="good" id="kpi-main"></b><span>next-token accuracy</span></div>
+        <div><b style="color:var(--mtp)" id="kpi-mtp"></b><span>MTP two-ahead accuracy</span></div>
+      </div>
+      <canvas id="curve-canvas" height="200"></canvas>
+    </div>
+  </div>
+
+  <div class="footer">Interactive companion to the <b>DeepSeek-V3 Technical Report</b> (arXiv:2412.19437). Data generated by <code class="k">demo/run_demo.py</code>.</div>
+</div>
+
+<script>
+const BAKED = {"params":341376,
+"curve":[{"step":1,"loss":6.9397,"main_acc":0.0339,"mtp_acc":0.0306},{"step":100,"loss":4.6364,"main_acc":0.5365,"mtp_acc":0.4017},{"step":200,"loss":3.0049,"main_acc":1.0,"mtp_acc":1.0},{"step":300,"loss":2.9561,"main_acc":1.0,"mtp_acc":1.0},{"step":400,"loss":2.9829,"main_acc":1.0,"mtp_acc":1.0},{"step":500,"loss":2.9656,"main_acc":1.0,"mtp_acc":1.0}],
+"final":{"main_acc":1.0,"mtp_acc":1.0},
+"moe_load":[0.3156,0.2613,0.2854,0.1641,0.3533,0.2284,0.155,0.237],"moe_ideal":0.25,"n_shared":1,"n_routed":8,"top_k":2,
+"kv_cache":{"mla_floats":48,"mha_floats":128,"saving":2.667,"mla_acc":1.0,"mha_acc":1.0},
+"mla_config":{"kv_latent":32,"rope_dim":16,"n_heads":4,"head_dim":16},"seconds":34.3};
+
+const el=id=>document.getElementById(id);
+function render(d){
+  const mc=d.mla_config, kv=d.kv_cache;
+  el('mla-dim').textContent=64; el('mla-latent').textContent=mc.kv_latent;
+  el('mla-cache').textContent=kv.mla_floats; el('mha-cache').textContent=kv.mha_floats;
+  el('mha-f').textContent=`${2}·${mc.n_heads}·${mc.head_dim} = ${kv.mha_floats}`;
+  el('mla-f').textContent=`${mc.kv_latent} + ${mc.rope_dim} = ${kv.mla_floats}`;
+  el('kpi-save').textContent=kv.saving.toFixed(2)+'×';
+  el('kpi-mla-acc').textContent=(kv.mla_acc*100).toFixed(0)+'%';
+  el('kpi-mha-acc').textContent=(kv.mha_acc*100).toFixed(0)+'%';
+  drawCache(kv);
+
+  el('moe-shared').textContent=d.n_shared; el('moe-routed').textContent=d.n_routed;
+  el('moe-topk').textContent=d.top_k; el('moe-ideal').textContent=d.moe_ideal.toFixed(3);
+  const ex=el('experts'); ex.innerHTML='';
+  for(let s=0;s<d.n_shared;s++){const e=document.createElement('div');e.className='ex shared';
+    e.innerHTML=`<div><b>Shared ${s}</b></div><div style="color:var(--muted)">always on</div><div class="exbar" style="width:100%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>`;ex.appendChild(e);}
+  const maxL=Math.max(...d.moe_load);
+  d.moe_load.forEach((L,i)=>{const e=document.createElement('div');e.className='ex';
+    e.innerHTML=`<div><b>Routed ${i}</b></div><div style="color:var(--muted)">load ${L.toFixed(3)}</div><div class="exbar" style="width:${Math.round(L/maxL*100)}%"></div>`;ex.appendChild(e);});
+
+  el('kpi-main').textContent=(d.final.main_acc*100).toFixed(0)+'%';
+  el('kpi-mtp').textContent=(d.final.mtp_acc*100).toFixed(0)+'%';
+  drawCurve(d.curve);
+}
+function drawCache(kv){const c=el('cache-canvas');const ctx=c.getContext('2d');
+  const W=c.width=c.clientWidth*2,H=c.height=c.clientHeight*2;ctx.clearRect(0,0,W,H);
+  const data=[['MHA',kv.mha_floats,'#64748b'],['MLA',kv.mla_floats,'#22d3ee']];
+  const maxV=kv.mha_floats,pad=70*2,bw=(W-pad-40)/data.length;
+  data.forEach((d,i)=>{const h=d[1]/maxV*(H-70);const x=pad+i*bw+bw*0.2;const w=bw*0.6;const y=H-40-h;
+    ctx.fillStyle=d[2];ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#e8ecf7';ctx.font='bold 22px monospace';ctx.textAlign='center';
+    ctx.fillText(d[1]+' floats',x+w/2,y-10);
+    ctx.fillStyle='#93a0c0';ctx.font='18px monospace';ctx.fillText(d[0],x+w/2,H-14);ctx.textAlign='left';});
+  ctx.fillStyle='#93a0c0';ctx.font='16px monospace';ctx.fillText('KV cache / token / layer',pad,26);
+}
+function drawCurve(cur){const c=el('curve-canvas');const ctx=c.getContext('2d');
+  const W=c.width=c.clientWidth*2,H=c.height=c.clientHeight*2;ctx.clearRect(0,0,W,H);
+  const pad=54*2,maxS=cur[cur.length-1].step;
+  ctx.strokeStyle='#1e2946';for(let g=0;g<=4;g++){const y=H-40-g/4*(H-80);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-20,y);ctx.stroke();
+    ctx.fillStyle='#93a0c0';ctx.font='16px monospace';ctx.fillText((g*25)+'%',6,y+5);}
+  function line(key,col){ctx.strokeStyle=col;ctx.lineWidth=3;ctx.beginPath();
+    cur.forEach((p,i)=>{const x=pad+p.step/maxS*(W-pad-20);const y=H-40-p[key]*(H-80);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();}
+  line('main_acc','#22d3ee'); line('mtp_acc','#f59e0b');
+  ctx.fillStyle='#22d3ee';ctx.font='18px monospace';ctx.fillText('next-token',pad,26);
+  ctx.fillStyle='#f59e0b';ctx.fillText('MTP (t+2)',pad+120,26);
+}
+(async function init(){
+  if(location.protocol.startsWith('http')){try{const r=await fetch('../data/dsv3_results.json',{cache:'no-store'});if(r.ok){render(await r.json());return;}}catch(e){}}
+  render(BAKED);
+})();
+window.addEventListener('resize',()=>render(BAKED));
+</script>
+</body>
+</html>
