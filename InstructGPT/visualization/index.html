@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>InstructGPT — RLHF Pipeline Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --sft: #22d3ee;
+    --rm: #a78bfa;
+    --rl: #fb7185;
+    --good: #34d399;
+    --warn: #f59e0b;
+    --gen: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--sft); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(251,113,133,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 45%, #fb7185 80%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+
+  /* Pipeline */
+  .pipe { display: grid; grid-template-columns: 1fr 34px 1fr 34px 1fr; align-items: stretch; gap: 0; }
+  @media (max-width: 900px) { .pipe { grid-template-columns: 1fr; } .pipe .flow { display:none; } }
+  .stage {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow); cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .stage:hover { transform: translateY(-3px); box-shadow: 0 12px 26px rgba(0,0,0,.4); }
+  .stage.active { border-color: #fff4; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .stage .tag { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .stage h3 { margin: 6px 0 6px; font-size: 17px; }
+  .stage p { margin: 0; color: var(--muted); font-size: 13px; }
+  .stage .chip { display:inline-block; margin-top:10px; font-size:11px; padding:3px 9px; border-radius:999px; }
+  .s-sft { border-top: 3px solid var(--sft); } .s-sft .chip { background: rgba(34,211,238,.16); color:#bdf1fb; }
+  .s-rm  { border-top: 3px solid var(--rm); }  .s-rm  .chip { background: rgba(167,139,250,.16); color:#e0d7ff; }
+  .s-rl  { border-top: 3px solid var(--rl); }  .s-rl  .chip { background: rgba(251,113,133,.16); color:#ffd6dd; }
+  .flow { display:flex; align-items:center; justify-content:center; color: var(--muted); font-size: 22px; }
+
+  .detail { margin-top: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 170px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .sub { font-size: 12px; color: var(--muted); }
+  .formula { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; } .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; } .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  /* Metric bars */
+  .metric { margin: 12px 0; }
+  .metric .lab { display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px; }
+  .metric .lab b { color: var(--ink); } .metric .lab span { color: var(--muted); }
+  .bar { height: 16px; border-radius: 8px; background: #0d132a; border:1px solid var(--line); overflow:hidden; }
+  .bar > div { height:100%; border-radius:8px; transition: width .6s ease; }
+  .fill-sft { background: linear-gradient(90deg,#155e6b,var(--sft)); }
+  .fill-rlhf{ background: linear-gradient(90deg,#7a2d3a,var(--rl)); }
+  .fill-bon { background: linear-gradient(90deg,#1b6a4b,var(--good)); }
+  .fill-rm  { background: linear-gradient(90deg,#4b3a7a,var(--rm)); }
+
+  canvas { width: 100%; height: 260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend-row { display:flex; gap:16px; margin-top:10px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .legend-row i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  .example { font-family: ui-monospace, monospace; font-size: 13px; }
+  .example .row { display:flex; gap:10px; margin:6px 0; align-items:center; }
+  .example .row .who { width: 120px; color: var(--muted); }
+  .tok { display:inline-block; min-width:22px; text-align:center; padding:3px 7px; margin:0 2px; border-radius:7px; background:var(--panel-2); border:1px solid var(--line); }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>InstructGPT: Aligning a Language Model with Human Feedback</h1>
+  <p>The three-stage RLHF recipe — <b>SFT → Reward Model → RL policy optimization</b> — reproduced in miniature on a toy task where the "human" preference is a known rule (respond with the tokens <b>sorted</b>). Click a stage to see its role and equations.</p>
+  <div class="badges">
+    <span class="badge">Ouyang et al., 2022</span>
+    <span class="badge">arXiv:2203.02155</span>
+    <span class="badge">RLHF</span>
+    <span class="badge">Reward Model</span>
+    <span class="badge">Best-of-n · REINFORCE</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">The three-stage pipeline</h2>
+  <p class="section-sub">Human demonstrations are noisy and expensive; reliable <i>comparisons</i> are cheaper. That gap is exactly what RLHF exploits — the RL policy can surpass the quality of its own SFT training data.</p>
+
+  <div class="pipe">
+    <div class="stage s-sft active" data-key="sft">
+      <div class="tag">Stage 1</div>
+      <h3>Supervised Fine-Tuning</h3>
+      <p>Train the base LM to imitate (imperfect) human demonstrations of the task.</p>
+      <span class="chip">policy π_SFT</span>
+    </div>
+    <div class="flow">→</div>
+    <div class="stage s-rm" data-key="rm">
+      <div class="tag">Stage 2</div>
+      <h3>Reward Model</h3>
+      <p>Learn a scalar reward from human preference comparisons (chosen ≻ rejected).</p>
+      <span class="chip">reward r_φ</span>
+    </div>
+    <div class="flow">→</div>
+    <div class="stage s-rl" data-key="rl">
+      <div class="tag">Stage 3</div>
+      <h3>RL Policy Optimization</h3>
+      <p>Optimize the policy to maximize the learned reward (REINFORCE / best-of-n), with a KL leash to π_SFT.</p>
+      <span class="chip">policy π_RL</span>
+    </div>
+  </div>
+
+  <div class="detail" id="detail"></div>
+
+  <h2 class="section-title">Did alignment work? (live numbers from the demo)</h2>
+  <p class="section-sub">These are the exact metrics printed by <code class="k">demo/run_demo.py</code> on this machine, baked into the page. The reward is the hidden "human" rule: how well-sorted the response is.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Reward &amp; rule-compliance by policy</h4>
+      <p class="small">Average reward (sortedness) over held-out prompts. RLHF beats the SFT baseline; best-of-8 rejection sampling squeezes out even more.</p>
+      <div id="metrics"></div>
+    </div>
+    <div class="card">
+      <h4>Reward model preference accuracy</h4>
+      <p class="small">On held-out comparisons, how often the RM ranks the human-chosen response above the rejected one — the signal that drives Stage 3.</p>
+      <div id="rm-metric"></div>
+      <h4 style="margin-top:18px">One prompt, three policies</h4>
+      <div class="example" id="example"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Reward increases during RL (Stage 3)</h2>
+  <p class="section-sub">Average true reward on held-out prompts as REINFORCE optimizes the policy against the reward model. Step 0 is the SFT baseline.</p>
+  <div class="card">
+    <canvas id="curve" width="1100" height="260"></canvas>
+    <div class="legend-row">
+      <span><i style="background:var(--rl)"></i>avg reward (sortedness)</span>
+      <span><i style="background:var(--good)"></i>exact rule-compliance</span>
+      <span><i style="background:var(--sft)"></i>SFT baseline</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">The math, one card per stage</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Reward model loss <span style="color:var(--muted);font-size:12px">§2.3</span></h4>
+      <p class="small">Bradley-Terry / logistic loss over a preference pair.</p>
+      <div class="formula">loss(φ) = − E[ log σ( r_φ(x, y_chosen) − r_φ(x, y_rejected) ) ]
+
+x            : prompt
+y_chosen     : the response the labeler preferred
+y_rejected   : the other response
+σ            : logistic sigmoid</div>
+      <ul>
+        <li>Only the <b>difference</b> of rewards is supervised — the RM learns a relative ordering, not absolute values.</li>
+        <li>Comparisons are easier to collect reliably than gold demonstrations.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Policy objective <span style="color:var(--muted);font-size:12px">§2.3</span></h4>
+      <p class="small">Maximize reward while staying near the SFT policy (KL penalty).</p>
+      <div class="formula">maximize  E_{y∼π}[ r_φ(x, y) ] − β · KL( π(·|x) ‖ π_SFT(·|x) )
+
+REINFORCE gradient (used here):
+  ∇J = E[ (R − b) · ∇ log π(y | x) ]
+  R  = r_φ(x,y) − β·(log π − log π_SFT)
+  b  = running-mean baseline (variance reduction)</div>
+      <ul>
+        <li>The KL term is a leash: it stops the policy from drifting into reward-hacking gibberish.</li>
+        <li><b>best-of-n</b> is the RL-free cousin: sample n, keep the RM's favourite.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Training language models to follow instructions with human feedback”</b> (Ouyang et al., 2022).
+    Numbers generated by <code class="k">python demo/run_demo.py</code>; implementation in <code class="k">src/</code>.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in results from demo/run_demo.py (data/rlhf_results.json).
+// Served over http(s), the page will fetch the live file instead.
+const BAKED = {
+  "rm_pref_accuracy": 0.9921875,
+  "sft": {"avg_reward": 0.7526, "compliance": 0.3086},
+  "rlhf": {"avg_reward": 0.9961, "compliance": 0.6797},
+  "best_of_n": {"n": 8, "avg_reward": 1.0, "compliance": 0.4766},
+  "reward_curve": [
+    {"step":0,"avg_reward":0.7526,"compliance":0.3086},
+    {"step":1,"avg_reward":0.8411,"compliance":0.5},
+    {"step":20,"avg_reward":0.9635,"compliance":0.6094},
+    {"step":40,"avg_reward":0.9740,"compliance":0.6328},
+    {"step":60,"avg_reward":0.9922,"compliance":0.5781},
+    {"step":80,"avg_reward":0.9740,"compliance":0.5781},
+    {"step":100,"avg_reward":0.9896,"compliance":0.6641},
+    {"step":120,"avg_reward":0.9896,"compliance":0.6094},
+    {"step":140,"avg_reward":0.9974,"compliance":0.6406},
+    {"step":160,"avg_reward":0.9844,"compliance":0.6563},
+    {"step":180,"avg_reward":0.9948,"compliance":0.5547},
+    {"step":200,"avg_reward":0.9948,"compliance":0.6719}
+  ],
+  "example": {"prompt":[6,6,5,8],"ideal":[5,6,6,8],"sft_output":[5,6,6,8],"rlhf_output":[5,6,6,8]}
+};
+
+const DETAILS = {
+  sft: {
+    title: "Stage 1 — Supervised Fine-Tuning (SFT)", sub: "Paper §2.3 · src/model.py, demo/run_demo.py",
+    formula: "minimize  −E_{(x,y)∼demos}  Σ_t log π(y_t | x, y_<t)\n\n(standard next-token cross-entropy on the response region)",
+    points: [
+      "Start from a pretrained LM; imitate human demonstrations of the task.",
+      "Here demonstrations are deliberately noisy (only ~55% are ideal) — like real human data.",
+      "Produces π_SFT, a decent-but-imperfect starting policy and the KL reference."
+    ]
+  },
+  rm: {
+    title: "Stage 2 — Reward Model (RM)", sub: "Paper §2.3 · src/reward_model.py",
+    formula: "loss = −log σ( r_φ(x, y_chosen) − r_φ(x, y_rejected) )\n\nRM: embed tokens → pool → MLP → scalar reward",
+    points: [
+      "Trained purely from pairwise comparisons labeled by the (hidden) human rule.",
+      "Learns to score more-sorted responses higher — recovering the reward without ever seeing it directly.",
+      "Held-out preference accuracy is the headline metric that it worked."
+    ]
+  },
+  rl: {
+    title: "Stage 3 — RL Policy Optimization", sub: "Paper §2.3 · src/rlhf.py, demo/run_demo.py",
+    formula: "maximize  E[ r_φ(x,y) ] − β·KL(π ‖ π_SFT)\n∇J = E[ (R − b)·∇ log π(y|x) ]      (REINFORCE)",
+    points: [
+      "Sample responses from the policy, score them with the frozen RM, push up the good ones.",
+      "A KL penalty toward π_SFT prevents reward-hacking / distribution collapse.",
+      "best-of-n rejection sampling is the simple RL-free alternative shown alongside."
+    ]
+  }
+};
+
+// ---- Detail panel
+const detail = document.getElementById('detail');
+const stages = document.querySelectorAll('.stage');
+function show(key, el){
+  const d = DETAILS[key];
+  stages.forEach(s=>s.classList.remove('active'));
+  if (el) el.classList.add('active');
+  detail.innerHTML = `<h3>${d.title}</h3><div class="sub">${d.sub}</div>`+
+    `<div class="formula">${d.formula}</div>`+
+    `<ul>${d.points.map(p=>`<li>${p}</li>`).join('')}</ul>`;
+}
+stages.forEach(s=>s.addEventListener('click',()=>show(s.dataset.key,s)));
+
+// ---- Metric bars
+function metricBar(label, sub, val, cls){
+  const pct = Math.round(val*100);
+  return `<div class="metric"><div class="lab"><b>${label}</b><span>${sub}</span></div>`+
+         `<div class="bar"><div class="${cls}" style="width:${Math.max(2,pct)}%"></div></div></div>`;
+}
+function tokens(arr, ideal){
+  return arr.map((t,i)=>{
+    const ok = ideal ? (t===ideal[i]) : true;
+    const col = ok ? 'var(--good)' : 'var(--warn)';
+    return `<span class="tok" style="border-color:${col};color:${col}">${t}</span>`;
+  }).join('');
+}
+function render(d){
+  const m = document.getElementById('metrics');
+  m.innerHTML =
+    metricBar('SFT baseline', (d.sft.avg_reward).toFixed(3)+' reward · '+Math.round(d.sft.compliance*100)+'% exact', d.sft.avg_reward, 'fill-sft')+
+    metricBar('RLHF policy', (d.rlhf.avg_reward).toFixed(3)+' reward · '+Math.round(d.rlhf.compliance*100)+'% exact', d.rlhf.avg_reward, 'fill-rlhf')+
+    metricBar('RLHF + best-of-'+d.best_of_n.n, (d.best_of_n.avg_reward).toFixed(3)+' reward', d.best_of_n.avg_reward, 'fill-bon');
+  document.getElementById('rm-metric').innerHTML =
+    metricBar('RM preference accuracy', (d.rm_pref_accuracy*100).toFixed(1)+'%', d.rm_pref_accuracy, 'fill-rm');
+  const ex = d.example;
+  document.getElementById('example').innerHTML =
+    `<div class="row"><span class="who">prompt</span> ${tokens(ex.prompt)}</div>`+
+    `<div class="row"><span class="who">ideal (rule)</span> ${tokens(ex.ideal)}</div>`+
+    `<div class="row"><span class="who">SFT output</span> ${tokens(ex.sft_output, ex.ideal)}</div>`+
+    `<div class="row"><span class="who">RLHF output</span> ${tokens(ex.rlhf_output, ex.ideal)}</div>`;
+  drawCurve(d);
+}
+
+// ---- Reward curve canvas
+function drawCurve(d){
+  const c = document.getElementById('curve'), ctx = c.getContext('2d');
+  const W=c.width, H=c.height, padL=48, padR=16, padT=18, padB=34;
+  ctx.clearRect(0,0,W,H);
+  const pts = d.reward_curve;
+  const xs = pts.map(p=>p.step); const maxX = Math.max(...xs);
+  const X = s => padL + (s/maxX)*(W-padL-padR);
+  const Y = v => H-padB - v*(H-padT-padB);
+  // grid + y labels
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#6b7aa0'; ctx.font='11px ui-monospace';
+  for(let g=0; g<=5; g++){ const v=g/5; const y=Y(v);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillText(v.toFixed(1), 12, y+3);
+  }
+  ctx.fillText('reward / compliance', padL, 12);
+  ctx.fillText('RL step →', W-padR-70, H-8);
+  // SFT baseline (dashed)
+  const base = d.sft.avg_reward;
+  ctx.setLineDash([6,5]); ctx.strokeStyle='#22d3ee88'; ctx.beginPath();
+  ctx.moveTo(padL,Y(base)); ctx.lineTo(W-padR,Y(base)); ctx.stroke(); ctx.setLineDash([]);
+  // line helper
+  function line(key,color){
+    ctx.beginPath();
+    pts.forEach((p,i)=>{ const x=X(p.step), y=Y(p[key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+    ctx.strokeStyle=color; ctx.lineWidth=2.4; ctx.stroke();
+    pts.forEach(p=>{ ctx.beginPath(); ctx.arc(X(p.step),Y(p[key]),3,0,7); ctx.fillStyle=color; ctx.fill(); });
+  }
+  line('compliance','#34d399');
+  line('avg_reward','#fb7185');
+}
+
+// ---- Load live data over http, else use baked
+(async function init(){
+  show('sft', document.querySelector('.stage[data-key="sft"]'));
+  if (location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/rlhf_results.json',{cache:'no-store'});
+      if(r.ok){ render(await r.json()); return; } }catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>

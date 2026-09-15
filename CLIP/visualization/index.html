@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CLIP — Contrastive Language–Image Pre-training</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --img: #22d3ee;
+    --txt: #f59e0b;
+    --shared: #a78bfa;
+    --contrast: #fb7185;
+    --pos: #34d399;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #3a2410 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--img); }
+  header.hero {
+    padding: 40px 24px 28px;
+    text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 45%, #fb7185 72%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+
+  /* Architecture */
+  .arch { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 820px) { .arch { grid-template-columns: 1fr; } }
+  .stack { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow); position: relative; }
+  .stack h3 { margin: 2px 0 12px; text-align: center; font-size: 15px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); }
+  .block { display: flex; align-items: center; gap: 10px; padding: 11px 13px; margin: 9px 0;
+    border-radius: 11px; cursor: pointer; border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    background: var(--panel-2); user-select: none; }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .block .label { font-weight: 600; }
+  .block .sec { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .arrow { text-align: center; color: var(--line); font-size: 18px; line-height: 1; margin: -3px 0; }
+  .c-img { background: linear-gradient(90deg, rgba(34,211,238,.16), transparent); }
+  .c-txt { background: linear-gradient(90deg, rgba(245,158,11,.16), transparent); }
+  .c-shared { background: linear-gradient(90deg, rgba(167,139,250,.18), transparent); }
+  .c-contrast { background: linear-gradient(90deg, rgba(251,113,133,.16), transparent); }
+  .io { text-align: center; color: var(--muted); font-size: 13px; border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px; margin: 8px 0; background: rgba(255,255,255,.02); }
+  .join { text-align:center; color: var(--shared); font-size: 12px; margin: 8px 0; }
+
+  .detail { position: sticky; top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 240px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .formula { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a;
+    border: 1px solid var(--line); font-family: "SFMono-Regular", ui-monospace, Consolas, monospace;
+    font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; } .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; } .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  .stat { display:flex; gap:18px; flex-wrap:wrap; margin: 6px 0 4px; }
+  .stat .kpi { background: var(--panel-2); border:1px solid var(--line); border-radius:12px;
+    padding: 12px 16px; min-width: 150px; }
+  .stat .kpi .big { font-size: 26px; font-weight: 700;
+    background: linear-gradient(90deg,#34d399,#22d3ee); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .stat .kpi .lbl { font-size: 12px; color: var(--muted); }
+
+  /* Heatmap */
+  .cell { width: 100%; aspect-ratio: 1/1; border-radius: 4px; position: relative;
+    display:flex; align-items:center; justify-content:center; font-size: 9px; color:#00121f; transition: transform .1s; }
+  .cell:hover { transform: scale(1.18); outline: 2px solid #fff; z-index:2; }
+  .heat-wrap { display: grid; grid-template-columns: 92px 1fr; gap: 6px; align-items: center; }
+  .ylabels { display: grid; gap: 3px; } .ylabels div { display:flex; align-items:center; justify-content:flex-end;
+    font-size: 10px; color: var(--muted); text-align:right; }
+  .xlabels { display: grid; grid-auto-flow: column; gap: 3px; text-align:center; font-size: 9px; color: var(--muted);
+    writing-mode: vertical-rl; }
+  .legend-row { display:flex; align-items:center; gap:8px; margin-top:12px; color:var(--muted); font-size:12px; }
+  .legend-bar { height: 10px; flex: 1; border-radius: 6px;
+    background: linear-gradient(90deg,#3b1d5e,#2a3352,#0d132a,#134e4a,#34d399,#a7f3d0); }
+  canvas { width: 100%; height: 240px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .swatch { width:14px; height:14px; border-radius:4px; display:inline-block; vertical-align:middle; border:1px solid #0006; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>CLIP: Learning from Natural Language Supervision</h1>
+  <p>A dual encoder — one for images, one for text — trained so that matching (image, caption)
+     pairs land next to each other in a shared embedding space. Once trained, it classifies
+     images it has never been told the labels of, <b>zero-shot</b>, just by comparing to captions.</p>
+  <div class="badges">
+    <span class="badge">Radford et al., 2021</span>
+    <span class="badge">arXiv:2103.00020</span>
+    <span class="badge">Contrastive (symmetric InfoNCE)</span>
+    <span class="badge">Zero-shot transfer</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The dual-encoder architecture</h2>
+  <p class="section-sub">Two towers encode the two modalities independently, project them into one
+     shared space, L2-normalize, and compare with a temperature-scaled cosine similarity.
+     Click any block for its role and equations.</p>
+
+  <div class="arch">
+    <!-- IMAGE TOWER -->
+    <div class="stack">
+      <h3>Image Encoder</h3>
+      <div class="io">Synthetic image · 3×24×24</div>
+      <div class="arrow">↓</div>
+      <div class="block c-img" data-key="imgenc"><span class="dot" style="background:var(--img)"></span><span class="label">Tiny CNN (conv ×2 + pool)</span><span class="sec">§2.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-shared" data-key="proj"><span class="dot" style="background:var(--shared)"></span><span class="label">Linear → shared space</span><span class="sec">§2</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-shared" data-key="norm"><span class="dot" style="background:var(--shared)"></span><span class="label">L2-normalize → e_img</span><span class="sec">§2.2</span></div>
+    </div>
+
+    <!-- TEXT TOWER -->
+    <div class="stack">
+      <h3>Text Encoder</h3>
+      <div class="io">Caption · "a photo of a red circle"</div>
+      <div class="arrow">↓</div>
+      <div class="block c-txt" data-key="txtenc"><span class="dot" style="background:var(--txt)"></span><span class="label">Token embed + pooling</span><span class="sec">§2.4</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-shared" data-key="proj"><span class="dot" style="background:var(--shared)"></span><span class="label">Linear → shared space</span><span class="sec">§2</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-shared" data-key="norm"><span class="dot" style="background:var(--shared)"></span><span class="label">L2-normalize → e_txt</span><span class="sec">§2.2</span></div>
+    </div>
+  </div>
+
+  <div class="join">↓ &nbsp; both embeddings meet in the shared space &nbsp; ↓</div>
+  <div class="block c-contrast" data-key="contrast" style="max-width:520px;margin:0 auto;">
+    <span class="dot" style="background:var(--contrast)"></span>
+    <span class="label">Contrastive matrix &nbsp;·&nbsp; symmetric InfoNCE loss</span>
+    <span class="sec">§2.2 · Fig 3</span>
+  </div>
+
+  <div style="height:18px"></div>
+  <div class="detail" id="detail">
+    <h3 id="d-title">Click a block above</h3>
+    <div class="tag" id="d-tag">Every colored block is interactive.</div>
+    <div class="formula" id="d-formula">Select any component to reveal its role, its equations, and the file that implements it.</div>
+    <ul id="d-points"></ul>
+    <p class="hint" id="d-file"></p>
+  </div>
+
+  <h2 class="section-title">How the contrastive objective works</h2>
+  <p class="section-sub">The single idea behind CLIP: pull matched pairs together, push mismatched pairs apart — in both directions at once.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Temperature-scaled cosine similarity <span class="sec" style="color:var(--muted);font-size:12px">§2.2</span></h4>
+      <p class="small">Every image is scored against every caption in the batch.</p>
+      <div class="formula">e_img = normalize(f_image(image))
+e_txt = normalize(f_text(caption))
+
+logits[i, j] = exp(t) · &lt;e_img_i, e_txt_j&gt;
+             (t = learned log-temperature)</div>
+      <ul><li>Cosine similarity lives in [−1, 1]; the temperature sharpens it.</li>
+          <li>The diagonal holds the <b>N</b> correct pairs; everything off-diagonal is a negative.</li></ul>
+    </div>
+    <div class="card">
+      <h4>Symmetric InfoNCE loss <span class="sec" style="color:var(--muted);font-size:12px">Fig 3</span></h4>
+      <p class="small">Cross-entropy over rows (image→text) and columns (text→image), averaged.</p>
+      <div class="formula">labels = [0, 1, …, N−1]
+
+L = ½·CE(logits,  labels)     # each image picks its caption
+  + ½·CE(logitsᵀ, labels)     # each caption picks its image</div>
+      <ul><li>No hand-built class labels — supervision comes entirely from pairing.</li>
+          <li>Identical to the pseudocode in the paper's Figure 3.</li></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Zero-shot classification (from the trained model)</h2>
+  <p class="section-sub" id="zs-sub"></p>
+  <div class="stat" id="kpis"></div>
+  <div class="grid2" style="margin-top:14px">
+    <div class="card">
+      <h4>Image ↔ text similarity matrix</h4>
+      <p class="small">One held-out image per class (rows) vs. every class caption (columns).
+        The bright green diagonal means each image is closest to its own caption — that is
+        exactly what makes zero-shot classification work. Hover any cell for its cosine value.</p>
+      <div id="heat"></div>
+      <div class="legend-row"><span>−1 (opposite)</span><span class="legend-bar"></span><span>+1 (aligned)</span></div>
+    </div>
+    <div class="card">
+      <h4>Training curve</h4>
+      <p class="small">Contrastive loss falls while zero-shot accuracy on held-out images climbs
+        from chance to near-perfect. Captured live from <code class="k">demo/run_demo.py</code>.</p>
+      <canvas id="curve" width="900" height="360"></canvas>
+      <div class="legend-row">
+        <span style="color:var(--contrast)">■ loss</span>
+        <span style="color:var(--pos)">■ zero-shot accuracy</span>
+        <span style="margin-left:auto">chance = <span id="chance"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Learning Transferable Visual Models From Natural Language Supervision”</b>
+    (Radford et al., 2021). Diagram and numbers generated by the reference implementation in
+    <code class="k">src/</code>. Run <code class="k">python demo/run_demo.py</code> to regenerate.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in results from a real run of demo/run_demo.py (data/clip_demo.json).
+// When served over http(s) the page tries to load the live JSON instead.
+const BAKED = {
+  "classes": [
+    {"color":"red","shape":"circle"},{"color":"red","shape":"square"},{"color":"red","shape":"triangle"},
+    {"color":"green","shape":"circle"},{"color":"green","shape":"square"},{"color":"green","shape":"triangle"},
+    {"color":"blue","shape":"circle"},{"color":"blue","shape":"square"},{"color":"blue","shape":"triangle"},
+    {"color":"yellow","shape":"circle"},{"color":"yellow","shape":"square"},{"color":"yellow","shape":"triangle"}
+  ],
+  "similarity_matrix": [
+    [0.7156,0.5843,0.0928,-0.1177,-0.3829,-0.6929,0.2425,0.0303,-0.3933,0.2935,0.0419,-0.4669],
+    [0.4822,0.7423,0.0306,-0.3126,-0.1806,-0.7063,0.0965,0.2631,-0.3732,0.0432,0.1771,-0.5424],
+    [0.4346,-0.1685,0.7861,0.0027,-0.6466,0.323,0.033,-0.593,0.3993,-0.0002,-0.5715,0.4478],
+    [-0.0216,-0.4306,-0.4003,0.7494,0.4264,0.3229,0.2291,-0.1077,-0.1414,0.165,-0.186,-0.292],
+    [-0.3439,-0.0696,-0.7141,0.3925,0.7459,0.014,-0.0327,0.2755,-0.42,-0.0467,0.2411,-0.5303],
+    [-0.0531,-0.7071,0.3088,0.4819,-0.0877,0.7698,-0.0111,-0.6029,0.3682,-0.0501,-0.58,0.4099],
+    [0.2467,-0.2676,-0.134,0.1082,-0.4142,-0.2591,0.7785,0.3796,0.466,0.1914,-0.2929,-0.2675],
+    [-0.1512,0.1814,-0.6584,-0.1282,0.2035,-0.584,0.4091,0.8025,-0.0734,0.0291,0.3271,-0.6201],
+    [0.0684,-0.5698,0.2417,0.088,-0.5201,0.239,0.5501,0.0352,0.795,-0.0498,-0.5863,0.1635],
+    [0.1878,-0.1275,-0.4608,0.1891,-0.1282,-0.4341,0.2125,-0.0783,-0.4461,0.8323,0.465,0.1586],
+    [-0.1611,0.2789,-0.613,-0.2022,0.2269,-0.5991,-0.1071,0.3091,-0.5916,0.4859,0.8336,0.0023],
+    [-0.0072,-0.6026,0.4691,0.1085,-0.4436,0.5396,-0.0804,-0.6371,0.4102,0.1252,-0.3792,0.769]
+  ],
+  "diag_mean": 0.7767, "offdiag_mean": -0.0599,
+  "final_zero_shot_acc": 0.9944, "chance": 0.0833,
+  "logit_scale": 15.693, "num_params": 29569,
+  "training_curve": [
+    {"step":1,"loss":3.9089,"zero_shot_acc":0.1333},{"step":50,"loss":2.1945,"zero_shot_acc":0.65},
+    {"step":100,"loss":2.2008,"zero_shot_acc":0.6778},{"step":150,"loss":2.0414,"zero_shot_acc":0.7167},
+    {"step":200,"loss":1.9187,"zero_shot_acc":0.7667},{"step":250,"loss":1.8657,"zero_shot_acc":0.8278},
+    {"step":300,"loss":1.6519,"zero_shot_acc":0.8833},{"step":350,"loss":1.7541,"zero_shot_acc":0.8944},
+    {"step":400,"loss":1.5956,"zero_shot_acc":0.8278},{"step":450,"loss":1.5173,"zero_shot_acc":0.9444},
+    {"step":500,"loss":1.5311,"zero_shot_acc":0.9889},{"step":550,"loss":1.5213,"zero_shot_acc":1.0},
+    {"step":600,"loss":1.5505,"zero_shot_acc":0.9889},{"step":650,"loss":1.4732,"zero_shot_acc":1.0},
+    {"step":700,"loss":1.4918,"zero_shot_acc":0.9944}
+  ]
+};
+
+const COLOR_RGB = {red:"#e6262f",green:"#26cc40",blue:"#3459f2",yellow:"#f2d81a"};
+
+const DETAILS = {
+  imgenc: { title: "Image Encoder", tag: "Paper §2.4 — a vision backbone",
+    formula: "image (3×24×24)\n  → Conv 3→32  stride 2   (24→12)\n  → Conv 32→64 stride 2   (12→6)\n  → global average pool     → (64,)",
+    points: ["CLIP uses a ResNet or ViT here; we use a tiny CNN so it trains in seconds on CPU.",
+             "Outputs one vector per image that summarizes its visual content.",
+             "The encoder is learned from scratch — no pretrained weights."],
+    file: "src/encoders.py → class ImageEncoder" },
+  txtenc: { title: "Text Encoder", tag: "Paper §2.4 — a text Transformer",
+    formula: "caption → token ids (padded)\n  → embedding table\n  → MLP per token\n  → mean-pool over non-pad tokens  → (48,)",
+    points: ["CLIP uses a Transformer; here a token-embedding + pooling encoder stands in for it.",
+             "Turns the whole caption into a single vector.",
+             "Shares nothing with the image tower except the final shared space."],
+    file: "src/encoders.py → class TextEncoder" },
+  proj: { title: "Projection to the shared space", tag: "Paper §2 — the joint embedding",
+    formula: "e = W · h        (image and text each have their own W)\nboth map to the SAME dimensionality (64)",
+    points: ["Each tower ends in a linear layer into one common space.",
+             "This is what lets an image vector and a text vector be compared at all.",
+             "Dimensionality here: 64."],
+    file: "src/model.py → CLIP.encode_image / encode_text" },
+  norm: { title: "L2 normalization", tag: "Paper §2.2",
+    formula: "e ← e / ‖e‖₂        (unit vectors)",
+    points: ["After normalization, a dot product IS the cosine similarity.",
+             "Keeps every embedding on the unit hypersphere.",
+             "Makes the temperature the only thing controlling logit scale."],
+    file: "src/model.py → F.normalize(...)" },
+  contrast: { title: "Contrastive matrix + symmetric InfoNCE", tag: "Paper §2.2, Figure 3",
+    formula: "logits = exp(t) · E_img · E_txtᵀ     # (N×N)\nlabels = 0..N−1  (diagonal = correct)\nL = ½ CE(logits,labels) + ½ CE(logitsᵀ,labels)",
+    points: ["Correct pairs sit on the diagonal; all other cells are negatives.",
+             "Loss is symmetric: images pick captions AND captions pick images.",
+             "This objective, at scale, is the whole of CLIP's training signal."],
+    file: "src/loss.py → clip_contrastive_loss" }
+};
+
+const blocks = document.querySelectorAll('.block');
+const g = id => document.getElementById(id);
+function show(key, el) {
+  const d = DETAILS[key]; if (!d) return;
+  blocks.forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  g('d-title').textContent = d.title; g('d-tag').textContent = d.tag;
+  g('d-formula').textContent = d.formula;
+  g('d-points').innerHTML = d.points.map(p => `<li>${p}</li>`).join('');
+  g('d-file').textContent = d.file;
+}
+blocks.forEach(b => b.addEventListener('click', () => show(b.dataset.key, b)));
+
+// diverging color scale in [-1, 1]: purple/blue (neg) -> dark (0) -> green (pos)
+function simColor(v) {
+  const stops = [[59,29,94],[42,51,82],[13,19,42],[19,78,74],[52,211,153],[167,243,208]];
+  const t = (Math.max(-1, Math.min(1, v)) + 1) / 2 * (stops.length - 1);
+  const i = Math.floor(t), f = t - i;
+  const a = stops[i], b = stops[Math.min(i+1, stops.length-1)];
+  const c = a.map((x,k)=>Math.round(x+(b[k]-x)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function render(data) {
+  const classes = data.classes;
+  const labels = classes.map(c => `${c.color} ${c.shape}`);
+  const n = classes.length;
+
+  // KPIs
+  g('kpis').innerHTML = `
+    <div class="kpi"><div class="big">${(data.final_zero_shot_acc*100).toFixed(1)}%</div><div class="lbl">zero-shot accuracy (held-out)</div></div>
+    <div class="kpi"><div class="big">${(data.chance*100).toFixed(1)}%</div><div class="lbl">random chance (1 / ${n})</div></div>
+    <div class="kpi"><div class="big">${data.diag_mean.toFixed(2)}</div><div class="lbl">mean matched similarity (diagonal)</div></div>
+    <div class="kpi"><div class="big">${data.offdiag_mean.toFixed(2)}</div><div class="lbl">mean mismatched (off-diagonal)</div></div>`;
+  g('zs-sub').innerHTML = `The model is never trained on class labels. To classify a held-out image we embed all `
+    + `${n} captions "a photo of a {color} {shape}" and pick the nearest one — reaching `
+    + `<b>${(data.final_zero_shot_acc*100).toFixed(1)}%</b> vs. ${(data.chance*100).toFixed(1)}% chance.`;
+  g('chance').textContent = (data.chance*100).toFixed(1) + '%';
+
+  // Heatmap
+  const wrap = document.createElement('div'); wrap.className = 'heat-wrap';
+  const ylab = document.createElement('div'); ylab.className='ylabels';
+  ylab.style.gridTemplateRows = `repeat(${n},1fr)`;
+  labels.forEach((l,i)=>{ const d=document.createElement('div');
+    d.innerHTML = `<span class="swatch" style="background:${COLOR_RGB[classes[i].color]}"></span>&nbsp;${l}`; ylab.appendChild(d); });
+  const heat = document.createElement('div');
+  heat.style.display='grid'; heat.style.gap='3px'; heat.style.gridTemplateRows=`repeat(${n},1fr)`;
+  data.similarity_matrix.forEach((row,ri)=>{
+    const r=document.createElement('div'); r.style.display='grid'; r.style.gap='3px';
+    r.style.gridTemplateColumns=`repeat(${n},1fr)`;
+    row.forEach((v,ci)=>{ const c=document.createElement('div'); c.className='cell';
+      c.style.background=simColor(v);
+      if (ri===ci) c.style.outline='2px solid #a7f3d0';
+      if (Math.abs(v)>=0.45) c.textContent = v.toFixed(2).replace(/^(-?)0/, '$1');
+      c.title = `image: ${labels[ri]}  →  caption: ${labels[ci]}\ncosine = ${v.toFixed(4)}`;
+      r.appendChild(c); });
+    heat.appendChild(r);
+  });
+  wrap.appendChild(ylab); wrap.appendChild(heat);
+  // x labels
+  const spacer=document.createElement('div');
+  const xlab=document.createElement('div'); xlab.style.display='grid';
+  xlab.style.gridAutoFlow='column'; xlab.style.gap='3px';
+  labels.forEach(l=>{ const d=document.createElement('div'); d.className='xlabels';
+    d.textContent=l; d.style.fontSize='9px'; d.style.color='var(--muted)'; d.style.textAlign='center'; xlab.appendChild(d); });
+  const outer=document.createElement('div');
+  outer.style.display='grid'; outer.style.gridTemplateColumns='92px 1fr'; outer.style.gap='6px';
+  outer.appendChild(spacer); outer.appendChild(xlab);
+  const host=g('heat'); host.innerHTML=''; host.appendChild(wrap); host.appendChild(outer);
+
+  drawCurve(data);
+}
+
+function drawCurve(data) {
+  const cv=g('curve'), ctx=cv.getContext('2d'); const W=cv.width,H=cv.height;
+  const pad=44; ctx.clearRect(0,0,W,H);
+  const cur=data.training_curve; const steps=cur.map(p=>p.step);
+  const maxStep=Math.max(...steps); const maxLoss=Math.max(...cur.map(p=>p.loss));
+  const X=s=>pad+(s/maxStep)*(W-pad*1.5);
+  const Yloss=l=>H-pad-(l/maxLoss)*(H-pad*1.7);
+  const Yacc=a=>H-pad-a*(H-pad*1.7);
+  // grid
+  ctx.strokeStyle='#1e2946'; ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){ const y=pad*0.6+i/5*(H-pad*1.7); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad*0.5,y); ctx.stroke(); }
+  // chance line
+  ctx.strokeStyle='#64748b'; ctx.setLineDash([5,4]); ctx.beginPath();
+  ctx.moveTo(pad,Yacc(data.chance)); ctx.lineTo(W-pad*0.5,Yacc(data.chance)); ctx.stroke(); ctx.setLineDash([]);
+  // loss
+  ctx.strokeStyle='#fb7185'; ctx.lineWidth=2.5; ctx.beginPath();
+  cur.forEach((p,i)=>{ const x=X(p.step),y=Yloss(p.loss); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  // acc
+  ctx.strokeStyle='#34d399'; ctx.lineWidth=2.5; ctx.beginPath();
+  cur.forEach((p,i)=>{ const x=X(p.step),y=Yacc(p.zero_shot_acc); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  cur.forEach(p=>{ ctx.fillStyle='#34d399'; ctx.beginPath(); ctx.arc(X(p.step),Yacc(p.zero_shot_acc),3,0,7); ctx.fill(); });
+  // axes labels
+  ctx.fillStyle='#93a0c0'; ctx.font='12px monospace';
+  ctx.fillText('0',pad-14,H-pad+4); ctx.fillText('100%',W-pad*0.5-30,Yacc(1)-6);
+  ctx.fillText('training step →',W/2-40,H-12);
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const r=await fetch('../data/clip_demo.json',{cache:'no-store'});
+      if (r.ok){ render(await r.json()); return; } } catch(e){}
+  }
+  render(BAKED);
+})();
+
+show('contrast', document.querySelector('.block[data-key="contrast"]'));
+</script>
+</body>
+</html>

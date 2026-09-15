@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ReAct — Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --thought:#a78bfa; --action:#22d3ee; --obs:#f59e0b; --finish:#34d399; --bad:#fb7185;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #1c2140 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #23123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--action); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(167,139,250,.14), rgba(34,211,238,.14) 50%, rgba(245,158,11,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#a78bfa,#22d3ee 50%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:820px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  .controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  button { background:var(--panel-2); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:13px; cursor:pointer; transition:.12s; }
+  button:hover { transform:translateY(-1px); border-color:#fff3; }
+  button.active { background:linear-gradient(90deg, rgba(167,139,250,.3), rgba(34,211,238,.3)); border-color:#fff4; }
+
+  .qbar { font-family:ui-monospace,monospace; background:#0d132a; border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+  .trace { display:flex; flex-direction:column; gap:10px; }
+  .step { border-radius:12px; padding:12px 14px; border:1px solid var(--line); position:relative; opacity:0; transform:translateY(8px);
+    transition:opacity .4s ease, transform .4s ease; }
+  .step.show { opacity:1; transform:none; }
+  .step .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:6px; }
+  .step.thought { background:linear-gradient(90deg, rgba(167,139,250,.12), transparent); border-color:rgba(167,139,250,.4); }
+  .step.thought .tag { background:rgba(167,139,250,.2); color:var(--thought); }
+  .step.action { background:linear-gradient(90deg, rgba(34,211,238,.12), transparent); border-color:rgba(34,211,238,.4); }
+  .step.action .tag { background:rgba(34,211,238,.2); color:var(--action); }
+  .step.observation { background:linear-gradient(90deg, rgba(245,158,11,.12), transparent); border-color:rgba(245,158,11,.4); margin-left:26px; }
+  .step.observation .tag { background:rgba(245,158,11,.2); color:var(--obs); }
+  .step.finish { background:linear-gradient(90deg, rgba(52,211,153,.14), transparent); border-color:rgba(52,211,153,.5); }
+  .step.finish .tag { background:rgba(52,211,153,.2); color:var(--finish); }
+  .step .body { font-family:ui-monospace,monospace; font-size:13.5px; }
+  .toolchip { color:var(--action); font-weight:700; }
+  .loop-note { text-align:center; color:var(--muted); font-size:12px; margin:2px 0; }
+
+  .verdict { font-family:ui-monospace,monospace; margin-top:12px; }
+  .contrast { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; } @media(max-width:820px){ .contrast{grid-template-columns:1fr;} }
+  .agentcard { border-radius:14px; padding:14px; border:1px solid var(--line); text-align:center; }
+  .agentcard.ok { border-color:rgba(52,211,153,.5); background:linear-gradient(180deg, rgba(52,211,153,.1), var(--panel)); }
+  .agentcard.no { border-color:rgba(251,113,133,.5); background:linear-gradient(180deg, rgba(251,113,133,.1), var(--panel)); }
+  .agentcard .ans { font-family:ui-monospace,monospace; font-size:20px; font-weight:800; margin:6px 0; }
+  .agentcard.ok .ans { color:var(--finish); } .agentcard.no .ans { color:var(--bad); }
+  .bars { display:flex; flex-direction:column; gap:12px; }
+  .barrow .lab { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:24px; overflow:hidden; }
+  .fill { height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; font-weight:700; color:#04121e; transition:width .8s ease; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>ReAct</h1>
+  <p>Synergize <b>reasoning</b> and <b>acting</b>: the agent alternates <b style="color:var(--thought)">Thought</b> → <b style="color:var(--action)">Action</b> (a real tool call) → <b style="color:var(--obs)">Observation</b>, using each observation to decide its next step. Reasoning without tools hallucinates; acting without reasoning can't chain.</p>
+  <div class="badges">
+    <span class="badge">Yao et al., 2022</span>
+    <span class="badge">arXiv:2210.03629</span>
+    <span class="badge">Tools: KB lookup + calculator</span>
+    <span class="badge">Multi-hop questions</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The Thought → Action → Observation loop</h2>
+  <p class="section-sub">A real recorded trace from <code class="k">demo/run_demo.py</code>. Pick a question; the agent's interleaved reasoning and tool calls animate step by step.</p>
+
+  <div class="card">
+    <div class="controls" id="qbtns"></div>
+    <div class="qbar" id="qbar"></div>
+    <div class="trace" id="trace"></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <h2 class="section-title">Why both halves matter</h2>
+  <p class="section-sub" id="contrast-sub"></p>
+  <div class="contrast" id="contrast"></div>
+
+  <h2 class="section-title">Accuracy on the multi-hop question set</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Questions answered correctly</h4>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <h4>The two tools</h4>
+      <p class="small"><span class="toolchip">Lookup[entity, attribute]</span> — query the key-value knowledge base (e.g. <code class="k">Alice.country = France</code>).</p>
+      <p class="small"><span class="toolchip">Calc[expression]</span> — evaluate arithmetic (e.g. <code class="k">68+214 = 282</code>).</p>
+      <ul>
+        <li><b style="color:var(--thought)">Reasoning-only</b> can't query facts, so it guesses from stale memory and hallucinates.</li>
+        <li><b style="color:var(--action)">Acting-only</b> fires one naive tool call and can't chain lookup → lookup → calc.</li>
+        <li><b style="color:var(--finish)">ReAct</b> reasons about each observation to choose the next action, so multi-hop questions fall out naturally.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“ReAct: Synergizing Reasoning and Acting in Language Models”</b> (Yao et al., 2022).
+    The policy is a transparent rule-based stand-in for the paper's LLM, but the tools and observations are real;
+    trace recorded by <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {
+    "n_questions": 6,
+    "seconds": 0.0
+  },
+  "accuracy": {
+    "ReAct": {
+      "correct": 6,
+      "total": 6,
+      "rate": 1.0
+    },
+    "Reasoning-only": {
+      "correct": 1,
+      "total": 6,
+      "rate": 0.1667
+    },
+    "Acting-only": {
+      "correct": 1,
+      "total": 6,
+      "rate": 0.1667
+    }
+  },
+  "questions": [
+    {
+      "question": "What is the capital of the country Alice lives in?",
+      "gold": "Paris",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "What is the capital of the country Alice lives in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I need the capital of the country Alice lives in \u2014 first find Alice's country."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Alice",
+                "country"
+              ],
+              "obs": "Alice.country = France",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "Alice lives in France. Now look up the capital of France."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "France",
+                "capital"
+              ],
+              "obs": "France.capital = Paris",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "The capital of France is Paris."
+            },
+            {
+              "type": "finish",
+              "answer": "Paris"
+            }
+          ],
+          "answer": "Paris",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "What is the capital of the country Alice lives in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I'll reason about capitals from memory (no tools). The most famous capital I can recall is Paris, so I'll say that."
+            },
+            {
+              "type": "finish",
+              "answer": "Paris"
+            }
+          ],
+          "answer": "Paris",
+          "correct": true
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "What is the capital of the country Alice lives in?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Alice",
+                "capital"
+              ],
+              "obs": "'Alice' has no attribute 'capital'",
+              "ok": false
+            },
+            {
+              "type": "finish",
+              "answer": "unknown"
+            }
+          ],
+          "answer": "unknown",
+          "correct": false
+        }
+      }
+    },
+    {
+      "question": "What is the capital of the country Bob lives in?",
+      "gold": "Tokyo",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "What is the capital of the country Bob lives in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I need the capital of the country Bob lives in \u2014 first find Bob's country."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Bob",
+                "country"
+              ],
+              "obs": "Bob.country = Japan",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "Bob lives in Japan. Now look up the capital of Japan."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Japan",
+                "capital"
+              ],
+              "obs": "Japan.capital = Tokyo",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "The capital of Japan is Tokyo."
+            },
+            {
+              "type": "finish",
+              "answer": "Tokyo"
+            }
+          ],
+          "answer": "Tokyo",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "What is the capital of the country Bob lives in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I'll reason about capitals from memory (no tools). The most famous capital I can recall is Paris, so I'll say that."
+            },
+            {
+              "type": "finish",
+              "answer": "Paris"
+            }
+          ],
+          "answer": "Paris",
+          "correct": false
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "What is the capital of the country Bob lives in?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Bob",
+                "capital"
+              ],
+              "obs": "'Bob' has no attribute 'capital'",
+              "ok": false
+            },
+            {
+              "type": "finish",
+              "answer": "unknown"
+            }
+          ],
+          "answer": "unknown",
+          "correct": false
+        }
+      }
+    },
+    {
+      "question": "What is the total population (in millions) of the countries Alice and Carol live in?",
+      "gold": "282",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "What is the total population (in millions) of the countries Alice and Carol live in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I need the populations of the countries Alice and Carol live in, then add them."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Alice",
+                "country"
+              ],
+              "obs": "Alice.country = France",
+              "ok": true
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "France",
+                "population"
+              ],
+              "obs": "France.population = 68",
+              "ok": true
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Carol",
+                "country"
+              ],
+              "obs": "Carol.country = Brazil",
+              "ok": true
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Brazil",
+                "population"
+              ],
+              "obs": "Brazil.population = 214",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "France has 68M and Brazil has 214M. Add them with the calculator."
+            },
+            {
+              "type": "action",
+              "tool": "Calc",
+              "args": [
+                "68+214"
+              ],
+              "obs": "68+214 = 282",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "282"
+            }
+          ],
+          "answer": "282",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "What is the total population (in millions) of the countries Alice and Carol live in?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "This needs numbers I don't have grounded access to; I'll estimate the total as about 100."
+            },
+            {
+              "type": "finish",
+              "answer": "100"
+            }
+          ],
+          "answer": "100",
+          "correct": false
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "What is the total population (in millions) of the countries Alice and Carol live in?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Alice",
+                "population"
+              ],
+              "obs": "'Alice' has no attribute 'population'",
+              "ok": false
+            },
+            {
+              "type": "finish",
+              "answer": "unknown"
+            }
+          ],
+          "answer": "unknown",
+          "correct": false
+        }
+      }
+    },
+    {
+      "question": "What is the combined age of Bob and Carol?",
+      "gold": "66",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "What is the combined age of Bob and Carol?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I need Bob's and Carol's age, then add them."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Bob",
+                "age"
+              ],
+              "obs": "Bob.age = 25",
+              "ok": true
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Carol",
+                "age"
+              ],
+              "obs": "Carol.age = 41",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "Bob's age is 25, Carol's is 41. Sum them."
+            },
+            {
+              "type": "action",
+              "tool": "Calc",
+              "args": [
+                "25+41"
+              ],
+              "obs": "25+41 = 66",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "66"
+            }
+          ],
+          "answer": "66",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "What is the combined age of Bob and Carol?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "This needs numbers I don't have grounded access to; I'll estimate the total as about 100."
+            },
+            {
+              "type": "finish",
+              "answer": "100"
+            }
+          ],
+          "answer": "100",
+          "correct": false
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "What is the combined age of Bob and Carol?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Bob",
+                "age"
+              ],
+              "obs": "Bob.age = 25",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "25"
+            }
+          ],
+          "answer": "25",
+          "correct": false
+        }
+      }
+    },
+    {
+      "question": "How many wheels do 3 bicycles and 2 cars have in total?",
+      "gold": "14",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "How many wheels do 3 bicycles and 2 cars have in total?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I need wheels-per-bicycle and wheels-per-car, then compute the total."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "bicycle",
+                "wheels"
+              ],
+              "obs": "bicycle.wheels = 2",
+              "ok": true
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "car",
+                "wheels"
+              ],
+              "obs": "car.wheels = 4",
+              "ok": true
+            },
+            {
+              "type": "thought",
+              "text": "A bicycle has 2 wheels, a car has 4. Compute 3*2 + 2*4."
+            },
+            {
+              "type": "action",
+              "tool": "Calc",
+              "args": [
+                "3*2 + 2*4"
+              ],
+              "obs": "3*2 + 2*4 = 14",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "14"
+            }
+          ],
+          "answer": "14",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "How many wheels do 3 bicycles and 2 cars have in total?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "This needs numbers I don't have grounded access to; I'll estimate the total as about 100."
+            },
+            {
+              "type": "finish",
+              "answer": "100"
+            }
+          ],
+          "answer": "100",
+          "correct": false
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "How many wheels do 3 bicycles and 2 cars have in total?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "bicycle",
+                "wheels"
+              ],
+              "obs": "bicycle.wheels = 2",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "2"
+            }
+          ],
+          "answer": "2",
+          "correct": false
+        }
+      }
+    },
+    {
+      "question": "In which country does Carol live?",
+      "gold": "Brazil",
+      "agents": {
+        "ReAct": {
+          "name": "ReAct (reason + act)",
+          "question": "In which country does Carol live?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "I just need the country Carol lives in."
+            },
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Carol",
+                "country"
+              ],
+              "obs": "Carol.country = Brazil",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "Brazil"
+            }
+          ],
+          "answer": "Brazil",
+          "correct": true
+        },
+        "Reasoning-only": {
+          "name": "Reasoning-only (no tools)",
+          "question": "In which country does Carol live?",
+          "steps": [
+            {
+              "type": "thought",
+              "text": "From memory I think this person lives in the United States."
+            },
+            {
+              "type": "finish",
+              "answer": "United States"
+            }
+          ],
+          "answer": "United States",
+          "correct": false
+        },
+        "Acting-only": {
+          "name": "Acting-only (no reasoning)",
+          "question": "In which country does Carol live?",
+          "steps": [
+            {
+              "type": "action",
+              "tool": "Lookup",
+              "args": [
+                "Carol",
+                "country"
+              ],
+              "obs": "Carol.country = Brazil",
+              "ok": true
+            },
+            {
+              "type": "finish",
+              "answer": "Brazil"
+            }
+          ],
+          "answer": "Brazil",
+          "correct": true
+        }
+      }
+    }
+  ],
+  "contrast": {
+    "question": "What is the capital of the country Bob lives in?",
+    "gold": "Tokyo",
+    "agents": {
+      "ReAct": {
+        "name": "ReAct (reason + act)",
+        "question": "What is the capital of the country Bob lives in?",
+        "steps": [
+          {
+            "type": "thought",
+            "text": "I need the capital of the country Bob lives in \u2014 first find Bob's country."
+          },
+          {
+            "type": "action",
+            "tool": "Lookup",
+            "args": [
+              "Bob",
+              "country"
+            ],
+            "obs": "Bob.country = Japan",
+            "ok": true
+          },
+          {
+            "type": "thought",
+            "text": "Bob lives in Japan. Now look up the capital of Japan."
+          },
+          {
+            "type": "action",
+            "tool": "Lookup",
+            "args": [
+              "Japan",
+              "capital"
+            ],
+            "obs": "Japan.capital = Tokyo",
+            "ok": true
+          },
+          {
+            "type": "thought",
+            "text": "The capital of Japan is Tokyo."
+          },
+          {
+            "type": "finish",
+            "answer": "Tokyo"
+          }
+        ],
+        "answer": "Tokyo",
+        "correct": true
+      },
+      "Reasoning-only": {
+        "name": "Reasoning-only (no tools)",
+        "question": "What is the capital of the country Bob lives in?",
+        "steps": [
+          {
+            "type": "thought",
+            "text": "I'll reason about capitals from memory (no tools). The most famous capital I can recall is Paris, so I'll say that."
+          },
+          {
+            "type": "finish",
+            "answer": "Paris"
+          }
+        ],
+        "answer": "Paris",
+        "correct": false
+      },
+      "Acting-only": {
+        "name": "Acting-only (no reasoning)",
+        "question": "What is the capital of the country Bob lives in?",
+        "steps": [
+          {
+            "type": "action",
+            "tool": "Lookup",
+            "args": [
+              "Bob",
+              "capital"
+            ],
+            "obs": "'Bob' has no attribute 'capital'",
+            "ok": false
+          },
+          {
+            "type": "finish",
+            "answer": "unknown"
+          }
+        ],
+        "answer": "unknown",
+        "correct": false
+      }
+    }
+  }
+};
+let D = BAKED, qi = 0, timer = null;
+
+function renderTrace(res) {
+  const trace = document.getElementById('trace');
+  trace.innerHTML = '';
+  const els = [];
+  res.steps.forEach(s => {
+    if (s.type === 'action') {
+      // action + its observation are recorded together; split into two cards
+      const a = document.createElement('div'); a.className = 'step action';
+      const args = s.args.join(', ');
+      a.innerHTML = `<span class="tag">Action</span><div class="body"><span class="toolchip">${s.tool}[${args}]</span></div>`;
+      trace.appendChild(a); els.push(a);
+      const o = document.createElement('div'); o.className = 'step observation';
+      o.innerHTML = `<span class="tag">Observation</span><div class="body">${s.obs}</div>`;
+      trace.appendChild(o); els.push(o);
+    } else if (s.type === 'thought') {
+      const d = document.createElement('div'); d.className = 'step thought';
+      d.innerHTML = `<span class="tag">Thought</span><div class="body">${s.text}</div>`;
+      trace.appendChild(d); els.push(d);
+    } else if (s.type === 'finish') {
+      const d = document.createElement('div'); d.className = 'step finish';
+      d.innerHTML = `<span class="tag">Finish</span><div class="body">answer → <b>${s.answer}</b></div>`;
+      trace.appendChild(d); els.push(d);
+    }
+  });
+  // animate reveal
+  if (timer) clearInterval(timer);
+  let i = 0;
+  const step = () => { if (i < els.length) { els[i].classList.add('show'); i++; } else clearInterval(timer); };
+  timer = setInterval(step, 500); step();
+}
+
+function showQuestion(idx) {
+  qi = idx;
+  const row = D.questions[idx];
+  const res = row.agents["ReAct"];
+  document.getElementById('qbar').innerHTML = `<b>Q:</b> ${row.question} &nbsp; <span style="color:var(--muted)">(gold answer: ${row.gold})</span>`;
+  renderTrace(res);
+  const v = document.getElementById('verdict');
+  v.innerHTML = res.correct ? `<span style="color:var(--finish)">✓ ReAct answered ${res.answer}, matching the gold answer.</span>`
+                            : `<span style="color:var(--bad)">✗ ${res.answer}</span>`;
+  document.querySelectorAll('#qbtns button').forEach((b,i)=>b.classList.toggle('active', i===idx));
+}
+
+function render(data) {
+  D = data;
+  // question buttons
+  const qb = document.getElementById('qbtns'); qb.innerHTML = '';
+  D.questions.forEach((row, i) => {
+    const b = document.createElement('button');
+    b.textContent = `Q${i+1}`;
+    b.title = row.question;
+    b.onclick = () => showQuestion(i);
+    qb.appendChild(b);
+  });
+
+  // contrast
+  const c = D.contrast;
+  document.getElementById('contrast-sub').innerHTML =
+    `Same multi-hop question — <code class="k">${c.question}</code> (gold <b>${c.gold}</b>) — solved by ReAct but missed by each ablation.`;
+  const cc = document.getElementById('contrast'); cc.innerHTML = '';
+  [["ReAct","reason + act"],["Reasoning-only","no tools"],["Acting-only","no reasoning"]].forEach(([name,sub]) => {
+    const a = c.agents[name];
+    const div = document.createElement('div');
+    div.className = 'agentcard ' + (a.correct ? 'ok' : 'no');
+    const nsteps = a.steps.filter(s=>s.type==='action').length;
+    div.innerHTML = `<div style="color:var(--muted);font-size:12px">${name}<br><span style="opacity:.7">${sub}</span></div>
+      <div class="ans">${a.answer}</div>
+      <div style="font-size:12px;color:var(--muted)">${a.correct?'✓ correct':'✗ wrong'} · ${nsteps} tool call${nsteps===1?'':'s'}</div>`;
+    cc.appendChild(div);
+  });
+
+  // bars
+  const bars = document.getElementById('bars'); bars.innerHTML = '';
+  const order = ["ReAct","Reasoning-only","Acting-only"];
+  const colors = {"ReAct":"linear-gradient(90deg,#34d399,#a7f3d0)","Reasoning-only":"linear-gradient(90deg,#a78bfa,#c9b8ff)","Acting-only":"linear-gradient(90deg,#22d3ee,#a5eefb)"};
+  order.forEach(name => {
+    const acc = D.accuracy[name];
+    const wrap = document.createElement('div'); wrap.className='barrow';
+    wrap.innerHTML = `<div class="lab"><span>${name}</span><span>${acc.correct}/${acc.total} · ${Math.round(acc.rate*100)}%</span></div>
+      <div class="track"><div class="fill" style="width:0%;background:${colors[name]}">${Math.round(acc.rate*100)}%</div></div>`;
+    bars.appendChild(wrap);
+    requestAnimationFrame(()=>{ wrap.querySelector('.fill').style.width=(acc.rate*100)+'%'; });
+  });
+
+  showQuestion(2); // start on a multi-hop (population) question
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/react_results.json',{cache:'no-store'});
+      if (r.ok) { render(await r.json()); return; } } catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>

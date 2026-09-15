@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>GPT-3 — In-Context Few-Shot Learning</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;--line:#2a3352;
+    --tok:#22d3ee;--pos:#a78bfa;--seg:#f0abfc;--attn:#fb7185;--ffn:#34d399;--norm:#64748b;--mlm:#f59e0b;--cls:#38bdf8;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--tok)}
+  header.hero{padding:40px 24px 28px;text-align:center;background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(245,158,11,.14));border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:820px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px}
+  .arch{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  @media(max-width:820px){.arch{grid-template-columns:1fr}}
+  .stack{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .stack h3{margin:2px 0 12px;text-align:center;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .nx{border:1px dashed var(--line);border-radius:12px;padding:10px;position:relative;margin:6px 0;background:rgba(255,255,255,.015)}
+  .nx::before{content:"N \00d7 (bidirectional layers)";position:absolute;top:-11px;left:14px;background:var(--panel);padding:0 8px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px}
+  .block{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:9px 0;border-radius:11px;cursor:pointer;border:1px solid transparent;transition:transform .12s,box-shadow .12s,border-color .12s;background:var(--panel-2);user-select:none}
+  .block:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .block.active{border-color:#fff3;box-shadow:0 0 0 2px #ffffff22,var(--shadow)}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .block .label{font-weight:600}.block .sec{margin-left:auto;font-size:11px;color:var(--muted)}
+  .arrow{text-align:center;color:var(--line);font-size:18px;margin:-3px 0}
+  .c-tok{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent)}
+  .c-pos{background:linear-gradient(90deg,rgba(167,139,250,.16),transparent)}
+  .c-seg{background:linear-gradient(90deg,rgba(240,171,252,.16),transparent)}
+  .c-attn{background:linear-gradient(90deg,rgba(251,113,133,.16),transparent)}
+  .c-ffn{background:linear-gradient(90deg,rgba(52,211,153,.16),transparent)}
+  .c-norm{background:linear-gradient(90deg,rgba(100,116,139,.18),transparent)}
+  .c-mlm{background:linear-gradient(90deg,rgba(245,158,11,.16),transparent)}
+  .io{text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px;margin:8px 0;background:rgba(255,255,255,.02)}
+  .detail{position:sticky;top:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-height:260px}
+  .detail h3{margin:0 0 4px;font-size:18px}.detail .tag{font-size:12px;color:var(--muted)}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);font-family:"SFMono-Regular",ui-monospace,Consolas,monospace;font-size:14px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  .detail ul{margin:10px 0 0;padding-left:18px}.detail li{margin:5px 0}
+  .hint{color:var(--muted);font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .cell{width:100%;aspect-ratio:1/1;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#00121f;transition:transform .1s}
+  .cell:hover{transform:scale(1.12);outline:2px solid #fff;z-index:2}
+  .heat{display:grid;gap:3px}.heat .row{display:grid;gap:3px;grid-auto-flow:column}
+  .heat-wrap{display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:center}
+  .ylabels{display:grid;gap:3px}.ylabels div{display:flex;align-items:center;justify-content:flex-end;font-size:11px;color:var(--muted)}
+  .xlabels{display:grid;grid-auto-flow:column;gap:3px;text-align:center;font-size:11px;color:var(--muted)}
+  .legend-row{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--muted);font-size:12px}
+  .legend-bar{height:10px;flex:1;border-radius:6px;background:linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a)}
+  .sample-note{color:var(--muted);font-size:12px;margin-top:10px}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .tokline{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .chip{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);font-family:ui-monospace,monospace}
+  .chip.mask{background:linear-gradient(90deg,rgba(245,158,11,.35),rgba(245,158,11,.15));border-color:#f59e0b}
+  .chip.cls{background:linear-gradient(90deg,rgba(56,189,248,.35),rgba(56,189,248,.12));border-color:#38bdf8}
+  .chip.pred{background:linear-gradient(90deg,rgba(52,211,153,.30),rgba(52,211,153,.10));border-color:#34d399}
+  .metric{font-size:34px;font-weight:700;background:linear-gradient(90deg,#34d399,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+<style>
+ canvas{width:100%;height:300px;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+ .mono{font-family:ui-monospace,monospace}
+ table{border-collapse:collapse;width:100%;font-family:ui-monospace,monospace;font-size:13px}
+ th,td{border:1px solid var(--line);padding:5px 8px;text-align:center}
+ th{color:var(--muted);font-weight:600}
+ .prompt{background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:#cfe8ff;font-family:ui-monospace,monospace;line-height:2}
+ .demo{background:rgba(52,211,153,.18);border:1px solid #34d399;border-radius:6px;padding:2px 6px;margin:0 2px}
+ .query{background:rgba(245,158,11,.28);border:1px solid #f59e0b;border-radius:6px;padding:2px 6px;margin:0 2px}
+ .ans{background:rgba(34,211,238,.28);border:1px solid #22d3ee;border-radius:6px;padding:2px 6px}
+</style></head><body>
+<header class="hero"><h1>GPT-3</h1>
+ <p>Language Models are <b>Few-Shot Learners</b>. Put a few input→output demonstrations in the prompt and the model infers the rule and completes a new query — <b>with no weight updates</b>. Accuracy climbs as the number of shots K grows.</p>
+ <div class="badges"><span class="badge">Brown et al. · 2020</span><span class="badge">arXiv:2005.14165</span><span class="badge">In-context learning</span><span class="badge">No gradient updates</span></div></header>
+<div class="wrap">
+ <h2 class="section-title">Learning from the prompt, not from training</h2>
+ <p class="section-sub">Each rule is a permutation of the symbols. The rules <b>overlap</b>, so one demonstration is usually ambiguous — the model must accumulate evidence across shots to pin down the rule, then apply it to a symbol it was not shown.</p>
+ <div class="grid2">
+   <div class="card"><h4>Accuracy vs number of shots K</h4><canvas id="curve" width="1000" height="300"></canvas>
+     <p class="sample-note" id="curve-note"></p></div>
+   <div class="card"><h4>A worked K-shot prompt</h4>
+     <div class="prompt" id="prompt"></div>
+     <p class="sample-note" id="pred-note"></p>
+     <p class="small">Green = demonstrations (the "shots"), orange = the query, cyan = the model's completion. The query symbol never appears among the demonstrations, so the model cannot copy — it has to infer the rule.</p></div>
+ </div>
+
+ <h2 class="section-title">The rule family (memorized in the weights, selected by context)</h2>
+ <p class="section-sub">During training the model saw all of these permutations. At inference the demonstrations tell it <i>which one</i> is active. Notice how columns share values across rows — that overlap is what makes single shots ambiguous.</p>
+ <div class="card"><div id="table"></div></div>
+
+ <h2 class="section-title">How it works</h2>
+ <div class="grid2">
+   <div class="card"><h4>In-context learning</h4>
+     <div class="formula">prompt = x₁>y₁  x₂>y₂  …  x_K>y_K  x_q>
+answer = argmax  p( · | prompt )
+
+no parameter update — inference only</div>
+     <p class="small">The knowledge of the rule family lives in the weights; the <i>selection</i> of the rule happens entirely in the forward pass, via attention over the demonstrations.</p></div>
+   <div class="card"><h4>Induction heads</h4>
+     <p class="small">The mechanism behind this is the <b>induction head</b>: attention heads that look back for an earlier context matching the current one and copy what came next. More demonstrations give these heads more consistent evidence, so accuracy rises monotonically with K — exactly the trend plotted above.</p></div>
+ </div>
+ <div class="footer">Interactive companion to <b>GPT-3</b> (Brown et al., 2020). Curve generated from <code class="k">src/</code> via <code class="k">python demo/run_demo.py</code>.</div>
+</div>
+<script>
+const BAKED={"n_tasks":5,"n_symbols":8,"chance":0.125,"curve":[{"shots":0,"accuracy":0.49},{"shots":1,"accuracy":0.64},{"shots":2,"accuracy":0.8},{"shots":3,"accuracy":0.8367},{"shots":4,"accuracy":0.9167},{"shots":5,"accuracy":0.8867},{"shots":6,"accuracy":0.9367}],"example_prompt":"g>h d>c b>d a>e h>f c>b f>","example_pred":"a","example_expected":"a","tasks":[{"a":"d","b":"c","c":"h","d":"b","e":"g","f":"a","g":"e","h":"f"},{"a":"b","b":"f","c":"d","d":"h","e":"g","f":"a","g":"e","h":"c"},{"a":"d","b":"a","c":"b","d":"e","e":"g","f":"h","g":"f","h":"c"},{"a":"d","b":"f","c":"g","d":"e","e":"c","f":"a","g":"h","h":"b"},{"a":"e","b":"d","c":"b","d":"c","e":"g","f":"a","g":"h","h":"f"}]};
+function drawCurve(d){const cv=document.getElementById('curve');const ctx=cv.getContext('2d');const W=cv.width,H=cv.height,pad=42;ctx.clearRect(0,0,W,H);
+ const pts=d.curve;const kmax=pts[pts.length-1].shots;
+ ctx.strokeStyle='#1e2946';ctx.lineWidth=1;for(let g=0;g<=5;g++){const y=pad+(H-2*pad)*g/5;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-10,y);ctx.stroke();ctx.fillStyle='#93a0c0';ctx.font='11px monospace';ctx.fillText((100-g*20)+'%',6,y+4);}
+ // chance line
+ const cy=pad+(H-2*pad)*(1-d.chance);ctx.strokeStyle='#fb7185';ctx.setLineDash([6,5]);ctx.beginPath();ctx.moveTo(pad,cy);ctx.lineTo(W-10,cy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#fb7185';ctx.fillText('chance '+(d.chance*100).toFixed(0)+'%',W-120,cy-6);
+ // curve
+ ctx.beginPath();pts.forEach((p,i)=>{const x=pad+(W-pad-10)*(p.shots/kmax);const y=pad+(H-2*pad)*(1-p.accuracy);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+ const grad=ctx.createLinearGradient(pad,0,W,0);grad.addColorStop(0,'#a78bfa');grad.addColorStop(1,'#34d399');ctx.strokeStyle=grad;ctx.lineWidth=3;ctx.stroke();
+ pts.forEach(p=>{const x=pad+(W-pad-10)*(p.shots/kmax);const y=pad+(H-2*pad)*(1-p.accuracy);ctx.fillStyle='#e8ecf7';ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fill();
+  ctx.fillStyle='#93a0c0';ctx.fillText('K='+p.shots,x-12,H-18);ctx.fillStyle='#fde68a';ctx.fillText((p.accuracy*100).toFixed(0),x-8,y-10);});}
+function renderPrompt(d){
+ const pr=document.getElementById('prompt');const s=d.example_prompt;// like 'g>h d>c ... c>b f>'
+ const parts=s.trim().split(' ');const html=[];
+ parts.forEach((p,i)=>{ if(p.endsWith('>')){ html.push(`<span class="query">${p}</span><span class="ans">${d.example_pred}</span>`);} else {html.push(`<span class="demo">${p}</span>`);} });
+ pr.innerHTML=html.join(' ');
+ const ok=d.example_pred===d.example_expected;
+ document.getElementById('pred-note').innerHTML=`model predicts <b class="mono">${d.example_pred}</b> · correct answer <b class="mono">${d.example_expected}</b> ${ok?'<span style="color:#34d399">✓</span>':''}`;
+}
+function renderTable(d){
+ const syms=Object.keys(d.tasks[0]);let h='<table><tr><th>rule</th>'+syms.map(s=>`<th>${s}</th>`).join('')+'</tr>';
+ d.tasks.forEach((t,i)=>{h+=`<tr><td>${i}</td>`+syms.map(s=>`<td>${t[s]}</td>`).join('')+'</tr>';});h+='</table>';
+ document.getElementById('table').innerHTML=h;}
+function draw(d,note){drawCurve(d);renderPrompt(d);renderTable(d);
+ const a0=d.curve[0].accuracy*100,am=d.curve[d.curve.length-1].accuracy*100;
+ document.getElementById('curve-note').textContent=`0-shot ${a0.toFixed(0)}% -> ${d.curve[d.curve.length-1].shots}-shot ${am.toFixed(0)}%  (+${(am-a0).toFixed(0)} pts from context alone) · ${note}`;}
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/gpt3_sample.json',{cache:'no-store'});if(r.ok){draw(await r.json(),'live data');return;}}catch(e){}}draw(BAKED,'baked-in sample');})();
+</script></body></html>

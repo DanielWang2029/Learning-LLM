@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RoFormer — Rotary Position Embedding (RoPE) Visualization</title>
+<style>
+  :root{--bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--a:#22d3ee;--b:#a78bfa;--c:#fb7185;--d:#f59e0b;--e:#34d399;--shadow:0 10px 30px rgba(0,0,0,.35);}
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#241a3f 0%,transparent 60%),
+       radial-gradient(1000px 500px at 100% 0%,#123a2a 0%,transparent 60%),var(--bg);
+       color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--a);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(167,139,250,.14),rgba(34,211,238,.14) 50%,rgba(52,211,153,.14));border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:32px;background:linear-gradient(90deg,#a78bfa,#22d3ee 50%,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:800px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;} .section-sub{color:var(--muted);margin:0 0 18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;white-space:pre-wrap;}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  .ctrl{display:flex;align-items:center;gap:12px;margin-top:12px;color:var(--muted);font-size:13px;flex-wrap:wrap;}
+  input[type=range]{flex:1;accent-color:var(--b);}
+  .heat{display:grid;gap:3px;margin-top:6px;}
+  .hrow{display:grid;gap:3px;grid-auto-flow:column;}
+  .cell{aspect-ratio:1/1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#00121f;}
+  .cell:hover{outline:2px solid #fff;}
+  .diag{outline:2px solid #fff6;}
+  .kpi{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;}
+  .kpi div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .kpi b{font-size:18px;color:var(--e);} .kpi span{display:block;color:var(--muted);font-size:12px;}
+  .bars{margin-top:8px;}
+  .barrow{display:flex;align-items:center;gap:10px;margin:8px 0;font-size:13px;}
+  .barrow .lab{width:70px;color:var(--muted);} .track{flex:1;background:#0d132a;border:1px solid var(--line);border-radius:8px;height:22px;position:relative;overflow:hidden;}
+  .fill{height:100%;border-radius:7px;} .fill.rope{background:linear-gradient(90deg,#34d399,#22d3ee);} .fill.none{background:linear-gradient(90deg,#fb7185,#f59e0b);}
+  .barrow .val{width:52px;text-align:right;}
+  .legend{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap;}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>RoFormer — Rotary Position Embedding (RoPE)</h1>
+  <p>RoPE encodes position by <b>rotating</b> query and key vectors. The magic: the attention score between a query at
+  position <b>m</b> and a key at position <b>n</b> ends up depending only on the <b>relative</b> distance
+  <code class="k">m − n</code>. So the model reads positions relatively and extrapolates to longer sequences.</p>
+  <div class="badges">
+    <span class="badge">Su et al., 2021</span>
+    <span class="badge">arXiv:2104.09864</span>
+    <span class="badge">Rotation = position</span>
+    <span class="badge">Relative &amp; extrapolatable</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">1 · Position is a rotation</h2>
+  <p class="section-sub">Each 2-D slice of a vector is rotated by an angle proportional to its position. Drag the sliders:
+  the angle <i>between</i> the rotated query and key depends only on <code class="k">m − n</code>.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Rotating a query/key pair</h4>
+      <canvas id="rot" width="1000" height="520"></canvas>
+      <div class="ctrl"><span>query pos m = <b id="mval">5</b></span><input id="m" type="range" min="0" max="12" value="5"></div>
+      <div class="ctrl"><span>key pos&nbsp; n = <b id="nval">2</b></span><input id="n" type="range" min="0" max="12" value="2"></div>
+      <div class="ctrl"><span>angle(q,k) ∝ (m − n) = <b id="rel">3</b> &nbsp;→&nbsp; same relative angle whenever m − n is the same.</span></div>
+    </div>
+    <div class="card">
+      <h4>The RoPE construction</h4>
+      <div class="formula">split the vector into d/2 pairs; pair i rotates by m·θ_i
+  θ_i = base^(−2i/d)            (paper Eq. 15)
+
+R(m) q · R(n) k  =  Σ_i |q_i||k_i| cos((m−n)·θ_i + φ_i)
+                 =  f(m − n)     (paper §3.4.3)</div>
+      <ul style="color:var(--ink);padding-left:18px">
+        <li>Low-index pairs spin fast, high-index pairs spin slowly — a spectrum of frequencies, like a clock's hands.</li>
+        <li>Applied only to <b>Q</b> and <b>K</b> inside attention (see <code class="k">src/rope.py</code>).</li>
+        <li>No learned parameters; the same rule extends to any sequence length.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">2 · The relative-position property, verified</h2>
+  <p class="section-sub">Below is the real matrix <code class="k">S[m,n] = ⟨R(m)q, R(n)k⟩</code> from the demo for fixed random q, k.
+  Hover any cell. Values are <b>constant along each diagonal</b> (m − n fixed) — hover to confirm.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>⟨R(m)q, R(n)k⟩ &nbsp;(rows m, cols n)</h4>
+      <div id="heat" class="heat"></div>
+      <div class="legend"><span>low</span><span class="swatch" style="width:120px;height:10px;background:linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a)"></span><span>high</span></div>
+    </div>
+    <div class="card">
+      <h4>Constant along diagonals</h4>
+      <p class="small">Move along any diagonal (m − n fixed) and the dot product does not change — the score is a pure
+      function of the offset. The largest spread found along any diagonal in the demo:</p>
+      <div class="kpi"><div><b id="kpi-std">–</b><span>max spread along a diagonal (≈ 0)</span></div>
+        <div><b id="kpi-dim">–</b><span>vector dimension d</span></div></div>
+      <div id="diaginfo" class="formula" style="min-height:120px">Hover a cell in the heatmap to highlight its entire
+diagonal (all cells with the same m − n) and see how close their values are.</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">3 · Learns relative tasks &amp; extrapolates</h2>
+  <p class="section-sub">A one-layer attention model is trained to “predict the token <b id="ks">3</b> positions earlier” at
+  sequence length <b id="tl">16</b>, then tested at longer lengths. RoPE keeps working; a model with <b>no</b> position
+  information stays near chance and degrades.</p>
+  <div class="card">
+    <div id="bars" class="bars"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#34d399"></span>RoPE accuracy</span>
+      <span><span class="swatch" style="background:#fb7185"></span>no positional encoding</span>
+      <span style="margin-left:auto">bars past the dashed line = tested <b>beyond</b> the training length (extrapolation)</span>
+    </div>
+  </div>
+
+  <div class="footer">Interactive companion to <b>“RoFormer: Enhanced Transformer with Rotary Position Embedding”</b>
+  (Su et al., 2021). Data from <code class="k">demo/run_demo.py</code> → <code class="k">data/rope_results.json</code>.</div>
+</div>
+
+<script>
+const BAKED={"relative_property":{"matrix":[
+[2.9839,2.8449,1.2160,-0.3790,-0.6933,0.1195,0.6907,-0.2420],
+[1.2356,2.9839,2.8449,1.2160,-0.3790,-0.6933,0.1195,0.6907],
+[-1.2793,1.2356,2.9839,2.8449,1.2160,-0.3790,-0.6933,0.1195],
+[-2.9044,-1.2793,1.2356,2.9839,2.8449,1.2160,-0.3790,-0.6933],
+[-2.9051,-2.9044,-1.2793,1.2356,2.9839,2.8449,1.2160,-0.3790],
+[-2.0686,-2.9051,-2.9044,-1.2793,1.2356,2.9839,2.8449,1.2160],
+[-1.9015,-2.0686,-2.9051,-2.9044,-1.2793,1.2356,2.9839,2.8449],
+[-3.1708,-1.9015,-2.0686,-2.9051,-2.9044,-1.2793,1.2356,2.9839]],
+"max_diag_std":4.74e-7,"dim":16},
+"task":{"vocab":20,"shift_k":3,"train_len":16,"eval_lens":[16,24,32,48],
+"rope_acc":{"16":1.0,"24":0.99849,"32":0.99456,"48":0.98865},
+"none_acc":{"16":0.24183,"24":0.21319,"32":0.19316,"48":0.16747}}};
+let DATA=BAKED;
+
+// ---- rotation canvas
+function drawRot(){
+  const c=document.getElementById('rot'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const m=+document.getElementById('m').value, n=+document.getElementById('n').value;
+  document.getElementById('mval').textContent=m; document.getElementById('nval').textContent=n;
+  document.getElementById('rel').textContent=(m-n);
+  const cx=W/2, cy=H/2, R=Math.min(W,H)*0.36, theta=0.45; // demo frequency for one pair
+  // circle + grid
+  ctx.strokeStyle='#1e2946';ctx.lineWidth=1;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx-R-20,cy);ctx.lineTo(cx+R+20,cy);ctx.moveTo(cx,cy-R-20);ctx.lineTo(cx,cy+R+20);ctx.stroke();
+  function vec(ang,col,lab,scale){const x=cx+R*scale*Math.cos(-ang),y=cy+R*scale*Math.sin(-ang);
+    ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();
+    ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill();
+    ctx.font='14px monospace';ctx.fillText(lab,x+8,y-8);}
+  const q0=0.6, k0=-0.2; // base angles of q and k
+  // base (unrotated) faint
+  ctx.globalAlpha=.35; vec(q0,'#a78bfa','q (pos 0)',1); vec(k0,'#22d3ee','k (pos 0)',1); ctx.globalAlpha=1;
+  // rotated
+  vec(q0+m*theta,'#c084fc','R(m)·q',1);
+  vec(k0+n*theta,'#67e8f9','R(n)·k',1);
+  // arc between them
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.beginPath();
+  ctx.arc(cx,cy,R*0.55,-(q0+m*theta),-(k0+n*theta),(q0+m*theta)<(k0+n*theta));ctx.stroke();
+  ctx.fillStyle='#34d399';ctx.font='13px monospace';
+  ctx.fillText('angle depends on (m−n) = '+(m-n), cx-90, cy+R+40);
+}
+
+// ---- heatmap
+function heatColor(t){const s=[[11,16,32],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];
+  const x=Math.max(0,Math.min(1,t))*(s.length-1),i=Math.floor(x),f=x-i,a=s[i],b=s[Math.min(i+1,s.length-1)];
+  return`rgb(${a.map((v,k)=>Math.round(v+(b[k]-v)*f)).join(',')})`;}
+function drawHeat(){
+  const M=DATA.relative_property.matrix,el=document.getElementById('heat');el.innerHTML='';
+  let mn=1e9,mx=-1e9;M.forEach(r=>r.forEach(v=>{mn=Math.min(mn,v);mx=Math.max(mx,v);}));
+  el.style.gridTemplateRows=`repeat(${M.length},1fr)`;
+  M.forEach((row,ri)=>{const r=document.createElement('div');r.className='hrow';r.style.gridTemplateColumns=`repeat(${row.length},1fr)`;
+    row.forEach((v,ci)=>{const cell=document.createElement('div');cell.className='cell';cell.dataset.off=ri-ci;
+      cell.style.background=heatColor((v-mn)/(mx-mn));cell.textContent=v.toFixed(1);
+      cell.title=`m=${ri}, n=${ci}, m-n=${ri-ci} : ⟨R(m)q,R(n)k⟩=${v.toFixed(4)}`;
+      cell.addEventListener('mouseenter',()=>highlight(ri-ci,v));
+      r.appendChild(cell);});
+    el.appendChild(r);});
+}
+function highlight(off,v){
+  document.querySelectorAll('.cell').forEach(c=>c.classList.toggle('diag',+c.dataset.off===off));
+  const M=DATA.relative_property.matrix,vals=[];
+  for(let m=0;m<M.length;m++){const n=m-off;if(n>=0&&n<M.length)vals.push(M[m][n]);}
+  const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const spread=Math.max(...vals)-Math.min(...vals);
+  document.getElementById('diaginfo').textContent=
+    `diagonal  m − n = ${off}\ncells: [${vals.map(x=>x.toFixed(3)).join(', ')}]\nmean = ${mean.toFixed(3)}   spread = ${spread.toExponential(2)}  (≈ 0)`;
+}
+
+// ---- bars
+function drawBars(){
+  const t=DATA.task,el=document.getElementById('bars');el.innerHTML='';
+  document.getElementById('ks').textContent=t.shift_k;document.getElementById('tl').textContent=t.train_len;
+  t.eval_lens.forEach(L=>{
+    const rp=t.rope_acc[String(L)]*100, no=t.none_acc[String(L)]*100;
+    const beyond=L>t.train_len?' · beyond training':'';
+    const block=document.createElement('div');
+    block.innerHTML=
+      `<div class="barrow"><span class="lab">len ${L}${beyond}</span></div>`+
+      `<div class="barrow"><span class="lab">RoPE</span><div class="track"><div class="fill rope" style="width:${rp}%"></div></div><span class="val">${rp.toFixed(1)}%</span></div>`+
+      `<div class="barrow"><span class="lab">no-pos</span><div class="track"><div class="fill none" style="width:${no}%"></div></div><span class="val">${no.toFixed(1)}%</span></div>`;
+    el.appendChild(block);
+  });
+}
+function hydrate(){
+  document.getElementById('kpi-std').textContent=DATA.relative_property.max_diag_std.toExponential(1);
+  document.getElementById('kpi-dim').textContent=DATA.relative_property.dim;
+  drawRot();drawHeat();drawBars();
+}
+['m','n'].forEach(id=>document.getElementById(id).addEventListener('input',drawRot));
+window.addEventListener('resize',drawRot);
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/rope_results.json',{cache:'no-store'});if(r.ok)DATA=await r.json();}catch(e){}}hydrate();})();
+</script>
+</body>
+</html>

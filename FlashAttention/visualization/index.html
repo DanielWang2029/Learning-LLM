@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FlashAttention — Tiling &amp; Online Softmax Visualization</title>
+<style>
+  :root{--bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--a:#22d3ee;--b:#a78bfa;--c:#fb7185;--d:#f59e0b;--e:#34d399;--shadow:0 10px 30px rgba(0,0,0,.35);}
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+       radial-gradient(1000px 500px at 100% 0%,#3a1220 0%,transparent 60%),var(--bg);
+       color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--a);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(251,113,133,.14),rgba(245,158,11,.14) 50%,rgba(34,211,238,.14));border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:34px;background:linear-gradient(90deg,#fb7185,#f59e0b 45%,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:800px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;} .section-sub{color:var(--muted);margin:0 0 18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;white-space:pre-wrap;}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  .kpi{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;}
+  .kpi div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .kpi b{font-size:18px;color:var(--a);} .kpi span{display:block;color:var(--muted);font-size:12px;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);} th{color:var(--muted);} td:first-child,th:first-child{text-align:left;}
+  .legend{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap;}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+  .tilewrap{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+  .ctrl{display:flex;align-items:center;gap:12px;margin-top:12px;color:var(--muted);font-size:13px;}
+  input[type=range]{flex:1;accent-color:var(--c);}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>FlashAttention</h1>
+  <p>Exact attention, computed <b>block by block</b> with an <b>online softmax</b> so the full N×N score matrix is
+  never stored. Same numbers as standard attention, a tiny fraction of the memory.</p>
+  <div class="badges">
+    <span class="badge">Dao et al., 2022</span>
+    <span class="badge">arXiv:2205.14135</span>
+    <span class="badge">Tiling</span>
+    <span class="badge">Online softmax</span>
+    <span class="badge">IO-aware</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">1 · The problem, and the trick</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Standard attention materializes N×N</h4>
+      <p class="small">The score matrix S = QKᵀ has one entry per (query, key) pair. Its size grows with the
+      <b>square</b> of the sequence length — the memory bottleneck FlashAttention removes.</p>
+      <canvas id="tiles" width="1000" height="480"></canvas>
+      <div class="ctrl"><span>sequence length N = <b id="nlab">8</b></span><input id="nrange" type="range" min="4" max="16" value="8"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:#fb7185"></span>full N×N score matrix (naive)</span>
+        <span><span class="swatch" style="background:#34d399"></span>one block tile FlashAttention holds at a time</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Online softmax (paper Alg. 1)</h4>
+      <div class="formula">for each key block j:
+   S = Q_i · K_jᵀ / √d            # one small tile
+   m_new = max(m, rowmax(S))
+   p     = exp(S − m_new)
+   l     = exp(m − m_new)·l + Σ p
+   O     = exp(m − m_new)·O + p·V_j
+   m     = m_new
+O_i = O / l                        # exact softmax, streamed</div>
+      <p class="small">Two running scalars per query row — the max <code class="k">m</code> and normalizer
+      <code class="k">l</code> — let the softmax be computed incrementally and <b>rescaled</b> as new blocks arrive.
+      Nothing but a single tile is ever in memory.</p>
+      <div class="kpi">
+        <div><b id="kpi-diff">–</b><span>max |naive − flash|</span></div>
+        <div><b id="kpi-diffc">–</b><span>max diff (causal)</span></div>
+      </div>
+      <p class="small" style="margin-top:8px">Identical outputs to full attention, up to floating-point noise.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">2 · Memory grows O(N²) — or stays flat</h2>
+  <p class="section-sub">Peak score-matrix memory vs. sequence length, from the demo. Naive attention scales as N²;
+  FlashAttention holds a single fixed-size tile regardless of N.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Peak score memory (log-log)</h4>
+      <canvas id="mem" width="1000" height="520"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:#fb7185"></span>naive O(N²)</span>
+        <span><span class="swatch" style="background:#34d399"></span>FlashAttention O(block²), flat</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Measured sweep</h4>
+      <table id="tbl"><thead><tr><th>N</th><th>naive mem</th><th>flash mem</th><th>savings</th></tr></thead><tbody></tbody></table>
+      <p class="small" style="margin-top:10px">On CPU with a Python loop, tiled attention is not faster in wall-clock
+      (the win is fewer memory reads/writes on a GPU); the point demonstrated here is the dramatic <b>memory</b>
+      reduction, which is what lets attention scale to long sequences.</p>
+      <div class="formula">block = <span id="blk">32</span> × <span id="blk2">32</span>
+naive peak  = N² floats
+flash peak  = block² floats  (constant)</div>
+    </div>
+  </div>
+
+  <div class="footer">Interactive companion to <b>“FlashAttention: Fast and Memory-Efficient Exact Attention with
+  IO-Awareness”</b> (Dao et al., 2022). Data from <code class="k">demo/run_demo.py</code> →
+  <code class="k">data/flash_results.json</code>.</div>
+</div>
+
+<script>
+const BAKED={"equivalence":{"N":128,"d":32,"block":32,"max_abs_diff":2.98e-7,"max_abs_diff_causal":4.17e-7},
+"sweep":[{"N":64,"naive_bytes":16384,"flash_bytes":4096,"ratio":4},
+{"N":128,"naive_bytes":65536,"flash_bytes":4096,"ratio":16},
+{"N":256,"naive_bytes":262144,"flash_bytes":4096,"ratio":64},
+{"N":512,"naive_bytes":1048576,"flash_bytes":4096,"ratio":256},
+{"N":1024,"naive_bytes":4194304,"flash_bytes":4096,"ratio":1024}],"block":32,"bytes_per_elem":4};
+let DATA=BAKED;
+
+function fmtBytes(n){const u=['B','KB','MB','GB'];let i=0;while(n>=1024&&i<3){n/=1024;i++;}return n.toFixed(0)+' '+u[i];}
+
+function drawTiles(){
+  const c=document.getElementById('tiles'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const N=+document.getElementById('nrange').value;document.getElementById('nlab').textContent=N;
+  const block=Math.max(2,Math.round(N/2>4?N/4:2));
+  const gridPx=Math.min(W*0.42,H*0.9), ox=W*0.06, oy=(H-gridPx)/2, cell=gridPx/N;
+  // full matrix (naive) left
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){ctx.fillStyle='rgba(251,113,133,.30)';
+    ctx.fillRect(ox+j*cell,oy+i*cell,cell-1,cell-1);}
+  ctx.strokeStyle='#fb7185';ctx.lineWidth=2;ctx.strokeRect(ox,oy,gridPx,gridPx);
+  ctx.fillStyle='#93a0c0';ctx.font='13px monospace';ctx.textAlign='center';
+  ctx.fillText('naive: full '+N+'×'+N+' = '+(N*N)+' floats',ox+gridPx/2,oy+gridPx+22);
+  // right: same grid but only one tile highlighted
+  const ox2=W*0.56;
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){ctx.fillStyle='rgba(120,130,160,.12)';
+    ctx.fillRect(ox2+j*cell,oy+i*cell,cell-1,cell-1);}
+  const bq=Math.min(block,N),bk=Math.min(block,N);
+  for(let i=0;i<bq;i++)for(let j=0;j<bk;j++){ctx.fillStyle='rgba(52,211,153,.75)';
+    ctx.fillRect(ox2+j*cell,oy+i*cell,cell-1,cell-1);}
+  ctx.strokeStyle='#2a3352';ctx.strokeRect(ox2,oy,gridPx,gridPx);
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.strokeRect(ox2,oy,bk*cell,bq*cell);
+  ctx.fillStyle='#93a0c0';ctx.fillText('flash: one '+bq+'×'+bk+' tile in memory at a time',ox2+gridPx/2,oy+gridPx+22);
+  // arrow
+  ctx.fillStyle='#e8ecf7';ctx.font='26px sans-serif';ctx.fillText('→',(ox+gridPx+ox2)/2,oy+gridPx/2);
+}
+
+function drawMem(){
+  const c=document.getElementById('mem'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const m={l:78,r:20,t:20,b:50},s=DATA.sweep;
+  const xs=s.map(d=>Math.log10(d.N)), ys=s.map(d=>Math.log10(d.naive_bytes)).concat(s.map(d=>Math.log10(d.flash_bytes)));
+  const x0=Math.min(...xs)-0.15,x1=Math.max(...xs)+0.15,y0=Math.min(...ys)-0.3,y1=Math.max(...ys)+0.3;
+  const X=v=>m.l+(Math.log10(v)-x0)/(x1-x0)*(W-m.l-m.r);
+  const Y=v=>H-m.b-(Math.log10(v)-y0)/(y1-y0)*(H-m.t-m.b);
+  ctx.font='12px monospace';
+  for(let e=Math.ceil(x0);e<=Math.floor(x1);e++){const gx=X(Math.pow(10,e));
+    ctx.strokeStyle='#1e2946';ctx.beginPath();ctx.moveTo(gx,m.t);ctx.lineTo(gx,H-m.b);ctx.stroke();
+    ctx.fillStyle='#93a0c0';ctx.textAlign='center';ctx.fillText('10^'+e,gx,H-m.b+18);}
+  for(let e=Math.ceil(y0);e<=Math.floor(y1);e++){const gy=Y(Math.pow(10,e));
+    ctx.strokeStyle='#1e2946';ctx.beginPath();ctx.moveTo(m.l,gy);ctx.lineTo(W-m.r,gy);ctx.stroke();
+    ctx.fillStyle='#93a0c0';ctx.textAlign='right';ctx.fillText(fmtBytes(Math.pow(10,e)),m.l-8,gy+4);}
+  ctx.fillStyle='#93a0c0';ctx.textAlign='center';ctx.fillText('sequence length N (log)',(m.l+W-m.r)/2,H-6);
+  function line(key,col){ctx.strokeStyle=col;ctx.lineWidth=3;ctx.beginPath();
+    s.forEach((d,i)=>{const gx=X(d.N),gy=Y(d[key]);i?ctx.lineTo(gx,gy):ctx.moveTo(gx,gy);});ctx.stroke();
+    s.forEach(d=>{const gx=X(d.N),gy=Y(d[key]);ctx.fillStyle=col;ctx.beginPath();ctx.arc(gx,gy,5,0,7);ctx.fill();});}
+  line('naive_bytes','#fb7185'); line('flash_bytes','#34d399');
+}
+function hydrate(){
+  document.getElementById('kpi-diff').textContent=DATA.equivalence.max_abs_diff.toExponential(1);
+  document.getElementById('kpi-diffc').textContent=DATA.equivalence.max_abs_diff_causal.toExponential(1);
+  document.getElementById('blk').textContent=DATA.block;document.getElementById('blk2').textContent=DATA.block;
+  const tb=document.querySelector('#tbl tbody');tb.innerHTML='';
+  DATA.sweep.forEach(d=>{const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.N}</td><td>${fmtBytes(d.naive_bytes)}</td><td>${fmtBytes(d.flash_bytes)}</td><td>${d.ratio}×</td>`;
+    tb.appendChild(tr);});
+  drawTiles();drawMem();
+}
+document.getElementById('nrange').addEventListener('input',drawTiles);
+window.addEventListener('resize',()=>{drawTiles();drawMem();});
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/flash_results.json',{cache:'no-store'});if(r.ok)DATA=await r.json();}catch(e){}}hydrate();})();
+</script>
+</body>
+</html>

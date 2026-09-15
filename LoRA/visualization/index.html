@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LoRA — Low-Rank Adaptation Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --frozen: #64748b;
+    --a: #22d3ee;
+    --b: #fb7185;
+    --delta: #a78bfa;
+    --full: #f59e0b;
+    --lora: #34d399;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--a); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(52,211,153,.14), rgba(167,139,250,.14) 45%, rgba(251,113,133,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #34d399, #22d3ee 40%, #a78bfa 75%, #fb7185);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 40px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .formula { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* Decomposition diagram */
+  .decomp { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; padding: 8px 0 4px; }
+  .mat { display: grid; gap: 2px; padding: 6px; border-radius: 10px; background: rgba(255,255,255,.02); border: 1px solid var(--line); }
+  .mat .cell { width: 9px; height: 9px; border-radius: 2px; }
+  .op { font-size: 26px; color: var(--muted); }
+  .matlabel { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .matlabel b { color: var(--ink); }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:14px; color:var(--muted); font-size:12px; flex-wrap: wrap; justify-content:center; }
+  .chip { display:inline-flex; align-items:center; gap:6px; }
+  .swatch { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  /* Layer inspector */
+  .layers { display:flex; gap:10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .lbtn { cursor:pointer; padding:10px 14px; border-radius:11px; border:1px solid var(--line); background:var(--panel-2); user-select:none; transition: transform .12s, border-color .12s; }
+  .lbtn:hover { transform: translateY(-2px); }
+  .lbtn.active { border-color:#fff3; box-shadow: 0 0 0 2px #ffffff22; }
+  .lbtn .n { font-weight:700; }
+  .lbtn .s { font-size:12px; color:var(--muted); }
+
+  /* Bars */
+  .bar-row { display:grid; grid-template-columns: 150px 1fr 120px; align-items:center; gap:12px; margin:12px 0; }
+  .bar-track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; overflow:hidden; position:relative; }
+  .bar-fill { height:100%; border-radius:7px 0 0 7px; transition: width .8s cubic-bezier(.2,.8,.2,1); }
+  .bar-val { font-family: ui-monospace, monospace; font-size:13px; color:var(--ink); text-align:right; }
+  .bar-name { color:var(--muted); font-size:13px; }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; margin: 8px 0 4px; }
+  @media (max-width: 760px){ .stat-grid { grid-template-columns: repeat(2,1fr);} }
+  .stat { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center; }
+  .stat .v { font-size:24px; font-weight:800; }
+  .stat .l { font-size:12px; color:var(--muted); margin-top:4px; }
+
+  .toggle { display:inline-flex; gap:8px; align-items:center; margin: 6px 0 12px; }
+  .toggle button { cursor:pointer; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); padding:8px 14px; border-radius:10px; }
+  .toggle button.on { background: linear-gradient(90deg, rgba(52,211,153,.35), rgba(34,211,238,.25)); border-color:#fff3; }
+  .out-line { font-family: ui-monospace, monospace; margin-top:10px; color:var(--ink); }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>LoRA — Low-Rank Adaptation</h1>
+  <p>Freeze the pretrained weight <b>W₀</b> and learn a tiny low-rank update <b>ΔW = B·A</b>.
+     Same accuracy as full fine-tuning, ~100× fewer trainable parameters, and the adapter
+     folds into W₀ with zero extra inference cost.</p>
+  <div class="badges">
+    <span class="badge">Hu et al., 2021</span>
+    <span class="badge">arXiv:2106.09685</span>
+    <span class="badge">ΔW = B·A</span>
+    <span class="badge">Parameter-efficient fine-tuning</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The core idea: ΔW = B·A</h2>
+  <p class="section-sub">A full-rank update to a big <code class="k">out×in</code> weight matrix is replaced by the
+    product of two skinny matrices. Only the colored factors <b>A</b> and <b>B</b> train; the grey matrix
+    <b>W₀</b> stays frozen.</p>
+  <div class="card">
+    <div class="decomp">
+      <div>
+        <div class="mat" id="mat-w0"></div>
+        <div class="matlabel"><b>W₀</b> &nbsp;(frozen)<br><span id="lbl-w0"></span></div>
+      </div>
+      <div class="op">+</div>
+      <div>
+        <div class="mat" id="mat-b"></div>
+        <div class="matlabel"><b>B</b> &nbsp;out×r<br><span id="lbl-b"></span></div>
+      </div>
+      <div class="op">×</div>
+      <div>
+        <div class="mat" id="mat-a"></div>
+        <div class="matlabel"><b>A</b> &nbsp;r×in<br><span id="lbl-a"></span></div>
+      </div>
+    </div>
+    <div class="legend-row">
+      <span class="chip"><span class="swatch" style="background:var(--frozen)"></span> W₀ frozen (no gradients)</span>
+      <span class="chip"><span class="swatch" style="background:var(--b)"></span> B trainable (init 0)</span>
+      <span class="chip"><span class="swatch" style="background:var(--a)"></span> A trainable (init N(0,·))</span>
+    </div>
+    <div class="formula">h = W₀·x + b  +  (alpha / r) · (B · A) · x            with  r ≪ min(in, out)
+B = 0 at init  ⇒  ΔW = 0  ⇒  the adapted model starts exactly at the pretrained model.</div>
+  </div>
+
+  <h2 class="section-title">Per-layer parameter cost</h2>
+  <p class="section-sub">Click a layer of the MLP backbone. Full fine-tuning trains the whole
+    <code class="k">out×in</code> matrix; LoRA trains only <code class="k">r·(in+out)</code> numbers.</p>
+  <div class="card">
+    <div class="layers" id="layers"></div>
+    <div class="stat-grid">
+      <div class="stat"><div class="v" id="ly-shape">–</div><div class="l">layer shape (out × in)</div></div>
+      <div class="stat"><div class="v" id="ly-full">–</div><div class="l">full-FT params</div></div>
+      <div class="stat"><div class="v" id="ly-lora">–</div><div class="l">LoRA params (r=<span id="ly-r"></span>)</div></div>
+      <div class="stat"><div class="v" id="ly-ratio">–</div><div class="l">fewer trained</div></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Trainable parameters: full fine-tuning vs LoRA</h2>
+  <p class="section-sub">Across the whole model. LoRA's trainable count is a sliver of full fine-tuning —
+    the headline efficiency win (baked in from the demo run).</p>
+  <div class="card" id="param-card"></div>
+
+  <h2 class="section-title">Accuracy on the new task</h2>
+  <p class="section-sub">The frozen model is useless on the new task (near chance). LoRA recovers
+    almost all of full fine-tuning's accuracy while training ~100× fewer parameters.</p>
+  <div class="card" id="acc-card"></div>
+
+  <h2 class="section-title">Merge, unmerge &amp; swap</h2>
+  <p class="section-sub">Because <code class="k">ΔW = (alpha/r)·B·A</code> is just a matrix, it can be folded into
+    W₀ for deployment (no extra latency), removed exactly, or swapped off to restore the base model.</p>
+  <div class="card">
+    <div class="toggle" id="merge-toggle">
+      <button data-mode="unmerged" class="on">LoRA active (unmerged)</button>
+      <button data-mode="merged">ΔW merged into W₀</button>
+      <button data-mode="off">adapter swapped OFF</button>
+    </div>
+    <div class="out-line" id="merge-out"></div>
+    <div class="formula" id="merge-note"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“LoRA: Low-Rank Adaptation of Large Language Models”</b> (Hu et al., 2021).
+    Diagram and numbers generated by the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate live data.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in results from a real demo run (data/lora_results.json).
+// Served over http(s) the page will try to load the fresh file instead.
+const BAKED = {
+  "config": {"in_dim": 32, "hidden": 768, "classes": 5, "rank": 2, "alpha": 8},
+  "base_task_accuracy": 0.8695,
+  "new_task_zero_shot": 0.0945,
+  "full": {"trainable": 619781, "accuracy": 0.8525},
+  "lora": {"trainable": 6218, "accuracy": 0.8135, "delta_w_norm": 240.61},
+  "param_ratio": 99.68,
+  "wrapped_layers": ["fc1", "fc2", "head"],
+  "merge_check": {"unmerged": 0.8135, "merged": 0.8135, "unmerged_again": 0.8135, "adapter_off": 0.0945}
+};
+
+let DATA = BAKED;
+
+function grid(el, rows, cols, color, maxCols) {
+  const shown = Math.min(cols, maxCols || cols);
+  el.style.gridTemplateColumns = `repeat(${shown}, 9px)`;
+  el.innerHTML = '';
+  for (let i = 0; i < rows * shown; i++) {
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.style.background = color;
+    c.style.opacity = (0.45 + Math.random() * 0.55).toFixed(2);
+    el.appendChild(c);
+  }
+}
+
+function drawDecomp() {
+  const inShown = 16, outShown = 10, r = DATA.config.rank;
+  grid(document.getElementById('mat-w0'), outShown, inShown, getVar('--frozen'));
+  grid(document.getElementById('mat-b'), outShown, r, getVar('--b'));
+  grid(document.getElementById('mat-a'), r, inShown, getVar('--a'));
+  const H = DATA.config.hidden;
+  document.getElementById('lbl-w0').textContent = `${H}×${H} = ${(H*H).toLocaleString()}`;
+  document.getElementById('lbl-b').textContent = `${H}×${r}`;
+  document.getElementById('lbl-a').textContent = `${r}×${H}`;
+}
+function getVar(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+// ---- Layer inspector
+function layerDims() {
+  const {in_dim, hidden, classes} = DATA.config;
+  return [
+    {name: 'fc1',  out: hidden,  in: in_dim},
+    {name: 'fc2',  out: hidden,  in: hidden},
+    {name: 'head', out: classes, in: hidden},
+  ];
+}
+function showLayer(idx) {
+  const L = layerDims()[idx], r = DATA.config.rank;
+  const full = L.out * L.in, lora = r * (L.in + L.out);
+  document.getElementById('ly-shape').textContent = `${L.out}×${L.in}`;
+  document.getElementById('ly-full').textContent = full.toLocaleString();
+  document.getElementById('ly-lora').textContent = lora.toLocaleString();
+  document.getElementById('ly-r').textContent = r;
+  document.getElementById('ly-ratio').textContent = (full/lora).toFixed(1) + '×';
+  document.querySelectorAll('.lbtn').forEach((b,i)=>b.classList.toggle('active', i===idx));
+}
+function buildLayers() {
+  const host = document.getElementById('layers');
+  host.innerHTML = '';
+  layerDims().forEach((L,i) => {
+    const d = document.createElement('div');
+    d.className = 'lbtn';
+    d.innerHTML = `<div class="n">${L.name}</div><div class="s">${L.out}×${L.in}</div>`;
+    d.addEventListener('click', () => showLayer(i));
+    host.appendChild(d);
+  });
+  showLayer(1);
+}
+
+// ---- Bars
+function bar(name, value, max, color, label) {
+  const pct = Math.max(1.5, (value / max) * 100);
+  return `<div class="bar-row"><div class="bar-name">${name}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}aa)"></div></div>
+    <div class="bar-val">${label}</div></div>`;
+}
+function drawParams() {
+  const full = DATA.full.trainable, lora = DATA.lora.trainable;
+  const ratio = (full/lora);
+  document.getElementById('param-card').innerHTML =
+    bar('Full fine-tuning', full, full, getVar('--full'), full.toLocaleString()) +
+    bar('LoRA (r=' + DATA.config.rank + ')', lora, full, getVar('--lora'), lora.toLocaleString()) +
+    `<div class="formula">LoRA trains <b>${lora.toLocaleString()}</b> of the model's ${full.toLocaleString()} weights — <b>${ratio.toFixed(1)}× fewer</b> trainable parameters. The frozen W₀ (grey above) carries all the pretrained knowledge.</div>`;
+}
+function drawAcc() {
+  const z = DATA.new_task_zero_shot*100, f = DATA.full.accuracy*100, l = DATA.lora.accuracy*100;
+  document.getElementById('acc-card').innerHTML =
+    bar('Frozen model (no adapt)', z, 100, getVar('--frozen'), z.toFixed(1)+'%') +
+    bar('Full fine-tuning', f, 100, getVar('--full'), f.toFixed(1)+'%') +
+    bar('LoRA', l, 100, getVar('--lora'), l.toFixed(1)+'%') +
+    `<div class="formula">LoRA reaches <b>${l.toFixed(1)}%</b> vs full fine-tuning's <b>${f.toFixed(1)}%</b> — a gap of only <b>${(f-l).toFixed(1)} points</b> — while training ${(DATA.full.trainable/DATA.lora.trainable).toFixed(0)}× fewer parameters. Before adaptation the frozen model scores just ${z.toFixed(1)}% (≈ chance for ${DATA.config.classes} classes).</div>`;
+}
+
+// ---- Merge / unmerge / swap
+function drawMerge(mode) {
+  const m = DATA.merge_check;
+  const acc = {unmerged: m.unmerged, merged: m.merged, off: m.adapter_off}[mode]*100;
+  const out = document.getElementById('merge-out');
+  const note = document.getElementById('merge-note');
+  document.querySelectorAll('#merge-toggle button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+  out.innerHTML = `new-task accuracy → <code class="k">${acc.toFixed(1)}%</code>`;
+  if (mode === 'unmerged')
+    note.textContent = 'Inference computes  W₀·x + (alpha/r)·B·A·x  as two matmuls (the adapter is applied on the fly).';
+  else if (mode === 'merged')
+    note.textContent = 'ΔW = (alpha/r)·B·A is folded into W₀ once: W = W₀ + ΔW. Inference is a single matmul — identical output, zero extra latency (paper §3). Accuracy is bit-for-bit the same as unmerged.';
+  else
+    note.textContent = 'The adapter is removed (B set to 0 ⇒ ΔW = 0): the model reverts exactly to the pretrained W₀, which never learned this task (≈ chance). Swap in a different adapter to serve a different task from the same frozen backbone.';
+}
+
+function renderAll() {
+  drawDecomp(); buildLayers(); drawParams(); drawAcc(); drawMerge('unmerged');
+}
+
+document.getElementById('merge-toggle').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (b) drawMerge(b.dataset.mode);
+});
+
+(async function init() {
+  if (location.protocol.startsWith('http')) {
+    try {
+      const res = await fetch('../data/lora_results.json', {cache:'no-store'});
+      if (res.ok) DATA = await res.json();
+    } catch (e) {}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

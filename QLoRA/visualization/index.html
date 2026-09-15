@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QLoRA — 4-bit NF4 + LoRA Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --fp32: #fb7185;
+    --fp16: #f59e0b;
+    --nf4: #34d399;
+    --lora: #22d3ee;
+    --nf4b: #a78bfa;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--lora); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(52,211,153,.14), rgba(167,139,250,.14) 45%, rgba(34,211,238,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #34d399, #22d3ee 40%, #a78bfa 75%, #fb7185);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 800px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 40px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .formula { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* Pipeline */
+  .pipe { display:flex; align-items:stretch; gap:12px; flex-wrap:wrap; justify-content:center; }
+  .stage { flex:1; min-width:150px; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; text-align:center; }
+  .stage .t { font-weight:700; margin-bottom:4px; }
+  .stage .d { font-size:12px; color:var(--muted); }
+  .stage.q { border-color: #34d39955; box-shadow: inset 0 0 20px rgba(52,211,153,.08);}
+  .stage.l { border-color: #22d3ee55; box-shadow: inset 0 0 20px rgba(34,211,238,.08);}
+  .arrow { display:flex; align-items:center; color:var(--muted); font-size:22px; }
+
+  /* NF4 number line */
+  .nline { position:relative; height:120px; margin:18px 6px 6px; }
+  .nline .axis { position:absolute; top:70px; left:0; right:0; height:2px; background:var(--line); }
+  .tick { position:absolute; top:56px; width:2px; height:30px; background:var(--nf4); border-radius:2px; }
+  .tick .lab { position:absolute; top:34px; left:50%; transform:translateX(-50%) rotate(-55deg); transform-origin:left; font-size:10px; color:var(--muted); white-space:nowrap; font-family:ui-monospace,monospace; }
+  .tick.zero { background:var(--fp16); height:40px; top:51px; }
+  .nline .cap { position:absolute; font-size:11px; color:var(--muted); top:0; }
+
+  /* Bars */
+  .bar-row { display:grid; grid-template-columns: 170px 1fr 120px; align-items:center; gap:12px; margin:12px 0; }
+  .bar-track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; overflow:hidden; position:relative; }
+  .bar-fill { height:100%; border-radius:7px 0 0 7px; transition: width .8s cubic-bezier(.2,.8,.2,1); display:flex; }
+  .bar-val { font-family: ui-monospace, monospace; font-size:13px; text-align:right; }
+  .bar-name { color:var(--muted); font-size:13px; }
+  .seg { height:100%; }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; margin: 8px 0 4px; }
+  @media (max-width: 760px){ .stat-grid { grid-template-columns: repeat(2,1fr);} }
+  .stat { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center; }
+  .stat .v { font-size:24px; font-weight:800; }
+  .stat .l { font-size:12px; color:var(--muted); margin-top:4px; }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .chip { display:inline-flex; align-items:center; gap:6px; }
+  .swatch { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>QLoRA — 4-bit base + LoRA</h1>
+  <p>Store the frozen base weights in <b>4-bit NormalFloat</b>, dequantize them on the fly for the matmul,
+     and train only small <b>full-precision LoRA</b> adapters on top. Big memory savings, accuracy retained.</p>
+  <div class="badges">
+    <span class="badge">Dettmers et al., 2023</span>
+    <span class="badge">arXiv:2305.14314</span>
+    <span class="badge">NF4 quantization</span>
+    <span class="badge">Blockwise absmax</span>
+    <span class="badge">4-bit + LoRA</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The QLoRA forward pass</h2>
+  <p class="section-sub">The 4-bit base is frozen; the fp32 LoRA adapter is the only trainable part.</p>
+  <div class="card">
+    <div class="pipe">
+      <div class="stage"><div class="t">x</div><div class="d">layer input</div></div>
+      <div class="arrow">→</div>
+      <div class="stage q"><div class="t">dequant(W₀ 4-bit)</div><div class="d">NF4 codes × absmax → fp weight</div></div>
+      <div class="arrow">+</div>
+      <div class="stage l"><div class="t">(alpha/r)·B·A·x</div><div class="d">fp32 LoRA (trainable)</div></div>
+      <div class="arrow">→</div>
+      <div class="stage"><div class="t">h</div><div class="d">output</div></div>
+    </div>
+    <div class="formula">h = dequant(W0_4bit)·x + b  +  (alpha / r) · (B · A) · x
+
+W0 stored as: 4-bit code per weight  +  one fp32 absmax per block of 64.
+Only A and B receive gradients — the 4-bit base never changes.</div>
+  </div>
+
+  <h2 class="section-title">NF4: the 16 quantization levels</h2>
+  <p class="section-sub">Each weight is normalized into <code class="k">[-1, 1]</code> by its block's <code class="k">absmax</code>,
+    then snapped to the nearest of these 16 levels — the quantiles of a standard normal (denser near 0, where
+    weights cluster). Only the 4-bit index is stored.</p>
+  <div class="card">
+    <div class="nline" id="nline">
+      <div class="cap" style="left:0">−1.0</div>
+      <div class="cap" style="right:0">+1.0</div>
+      <div class="axis"></div>
+    </div>
+    <div class="legend-row">
+      <span class="chip"><span class="swatch" style="background:var(--nf4)"></span> 16 NF4 levels (4 bits)</span>
+      <span class="chip"><span class="swatch" style="background:var(--fp16)"></span> exact zero level</span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Quantization error &amp; accuracy retained</h2>
+  <p class="section-sub">Compressing to 4 bits introduces a small reconstruction error — and the 4-bit model keeps
+    essentially all of its accuracy.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="margin-top:0">Per-layer quantization error (relative L2)</h4>
+      <div id="err-bars"></div>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">Accuracy</h4>
+      <div id="acc-bars"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Memory breakdown</h2>
+  <p class="section-sub">Bytes to hold the base weights three ways. QLoRA keeps the base in 4-bit NF4 and adds only
+    tiny fp32 adapters.</p>
+  <div class="card" id="mem-card"></div>
+
+  <h2 class="section-title">The bottom line</h2>
+  <div class="card">
+    <div class="stat-grid" id="stats"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“QLoRA: Efficient Finetuning of Quantized LLMs”</b> (Dettmers et al., 2023).
+    NF4 quantizer and numbers generated by the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate live data.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in results from a real demo run (data/qlora_results.json).
+const BAKED = {
+  "config": {"in_dim": 32, "hidden": 768, "classes": 5, "rank": 2, "alpha": 8, "block_size": 64},
+  "quant_error_overall": 0.0931,
+  "quant_error_per_layer": {"fc1": 0.0905, "fc2": 0.0935, "head": 0.1106},
+  "fp32_base_acc": 0.8695, "quant_base_acc": 0.8695,
+  "new_task_zero_shot": 0.0965, "qlora_acc": 0.8205, "qlora_trainable": 6218,
+  "memory": {"base_numel": 618240, "fp32_bytes": 2472960, "fp16_bytes": 1236480,
+             "nf4_bytes": 347760, "adapter_bytes": 24872, "qlora_total": 372632,
+             "eff_bits": 4.5, "save_vs_fp32": 6.64, "save_vs_fp16": 3.32},
+  "codebook": [-1.0,-0.696193,-0.525073,-0.394917,-0.284441,-0.184773,-0.09105,0.0,
+               0.07958,0.16093,0.246112,0.337915,0.44071,0.562617,0.722957,1.0]
+};
+let DATA = BAKED;
+function getVar(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function drawNF4() {
+  const host = document.getElementById('nline');
+  DATA.codebook.forEach(v => {
+    const t = document.createElement('div');
+    t.className = 'tick' + (v === 0 ? ' zero' : '');
+    t.style.left = ((v + 1) / 2 * 100) + '%';
+    t.title = 'level ' + v.toFixed(4);
+    const lab = document.createElement('div');
+    lab.className = 'lab';
+    lab.textContent = v.toFixed(2);
+    t.appendChild(lab);
+    host.appendChild(t);
+  });
+}
+
+function bar(name, pct, color, label) {
+  return `<div class="bar-row"><div class="bar-name">${name}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(1.5,pct)}%;background:linear-gradient(90deg,${color},${color}aa)"></div></div>
+    <div class="bar-val">${label}</div></div>`;
+}
+
+function drawErr() {
+  const p = DATA.quant_error_per_layer;
+  const max = Math.max(...Object.values(p)) * 100;
+  document.getElementById('err-bars').innerHTML =
+    Object.entries(p).map(([k,v]) =>
+      bar(k, v*100/max*100, getVar('--nf4b'), (v*100).toFixed(2)+'%')).join('') +
+    `<div class="formula">overall: <b>${(DATA.quant_error_overall*100).toFixed(2)}%</b> relative L2 error. Small enough that the 4-bit model behaves like the fp32 one.</div>`;
+}
+
+function drawAcc() {
+  const z = DATA.new_task_zero_shot*100, fp = DATA.fp32_base_acc*100,
+        q = DATA.quant_base_acc*100, ql = DATA.qlora_acc*100;
+  document.getElementById('acc-bars').innerHTML =
+    bar('fp32 base (base task)', fp, getVar('--fp32'), fp.toFixed(1)+'%') +
+    bar('4-bit base (base task)', q, getVar('--nf4'), q.toFixed(1)+'%') +
+    bar('4-bit base, new task (pre)', z, '#64748b', z.toFixed(1)+'%') +
+    bar('QLoRA, new task', ql, getVar('--lora'), ql.toFixed(1)+'%') +
+    `<div class="formula">Quantizing the base costs <b>${(fp-q).toFixed(1)} pts</b> on the base task. LoRA on the 4-bit base then lifts the new task from ${z.toFixed(1)}% (≈ chance) to <b>${ql.toFixed(1)}%</b>.</div>`;
+}
+
+function human(b){ return b < 1024*1024 ? (b/1024).toFixed(1)+' KB' : (b/1024/1024).toFixed(2)+' MB'; }
+
+function drawMem() {
+  const m = DATA.memory;
+  const max = m.fp32_bytes;
+  const pct = x => x/max*100;
+  const stacked = `<div class="bar-row"><div class="bar-name">4-bit base + adapters</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${pct(m.qlora_total)}%;background:none">
+      <div class="seg" style="width:${m.nf4_bytes/m.qlora_total*100}%;background:linear-gradient(90deg,${getVar('--nf4')},${getVar('--nf4')}aa)"></div>
+      <div class="seg" style="width:${m.adapter_bytes/m.qlora_total*100}%;background:linear-gradient(90deg,${getVar('--lora')},${getVar('--lora')}aa)"></div>
+    </div></div><div class="bar-val">${human(m.qlora_total)}</div></div>`;
+  document.getElementById('mem-card').innerHTML =
+    bar('fp32 base', pct(m.fp32_bytes), getVar('--fp32'), human(m.fp32_bytes)) +
+    bar('fp16 base', pct(m.fp16_bytes), getVar('--fp16'), human(m.fp16_bytes)) +
+    stacked +
+    `<div class="legend-row">
+       <span class="chip"><span class="swatch" style="background:var(--nf4)"></span> 4-bit NF4 base (~${m.eff_bits.toFixed(2)} bits/value incl. absmax)</span>
+       <span class="chip"><span class="swatch" style="background:var(--lora)"></span> fp32 LoRA adapters (${(m.adapter_bytes/1024).toFixed(1)} KB)</span>
+     </div>
+     <div class="formula">QLoRA total <b>${human(m.qlora_total)}</b> — <b>${m.save_vs_fp32.toFixed(1)}×</b> smaller than fp32 and <b>${m.save_vs_fp16.toFixed(1)}×</b> smaller than fp16. The saving grows with model size (adapters are a fixed small cost).</div>`;
+}
+
+function drawStats() {
+  const m = DATA.memory;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="v" style="color:var(--nf4b)">${(DATA.quant_error_overall*100).toFixed(1)}%</div><div class="l">4-bit quant error (rel L2)</div></div>
+    <div class="stat"><div class="v" style="color:var(--nf4)">${(DATA.quant_base_acc*100).toFixed(1)}%</div><div class="l">base-task acc kept by 4-bit</div></div>
+    <div class="stat"><div class="v" style="color:var(--lora)">${(DATA.qlora_acc*100).toFixed(1)}%</div><div class="l">QLoRA new-task accuracy</div></div>
+    <div class="stat"><div class="v" style="color:var(--fp32)">${m.save_vs_fp32.toFixed(1)}×</div><div class="l">memory saving vs fp32</div></div>`;
+}
+
+function renderAll(){ drawNF4(); drawErr(); drawAcc(); drawMem(); drawStats(); }
+
+(async function init() {
+  if (location.protocol.startsWith('http')) {
+    try {
+      const res = await fetch('../data/qlora_results.json', {cache:'no-store'});
+      if (res.ok) DATA = await res.json();
+    } catch (e) {}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>

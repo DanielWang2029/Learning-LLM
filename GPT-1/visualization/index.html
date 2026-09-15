@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>GPT-1 — Generative Pre-Training Visualization</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;--line:#2a3352;
+    --tok:#22d3ee;--pos:#a78bfa;--seg:#f0abfc;--attn:#fb7185;--ffn:#34d399;--norm:#64748b;--mlm:#f59e0b;--cls:#38bdf8;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--tok)}
+  header.hero{padding:40px 24px 28px;text-align:center;background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(245,158,11,.14));border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:820px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px}
+  .arch{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  @media(max-width:820px){.arch{grid-template-columns:1fr}}
+  .stack{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .stack h3{margin:2px 0 12px;text-align:center;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .nx{border:1px dashed var(--line);border-radius:12px;padding:10px;position:relative;margin:6px 0;background:rgba(255,255,255,.015)}
+  .nx::before{content:"N \00d7 (bidirectional layers)";position:absolute;top:-11px;left:14px;background:var(--panel);padding:0 8px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px}
+  .block{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:9px 0;border-radius:11px;cursor:pointer;border:1px solid transparent;transition:transform .12s,box-shadow .12s,border-color .12s;background:var(--panel-2);user-select:none}
+  .block:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .block.active{border-color:#fff3;box-shadow:0 0 0 2px #ffffff22,var(--shadow)}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .block .label{font-weight:600}.block .sec{margin-left:auto;font-size:11px;color:var(--muted)}
+  .arrow{text-align:center;color:var(--line);font-size:18px;margin:-3px 0}
+  .c-tok{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent)}
+  .c-pos{background:linear-gradient(90deg,rgba(167,139,250,.16),transparent)}
+  .c-seg{background:linear-gradient(90deg,rgba(240,171,252,.16),transparent)}
+  .c-attn{background:linear-gradient(90deg,rgba(251,113,133,.16),transparent)}
+  .c-ffn{background:linear-gradient(90deg,rgba(52,211,153,.16),transparent)}
+  .c-norm{background:linear-gradient(90deg,rgba(100,116,139,.18),transparent)}
+  .c-mlm{background:linear-gradient(90deg,rgba(245,158,11,.16),transparent)}
+  .io{text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px;margin:8px 0;background:rgba(255,255,255,.02)}
+  .detail{position:sticky;top:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-height:260px}
+  .detail h3{margin:0 0 4px;font-size:18px}.detail .tag{font-size:12px;color:var(--muted)}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);font-family:"SFMono-Regular",ui-monospace,Consolas,monospace;font-size:14px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  .detail ul{margin:10px 0 0;padding-left:18px}.detail li{margin:5px 0}
+  .hint{color:var(--muted);font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .cell{width:100%;aspect-ratio:1/1;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#00121f;transition:transform .1s}
+  .cell:hover{transform:scale(1.12);outline:2px solid #fff;z-index:2}
+  .heat{display:grid;gap:3px}.heat .row{display:grid;gap:3px;grid-auto-flow:column}
+  .heat-wrap{display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:center}
+  .ylabels{display:grid;gap:3px}.ylabels div{display:flex;align-items:center;justify-content:flex-end;font-size:11px;color:var(--muted)}
+  .xlabels{display:grid;grid-auto-flow:column;gap:3px;text-align:center;font-size:11px;color:var(--muted)}
+  .legend-row{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--muted);font-size:12px}
+  .legend-bar{height:10px;flex:1;border-radius:6px;background:linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a)}
+  .sample-note{color:var(--muted);font-size:12px;margin-top:10px}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .tokline{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .chip{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);font-family:ui-monospace,monospace}
+  .chip.mask{background:linear-gradient(90deg,rgba(245,158,11,.35),rgba(245,158,11,.15));border-color:#f59e0b}
+  .chip.cls{background:linear-gradient(90deg,rgba(56,189,248,.35),rgba(56,189,248,.12));border-color:#38bdf8}
+  .chip.pred{background:linear-gradient(90deg,rgba(52,211,153,.30),rgba(52,211,153,.10));border-color:#34d399}
+  .metric{font-size:34px;font-weight:700;background:linear-gradient(90deg,#34d399,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+<style>
+  canvas{width:100%;height:230px;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+  .bars{display:flex;gap:24px;align-items:flex-end;height:200px;padding:10px 6px}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+  .bar .fill{width:70%;border-radius:8px 8px 0 0;transition:height .6s}
+  .bar .val{margin-bottom:6px;font-weight:700}
+  .bar .lab{margin-top:8px;color:var(--muted);font-size:13px;text-align:center}
+  .gen{font-family:ui-monospace,monospace;background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:#cfe8ff}
+</style>
+</head><body>
+<header class="hero">
+  <h1>GPT-1</h1>
+  <p>Improving Language Understanding by <b>Generative Pre-Training</b>. A decoder-only Transformer is first trained to predict the next token on unlabeled text, then <b>fine-tuned</b> with a small head on a labeled task — pre-training supplies features that transfer.</p>
+  <div class="badges"><span class="badge">Radford, Narasimhan, Salimans &amp; Sutskever · 2018</span><span class="badge">Decoder-only</span><span class="badge">Causal LM</span><span class="badge">Pre-train → fine-tune</span></div>
+</header>
+<div class="wrap">
+  <h2 class="section-title">The decoder-only architecture</h2>
+  <p class="section-sub">A single stack with a <b>causal mask</b>: token <i>i</i> may attend only to tokens ≤ <i>i</i>. Click a block for details.</p>
+  <div class="arch">
+    <div class="stack"><h3>GPT Decoder</h3>
+      <div class="io">tokens x₁ … x₍ₜ₎ (shifted right)</div><div class="arrow">&darr;</div>
+      <div class="block c-tok" data-key="tok"><span class="dot" style="background:var(--tok)"></span><span class="label">Token + Position Embedding</span></div>
+      <div class="arrow">&darr;</div>
+      <div class="nx">
+        <div class="block c-attn" data-key="mha"><span class="dot" style="background:var(--attn)"></span><span class="label">Masked (Causal) Self-Attention</span></div>
+        <div class="block c-norm" data-key="ln"><span class="dot" style="background:var(--norm)"></span><span class="label">LayerNorm (pre-norm) + residual</span></div>
+        <div class="block c-ffn" data-key="ffn"><span class="dot" style="background:var(--ffn)"></span><span class="label">Feed Forward (GELU)</span></div>
+      </div>
+      <div class="arrow">&darr;</div>
+      <div class="block c-mlm" data-key="head"><span class="dot" style="background:var(--mlm)"></span><span class="label">LM Head (tied) → next token</span></div>
+      <div class="arrow">&darr;</div>
+      <div class="io" id="finetune-io">or: last-token hidden → linear head (fine-tuning)</div>
+    </div>
+    <div class="detail" id="detail"><h3 id="d-title">Click a block</h3><div class="tag" id="d-tag">Interactive.</div>
+      <div class="formula" id="d-formula">Select a component to see its role and equations.</div><ul id="d-points"></ul><p class="hint" id="d-file"></p></div>
+  </div>
+
+  <h2 class="section-title">Stage 1 — generative pre-training</h2>
+  <p class="section-sub">Train the LM to predict the next character. Perplexity (lower = better) collapses as the model learns the toy language.</p>
+  <div class="grid2">
+    <div class="card"><h4>Perplexity vs training step</h4><canvas id="ppl" width="1000" height="230"></canvas>
+      <p class="sample-note" id="ppl-note"></p></div>
+    <div class="card"><h4>Greedy continuation of a prompt</h4>
+      <p class="small">The model completes <code class="k" id="prompt"></code> by sampling one token at a time:</p>
+      <div class="gen" id="gen"></div>
+      <p class="sample-note">It reproduces the toy language's grammar — evidence it learned structure, not memorization.</p></div>
+  </div>
+
+  <h2 class="section-title">Stage 2 — discriminative fine-tuning</h2>
+  <p class="section-sub">Attach a linear head to the final token and fine-tune on a small labeled topic-classification set. The pre-trained model transfers; a from-scratch model with the same few labels lags behind.</p>
+  <div class="grid2">
+    <div class="card"><h4>Test accuracy — same labels, same steps</h4>
+      <div class="bars"><div class="bar"><div class="val" id="v-pre"></div><div class="fill" id="f-pre" style="background:linear-gradient(180deg,#34d399,#22d3ee)"></div><div class="lab">pre-trained<br/>then fine-tuned</div></div>
+        <div class="bar"><div class="val" id="v-scr"></div><div class="fill" id="f-scr" style="background:linear-gradient(180deg,#64748b,#475569)"></div><div class="lab">trained<br/>from scratch</div></div></div>
+      <p class="sample-note" id="gain-note"></p></div>
+    <div class="card"><h4>Why it works</h4>
+      <div class="formula">pre-train:  maximize  Σ log p(xᵢ | x₍&lt;ᵢ₎)
+fine-tune:  minimize  CE( head(h_last), label )</div>
+      <p class="small">Next-token pre-training forces the final hidden state to summarize the sentence; the classifier then only has to read that summary — so it learns from far fewer labels.</p></div>
+  </div>
+
+  <h2 class="section-title">Causal self-attention (from the trained model)</h2>
+  <p class="section-sub">Row = query position, column = key position. The <b>lower-triangular</b> shape is the causal mask in action: nothing attends to the future. Hover for values.</p>
+  <div class="card"><div id="heat"></div><div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+    <p class="sample-note" id="attn-note"></p></div>
+
+  <div class="footer">Interactive companion to <b>GPT-1</b> (Radford et al., 2018). Charts + heatmap generated from <code class="k">src/</code> via <code class="k">python demo/run_demo.py</code>.</div>
+</div>
+<script>
+const BAKED={"prompt":"the ","generated":"the pine grows today . the pine grows today ","loss_curve":[{"step":1,"loss":3.3295,"ppl":27.924},{"step":50,"loss":1.0241,"ppl":2.785},{"step":100,"loss":0.6153,"ppl":1.85},{"step":150,"loss":0.3851,"ppl":1.47},{"step":200,"loss":0.3094,"ppl":1.363},{"step":250,"loss":0.303,"ppl":1.354},{"step":300,"loss":0.2678,"ppl":1.307},{"step":350,"loss":0.2657,"ppl":1.304},{"step":400,"loss":0.2808,"ppl":1.324}],"first_ppl":27.924,"final_ppl":1.324,"acc_pretrained":1.0,"acc_scratch":0.83,"attn_labels":["t","h","e"," ","c","a","t"," ","r","u","n","s"," ","t","o","d","a","y"," ","."],"causal_attention":[[1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.6939,0.3061,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.3307,0.3724,0.2969,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0967,0.5273,0.1284,0.2476,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0644,0.0674,0.1517,0.5584,0.1581,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.1937,0.3249,0.2322,0.0566,0.078,0.1145,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.1111,0.0859,0.0821,0.0243,0.4723,0.0375,0.1868,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.1729,0.0966,0.0568,0.0344,0.2375,0.0829,0.1822,0.1368,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0296,0.0288,0.0141,0.1373,0.1951,0.0649,0.0441,0.2931,0.193,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0099,0.0173,0.0183,0.1743,0.0087,0.0128,0.0167,0.0514,0.237,0.4535,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0199,0.0204,0.0166,0.0201,0.0267,0.0249,0.0774,0.0849,0.1193,0.2986,0.2912,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0193,0.0347,0.0125,0.001,0.014,0.0032,0.0236,0.0041,0.2146,0.0341,0.5789,0.0602,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0165,0.0247,0.0356,0.0032,0.0071,0.0046,0.0328,0.053,0.14,0.0248,0.1168,0.5276,0.0134,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.0159,0.0186,0.0205,0.018,0.0503,0.1424,0.0187,0.2173,0.06,0.1568,0.0296,0.1177,0.111,0.0231,0.0,0.0,0.0,0.0,0.0,0.0],[0.0669,0.0431,0.0319,0.0399,0.135,0.0418,0.0211,0.0234,0.1668,0.0173,0.032,0.0259,0.0363,0.1901,0.1285,0.0,0.0,0.0,0.0,0.0],[0.0298,0.0094,0.0184,0.0402,0.0758,0.0839,0.0133,0.0746,0.0606,0.0171,0.0256,0.0514,0.0565,0.1076,0.0642,0.2714,0.0,0.0,0.0,0.0],[0.05,0.0188,0.0386,0.01,0.0682,0.0329,0.044,0.0287,0.0204,0.0104,0.0673,0.0639,0.0365,0.138,0.0435,0.199,0.1299,0.0,0.0,0.0],[0.0169,0.0166,0.0172,0.0013,0.09,0.0055,0.0297,0.0223,0.0577,0.0148,0.0942,0.0622,0.0068,0.1492,0.0136,0.2264,0.0922,0.0835,0.0,0.0],[0.0507,0.0138,0.0259,0.0054,0.029,0.0166,0.0431,0.0242,0.0317,0.0163,0.0358,0.0521,0.0178,0.0316,0.0933,0.1291,0.2088,0.119,0.0558,0.0],[0.0232,0.0234,0.0254,0.0048,0.1192,0.0091,0.0355,0.0136,0.0597,0.0236,0.1182,0.0377,0.0092,0.1415,0.0197,0.1759,0.0441,0.0547,0.0105,0.0508]]};
+const DETAILS={
+ tok:{title:"Token + Position Embedding",tag:"learned",formula:"h₀ = E[token] + P[pos]",points:["Token ids and absolute positions are looked up and summed.","The LM head reuses (ties) the token embedding matrix."],file:"src/model.py -> GPT.token_emb / pos_emb"},
+ mha:{title:"Masked (Causal) Self-Attention",tag:"decoder-only",formula:"softmax( QKᵀ/√d_k + Mask ) V\nMask[i,j>i] = -∞",points:["Position i attends only to positions ≤ i.","This is what lets teacher-forced training equal left-to-right generation."],file:"src/attention.py -> CausalSelfAttention"},
+ ln:{title:"Pre-LayerNorm + Residual",tag:"stability",formula:"x = x + Attn(LN(x));  x = x + FFN(LN(x))",points:["Pre-norm blocks train stably at small scale.","Residuals carry gradients through the stack."],file:"src/model.py -> Block"},
+ ffn:{title:"Feed-Forward (GELU)",tag:"per-token MLP",formula:"FFN(x)=GELU(xW1+b1)W2+b2",points:["Adds non-linear capacity between attention steps."],file:"src/model.py -> Block.mlp"},
+ head:{title:"LM Head / Fine-tune Head",tag:"two uses of the backbone",formula:"pre-train: logits = h·Eᵀ\nfine-tune: y = W·h_last + b",points:["Pre-training predicts the next token over the whole vocabulary.","Fine-tuning reads the last token's hidden state for classification."],file:"src/model.py -> GPT.lm_head / GPTClassifier"},
+};
+const blocks=document.querySelectorAll('.block');
+function show(k,el){const d=DETAILS[k];if(!d)return;blocks.forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');
+ document.getElementById('d-title').textContent=d.title;document.getElementById('d-tag').textContent=d.tag;document.getElementById('d-formula').textContent=d.formula;
+ document.getElementById('d-points').innerHTML=d.points.map(p=>`<li>${p}</li>`).join('');document.getElementById('d-file').textContent=d.file;}
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+function heatColor(t){const s=[[11,16,32],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];const x=Math.max(0,Math.min(1,t))*(s.length-1);const i=Math.floor(x),f=x-i;const a=s[i],b=s[Math.min(i+1,s.length-1)];const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f));return`rgb(${c[0]},${c[1]},${c[2]})`;}
+function renderHeat(id,m,rl,cl){const el=document.getElementById(id);const cols=cl.length;const w=document.createElement('div');w.className='heat-wrap';
+ const yl=document.createElement('div');yl.className='ylabels';yl.style.gridTemplateRows=`repeat(${m.length},1fr)`;rl.forEach(l=>{const dd=document.createElement('div');dd.textContent=l===' '?'␣':l;yl.appendChild(dd);});
+ const h=document.createElement('div');h.className='heat';h.style.gridTemplateRows=`repeat(${m.length},1fr)`;
+ m.forEach((row,ri)=>{const r=document.createElement('div');r.className='row';r.style.gridTemplateColumns=`repeat(${cols},1fr)`;row.slice(0,cols).forEach((v,ci)=>{const c=document.createElement('div');c.className='cell';c.style.background=heatColor(v);c.title=`${rl[ri]} -> ${cl[ci]} : ${v.toFixed(4)}`;r.appendChild(c);});h.appendChild(r);});
+ const sp=document.createElement('div');const xl=document.createElement('div');xl.className='xlabels';xl.style.gridTemplateColumns=`repeat(${cols},1fr)`;cl.forEach(l=>{const dd=document.createElement('div');dd.textContent=l===' '?'␣':l;xl.appendChild(dd);});
+ w.appendChild(yl);w.appendChild(h);w.appendChild(sp);w.appendChild(xl);el.innerHTML='';el.appendChild(w);}
+function drawPPL(curve){const cv=document.getElementById('ppl');const ctx=cv.getContext('2d');const W=cv.width,H=cv.height,pad=34;
+ ctx.clearRect(0,0,W,H);const xs=curve.map(p=>p.step),ys=curve.map(p=>p.ppl);const xmax=Math.max(...xs),ymax=Math.max(...ys),ymin=Math.min(...ys);
+ ctx.strokeStyle='#1e2946';for(let g=0;g<=5;g++){const y=pad+(H-2*pad)*g/5;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-8,y);ctx.stroke();}
+ ctx.beginPath();curve.forEach((p,i)=>{const x=pad+(W-pad-8)*(p.step/xmax);const y=pad+(H-2*pad)*(1-(p.ppl-ymin)/(ymax-ymin));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+ ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;ctx.stroke();
+ curve.forEach(p=>{const x=pad+(W-pad-8)*(p.step/xmax);const y=pad+(H-2*pad)*(1-(p.ppl-ymin)/(ymax-ymin));ctx.fillStyle='#fde68a';ctx.beginPath();ctx.arc(x,y,3,0,7);ctx.fill();});
+ ctx.fillStyle='#93a0c0';ctx.font='11px monospace';ctx.fillText('ppl '+ymax.toFixed(0),4,pad);ctx.fillText('ppl '+ymin.toFixed(1),4,H-pad);ctx.fillText('step '+xmax,W-70,H-10);}
+function draw(d,note){
+ document.getElementById('prompt').textContent=JSON.stringify(d.prompt);
+ document.getElementById('gen').textContent=d.generated;
+ drawPPL(d.loss_curve);
+ document.getElementById('ppl-note').textContent='perplexity '+d.first_ppl.toFixed(1)+' -> '+d.final_ppl.toFixed(2)+'  ·  '+note;
+ const pre=d.acc_pretrained*100, scr=d.acc_scratch*100;
+ document.getElementById('v-pre').textContent=pre.toFixed(0)+'%';document.getElementById('v-scr').textContent=scr.toFixed(0)+'%';
+ document.getElementById('f-pre').style.height=pre+'%';document.getElementById('f-scr').style.height=scr+'%';
+ document.getElementById('gain-note').textContent='transfer gain: +'+(pre-scr).toFixed(0)+' percentage points from pre-training';
+ renderHeat('heat',d.causal_attention,d.attn_labels,d.attn_labels);
+ document.getElementById('attn-note').textContent='text: "'+d.attn_labels.join('')+'"  ·  '+note;
+}
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/gpt1_sample.json',{cache:'no-store'});if(r.ok){draw(await r.json(),'live data');return;}}catch(e){}}draw(BAKED,'baked-in sample');})();
+show('mha',document.querySelector('.block[data-key="mha"]'));
+</script></body></html>
