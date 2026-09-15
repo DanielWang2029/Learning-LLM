@@ -45,6 +45,20 @@ papers rather than the internals of any single one:
 |---|---|---|---|
 | Attention Is All You Need | 2017 | [`Attention Is All You Need/`](Attention%20Is%20All%20You%20Need/) | reproduced |
 
+## Reading list / roadmap
+
+[`papers.json`](papers.json) also catalogs a broader roadmap of **key LLM papers**
+(currently 28, marked `planned` until reproduced) together with the citation
+edges that connect them. The list is drawn from widely-used curations — notably
+*Essential LLM Papers* (Foundation Models Deep Dive) — spanning foundational
+architecture (BERT, GPT), scaling laws (Kaplan, Chinchilla), architectural
+innovations (RoPE, FlashAttention, Switch Transformers), model milestones (GPT-2/3,
+T5, PaLM, LLaMA), alignment (InstructGPT, RLHF, Constitutional AI, DPO), retrieval
+(RAG), efficient fine-tuning (LoRA, QLoRA), reasoning (Chain-of-Thought,
+Self-Consistency, Tree of Thoughts, ReAct, DeepSeek-R1), and multimodal models
+(CLIP, Flamingo). Open [`citation_graph.html`](citation_graph.html) to explore
+them on a timeline colored by theme.
+
 ## Adding a new paper
 
 1. Create a new top-level folder named after the paper and drop the PDF inside.
