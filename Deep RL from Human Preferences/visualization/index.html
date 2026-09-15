@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Deep RL from Human Preferences — Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0;
+    --line:#2a3352; --seg:#22d3ee; --pref:#f59e0b; --rm:#a78bfa; --pol:#fb7185; --good:#34d399;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a { color:var(--seg); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(251,113,133,.14));
+    border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:32px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#fb7185 80%,#f59e0b);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+
+  /* Loop diagram */
+  .loop { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; align-items:stretch; }
+  @media (max-width:900px){ .loop { grid-template-columns:1fr 1fr; } }
+  .node { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; box-shadow:var(--shadow); position:relative; }
+  .node .tag { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+  .node h3 { margin:6px 0 4px; font-size:15px; } .node p { margin:0; color:var(--muted); font-size:12.5px; }
+  .n-seg { border-top:3px solid var(--seg); } .n-pref { border-top:3px solid var(--pref); }
+  .n-rm { border-top:3px solid var(--rm); } .n-pol { border-top:3px solid var(--pol); }
+  .loop-note { text-align:center; color:var(--muted); font-size:12.5px; margin-top:10px; }
+
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:820px){ .grid2 { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .formula { margin:14px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,"SFMono-Regular",Consolas,monospace; font-size:14px; color:#cfe8ff; overflow-x:auto; white-space:pre-wrap; }
+
+  /* Gridworld */
+  .grid { display:grid; gap:4px; margin-top:6px; }
+  .cell { aspect-ratio:1/1; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:20px; color:#00121f; position:relative; border:1px solid #0006; }
+  .cell .mark { position:absolute; top:3px; left:5px; font-size:10px; font-weight:700; color:#00121fcc; }
+  .cell.path { outline:2px solid #ffffffcc; outline-offset:-2px; }
+  .legend-row { display:flex; align-items:center; gap:8px; margin-top:10px; color:var(--muted); font-size:12px; }
+  .legend-bar { height:10px; flex:1; border-radius:6px; background:linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a); }
+
+  .metric { margin:12px 0; } .metric .lab { display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px; }
+  .metric .lab b { color:var(--ink); } .metric .lab span { color:var(--muted); }
+  .bar { height:16px; border-radius:8px; background:#0d132a; border:1px solid var(--line); overflow:hidden; }
+  .bar > div { height:100%; border-radius:8px; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend2 { display:flex; gap:16px; margin-top:10px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .legend2 i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Deep Reinforcement Learning from Human Preferences</h1>
+  <p>Learn a reward function from <b>preferences over trajectory segments</b> — never from the reward itself — then optimize a policy against that learned reward. Here the "human" is simulated by a hidden true reward on a 5×5 gridworld, so everything is reproducible on CPU.</p>
+  <div class="badges">
+    <span class="badge">Christiano et al., 2017</span>
+    <span class="badge">arXiv:1706.03741</span>
+    <span class="badge">Bradley-Terry</span>
+    <span class="badge">Reward learning</span>
+    <span class="badge">Gridworld + value iteration</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">The preference-learning loop</h2>
+  <p class="section-sub">The agent, the reward model, and the human form a loop. Crucially, the reward model is the only thing the human touches — and it sees only <i>which segment is better</i>, never a number.</p>
+  <div class="loop">
+    <div class="node n-seg"><div class="tag">1 · behavior</div><h3>Trajectory segments</h3><p>A policy produces short clips of states/actions (here a random walk over the grid).</p></div>
+    <div class="node n-pref"><div class="tag">2 · human</div><h3>Preference label</h3><p>Two segments are compared; the one with more hidden true reward is marked preferred (σ¹ ≻ σ²).</p></div>
+    <div class="node n-rm"><div class="tag">3 · reward model</div><h3>Fit r̂ (Bradley-Terry)</h3><p>Train r̂ so preferred segments get higher predicted return, via logistic loss.</p></div>
+    <div class="node n-pol"><div class="tag">4 · RL</div><h3>Optimize policy</h3><p>Plan a policy that maximizes the <i>learned</i> reward r̂ (value iteration).</p></div>
+  </div>
+  <p class="loop-note">↻ In the full paper these run concurrently; here we run them once, which already recovers the optimal policy.</p>
+
+  <h2 class="section-title">Hidden vs learned reward (and the policy each induces)</h2>
+  <p class="section-sub">Left: the true reward the model never sees. Right: the reward recovered from preferences alone. Arrows are the greedy policy; <b>S</b> = start, <b>G</b> = goal; the white-outlined cells trace the policy's path from start.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>True reward r*(s) &nbsp;<span style="color:var(--muted);font-size:12px">(hidden)</span></h4>
+      <p class="small">A smooth bump peaking at the goal. Optimal policy walks straight to G.</p>
+      <div class="grid" id="grid-true"></div>
+      <div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+    </div>
+    <div class="card">
+      <h4>Learned reward r̂(s) &nbsp;<span style="color:var(--rm);font-size:12px">from preferences</span></h4>
+      <p class="small">Recovered up to scale &amp; offset — enough to induce the same optimal behavior.</p>
+      <div class="grid" id="grid-learned"></div>
+      <div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Does the learned reward give a good policy?</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>True return by policy</h4>
+      <p class="small">Discounted true return from the start state. The policy trained on the <b>learned</b> reward matches the optimal policy (which is planned on the true reward).</p>
+      <div id="returns"></div>
+    </div>
+    <div class="card">
+      <h4>Reward-model preference accuracy &amp; learning curve</h4>
+      <p class="small">Held-out preference agreement, and true return of the learned-reward policy as the reward model trains.</p>
+      <div id="acc"></div>
+      <canvas id="curve" width="1100" height="220" style="height:220px"></canvas>
+      <div class="legend2">
+        <span><i style="background:var(--pol)"></i>learned-policy true return</span>
+        <span><i style="background:var(--good)"></i>optimal</span>
+        <span><i style="background:var(--muted)"></i>random</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The math</h2>
+  <div class="card">
+    <h4>Bradley-Terry preference model <span style="color:var(--muted);font-size:12px">Eq. 1</span></h4>
+    <div class="formula">P(σ¹ ≻ σ²) = exp Σ r̂(σ¹) / ( exp Σ r̂(σ¹) + exp Σ r̂(σ²) ) = σ( Σr̂(σ¹) − Σr̂(σ²) )
+
+loss(ψ) = − Σ_pairs  [ μ¹ log P(σ¹≻σ²) + μ² log P(σ²≻σ¹) ]      (μ = human label)</div>
+    <p class="small">Because segments are equal length, preferences pin down r̂ only up to an affine transform — but for a discounted infinite-horizon MDP the optimal policy is invariant to exactly that, so the recovered reward still induces the right behavior.</p>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Deep Reinforcement Learning from Human Preferences”</b> (Christiano et al., 2017).
+    Numbers from <code class="k">python demo/run_demo.py</code>; implementation in <code class="k">src/</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"n":5,"start":0,"goal":24,
+"true_reward":[-0.6,-0.4,-0.2,0.0,0.2,-0.4,-0.2,0.0,0.2,0.4,-0.2,0.0,0.2,0.4,0.6,0.0,0.2,0.4,0.6,0.8,0.2,0.4,0.6,0.8,1.0],
+"learned_reward":[-9.06,-7.20,-6.94,-4.75,-1.28,-6.77,-6.99,-3.61,-1.39,1.43,-6.84,-3.55,-2.26,1.11,3.68,-4.48,-1.98,1.02,3.61,5.86,-1.39,1.22,3.39,6.17,8.88],
+"optimal_return":5.243,"random_return":-5.911,"learned_return":5.243,"pref_accuracy":1.0,
+"learned_policy":["↓","→","↓","→","↓","→","→","→","→","↓","→","↓","→","↓","↓","↓","→","→","↓","↓","→","→","→","→","↓"],
+"optimal_policy":["↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","↓","→","→","→","→","↓"],
+"learned_path":[0,5,6,7,8,9,14,19,24],
+"optimal_path":[0,5,10,15,20,21,22,23,24],
+"learning_curve":[{"epoch":1,"pref_acc":0.805,"true_return":4.316},{"epoch":10,"pref_acc":1.0,"true_return":4.316},{"epoch":20,"pref_acc":0.985,"true_return":5.243},{"epoch":30,"pref_acc":1.0,"true_return":5.243},{"epoch":40,"pref_acc":0.995,"true_return":5.243},{"epoch":50,"pref_acc":1.0,"true_return":5.243},{"epoch":60,"pref_acc":1.0,"true_return":5.243},{"epoch":120,"pref_acc":1.0,"true_return":5.243}]};
+
+function heatColor(t){
+  const stops=[[11,16,32],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];
+  const x=Math.max(0,Math.min(1,t))*(stops.length-1); const i=Math.floor(x), f=x-i;
+  const a=stops[i], b=stops[Math.min(i+1,stops.length-1)];
+  const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f)); return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderGrid(id, field, policy, path, d){
+  const el=document.getElementById(id); const n=d.n;
+  el.style.gridTemplateColumns=`repeat(${n},1fr)`;
+  const lo=Math.min(...field), hi=Math.max(...field);
+  const pset=new Set(path);
+  el.innerHTML='';
+  for(let s=0;s<n*n;s++){
+    const cell=document.createElement('div'); cell.className='cell'+(pset.has(s)?' path':'');
+    const t=(field[s]-lo)/(hi-lo+1e-9);
+    cell.style.background=heatColor(t);
+    let mark=''; if(s===d.start) mark='S'; if(s===d.goal) mark='G';
+    cell.innerHTML=`<span class="mark">${mark}</span>${policy[s]}`;
+    cell.title=`state ${s} — reward ${field[s].toFixed(2)}`;
+    el.appendChild(cell);
+  }
+}
+function bar(label, sub, frac, color){
+  const pct=Math.round(frac*100);
+  return `<div class="metric"><div class="lab"><b>${label}</b><span>${sub}</span></div>`+
+    `<div class="bar"><div style="width:${Math.max(2,pct)}%;background:${color}"></div></div></div>`;
+}
+function render(d){
+  renderGrid('grid-true', d.true_reward, d.optimal_policy, d.optimal_path, d);
+  renderGrid('grid-learned', d.learned_reward, d.learned_policy, d.learned_path, d);
+
+  // returns mapped from [random, optimal] -> [0,1]
+  const lo=d.random_return, hi=d.optimal_return;
+  const map=v=>(v-lo)/(hi-lo+1e-9);
+  document.getElementById('returns').innerHTML =
+    bar('Random policy', d.random_return.toFixed(2), map(d.random_return), 'linear-gradient(90deg,#3a4568,#93a0c0)')+
+    bar('Policy from LEARNED reward', d.learned_return.toFixed(2), map(d.learned_return), 'linear-gradient(90deg,#7a2d3a,var(--pol))')+
+    bar('Optimal (from true reward)', d.optimal_return.toFixed(2), map(d.optimal_return), 'linear-gradient(90deg,#1b6a4b,var(--good))');
+  document.getElementById('acc').innerHTML =
+    bar('RM held-out preference accuracy', (d.pref_accuracy*100).toFixed(1)+'%', d.pref_accuracy, 'linear-gradient(90deg,#4b3a7a,var(--rm))');
+
+  drawCurve(d);
+}
+function drawCurve(d){
+  const c=document.getElementById('curve'), ctx=c.getContext('2d');
+  const W=c.width,H=c.height,padL=44,padR=16,padT=16,padB=30;
+  ctx.clearRect(0,0,W,H);
+  const pts=d.learning_curve, maxX=Math.max(...pts.map(p=>p.epoch));
+  const lo=Math.min(d.random_return, ...pts.map(p=>p.true_return));
+  const hi=Math.max(d.optimal_return, ...pts.map(p=>p.true_return));
+  const X=e=>padL+(e/maxX)*(W-padL-padR);
+  const Y=v=>H-padB-((v-lo)/(hi-lo+1e-9))*(H-padT-padB);
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#6b7aa0'; ctx.font='11px ui-monospace';
+  for(let g=0;g<=4;g++){ const v=lo+(hi-lo)*g/4; const y=Y(v);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke(); ctx.fillText(v.toFixed(1),8,y+3);
+  }
+  ctx.fillText('true return', padL, 11); ctx.fillText('reward-model epoch →', W-padR-140, H-8);
+  // reference lines
+  function ref(v,color){ ctx.setLineDash([6,5]); ctx.strokeStyle=color; ctx.beginPath();
+    ctx.moveTo(padL,Y(v)); ctx.lineTo(W-padR,Y(v)); ctx.stroke(); ctx.setLineDash([]); }
+  ref(d.optimal_return,'#34d39988'); ref(d.random_return,'#93a0c088');
+  // learned-policy return
+  ctx.beginPath(); pts.forEach((p,i)=>{const x=X(p.epoch),y=Y(p.true_return); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#fb7185'; ctx.lineWidth=2.6; ctx.stroke();
+  pts.forEach(p=>{ctx.beginPath(); ctx.arc(X(p.epoch),Y(p.true_return),3.2,0,7); ctx.fillStyle='#fb7185'; ctx.fill();});
+}
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/preference_results.json',{cache:'no-store'});
+      if(r.ok){ render(await r.json()); return; } }catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>
