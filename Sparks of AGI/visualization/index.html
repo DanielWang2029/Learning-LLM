@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sparks of AGI — Capability Profile vs. Scale</title>
+<style>
+  :root{ --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --c1:#22d3ee; --c2:#a78bfa; --c3:#fb7185; --c4:#f59e0b; --c5:#34d399; --shadow:0 10px 30px rgba(0,0,0,.35); }
+  *{ box-sizing:border-box; } html,body{ margin:0; padding:0; }
+  body{ background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a{ color:var(--c1); }
+  header.hero{ padding:40px 24px 28px; text-align:center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1{ margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p{ color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges{ margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge{ font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap{ max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title{ font-size:20px; margin:34px 0 6px; } .section-sub{ color:var(--muted); margin:0 0 18px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .grid2{ display:grid; grid-template-columns:1.15fr .85fr; gap:22px; } @media(max-width:860px){ .grid2{ grid-template-columns:1fr; } }
+  .callout{ background:linear-gradient(90deg, rgba(167,139,250,.12), transparent); border:1px solid var(--line);
+    border-left:3px solid var(--c2); border-radius:10px; padding:12px 16px; margin:10px 0; }
+  /* matrix */
+  table.matrix{ width:100%; border-collapse:separate; border-spacing:6px; }
+  table.matrix th{ color:var(--muted); font-size:12px; font-weight:600; text-align:center; padding:4px; }
+  table.matrix td.task{ text-align:left; white-space:nowrap; }
+  table.matrix td.task b{ font-size:14px; } table.matrix td.task span{ color:var(--muted); font-size:11.5px; }
+  .cell{ border-radius:10px; padding:10px 6px; text-align:center; font-weight:700; font-size:13px; border:1px solid var(--line); position:relative; }
+  .cell .pf{ font-size:15px; display:block; }
+  canvas.chart{ width:100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend-row{ display:flex; align-items:center; gap:14px; margin-top:10px; color:var(--muted); font-size:12.5px; flex-wrap:wrap; }
+  .sw{ display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:6px; }
+  code.k{ background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .footer{ color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Sparks of AGI · Capability Profile vs. Scale</h1>
+  <p>“Sparks of Artificial General Intelligence” is an <b>analysis paper</b> — it introduces no new model or algorithm.
+  Its contribution is a <b>methodology</b>: probe a model with a broad battery of self-contained tasks and report which
+  capabilities are present. This page reproduces that method with a battery of six transparent probes and a family of
+  tiny GPTs, showing the capability profile fill in as scale grows.</p>
+  <div class="badges">
+    <span class="badge">Bubeck et al., 2023</span>
+    <span class="badge">arXiv 2303.12712</span>
+    <span class="badge">capability probing</span>
+    <span class="badge">analysis, not an algorithm</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="callout">
+    <b>Honesty note.</b> There is no “Sparks” algorithm to reproduce — the paper studies GPT-4's behavior. What is
+    reproducible is its <i>experimental method</i>: a battery of probes turned into a pass/fail capability profile, tracked
+    across model scale. Everything below is real: tiny GPTs actually trained on each probe, on CPU, in ~30&nbsp;seconds.
+  </div>
+
+  <h2 class="section-title">The capability matrix</h2>
+  <p class="section-sub">Rows are probes (easy → hard); columns are model sizes. A tile turns on (✓) when the model exceeds
+  the pass threshold. Watch it fill in from left to right.</p>
+  <div class="card"><div id="matrix"></div>
+    <div class="legend-row">
+      <span><span class="sw" style="background:#34d399"></span>capability present (✓, ≥ 80%)</span>
+      <span><span class="sw" style="background:#3a2540"></span>absent (·)</span>
+      <span style="margin-left:auto">tile shade = exact-match accuracy</span>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="grid2">
+    <div class="card">
+      <h4>Accuracy vs. scale (per probe)</h4>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">Each line is one probe's exact-match accuracy as the
+      model grows. The dashed line is the pass threshold.</p>
+      <canvas class="chart" id="lineCanvas" width="640" height="380"></canvas>
+      <div class="legend-row" id="lineLegend"></div>
+    </div>
+    <div class="card">
+      <h4>Capabilities present vs. size</h4>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 10px">How many of the six probes pass, at each parameter count.</p>
+      <canvas class="chart" id="countCanvas" width="500" height="380"></canvas>
+      <div class="legend-row"><span><span class="sw" style="background:#a78bfa"></span>probes passed (of 6)</span></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The probe battery</h2>
+  <div class="card"><div id="battery"></div></div>
+
+  <div class="footer">
+    Interactive companion to <b>“Sparks of Artificial General Intelligence” (Bubeck et al., 2023)</b> · arXiv 2303.12712.
+    Data baked in from <code class="k">demo/run_demo.py</code> → <code class="k">data/capability_profile.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"tasks":["copy","reverse","sort","add","parity","pattern"],"task_desc":{"copy":"Echo the input (memory / identity)","reverse":"Reverse the input (positional routing)","pattern":"Continue an alternating pattern (induction)","sort":"Sort the digits ascending (comparison)","add":"Add two digits with carry (arithmetic)","parity":"XOR of a bit string (sequential counting)"},"chance":{"copy":0.0001,"reverse":0.0001,"sort":0.0001,"add":0.0526,"parity":0.5,"pattern":0.01},"pass_threshold":0.8,"scales":[{"name":"nano","N":3600},{"name":"micro","N":26048},{"name":"mini","N":85776},{"name":"small","N":151232}],"matrix":[{"scale":"nano","N":3600,"profile":{"copy":{"acc":0.195,"pass":false},"reverse":{"acc":0.18,"pass":false},"sort":{"acc":0.66,"pass":false},"add":{"acc":0.45,"pass":false},"parity":{"acc":0.52,"pass":false},"pattern":{"acc":1.0,"pass":true}},"n_pass":1},{"scale":"micro","N":26048,"profile":{"copy":{"acc":0.96,"pass":true},"reverse":{"acc":0.975,"pass":true},"sort":{"acc":0.94,"pass":true},"add":{"acc":0.53,"pass":false},"parity":{"acc":0.475,"pass":false},"pattern":{"acc":0.995,"pass":true}},"n_pass":4},{"scale":"mini","N":85776,"profile":{"copy":{"acc":0.975,"pass":true},"reverse":{"acc":0.97,"pass":true},"sort":{"acc":0.855,"pass":true},"add":{"acc":0.775,"pass":false},"parity":{"acc":0.47,"pass":false},"pattern":{"acc":1.0,"pass":true}},"n_pass":4},{"scale":"small","N":151232,"profile":{"copy":{"acc":1.0,"pass":true},"reverse":{"acc":0.965,"pass":true},"sort":{"acc":0.94,"pass":true},"add":{"acc":0.945,"pass":true},"parity":{"acc":0.525,"pass":false},"pattern":{"acc":1.0,"pass":true}},"n_pass":5}]};
+let DATA = BAKED;
+const ORDER = ["pattern","copy","reverse","sort","add","parity"]; // easy -> hard
+const COLORS = {copy:"#22d3ee",reverse:"#a78bfa",sort:"#34d399",add:"#f59e0b",parity:"#fb7185",pattern:"#60a5fa"};
+
+function accColor(acc, pass){
+  if(pass){ const t=Math.min(1,(acc-0.8)/0.2); const g=Math.round(160+40*t);
+    return `rgba(52,${g},153,${0.35+0.5*acc})`; }
+  return `rgba(120,60,90,${0.25+0.4*acc})`;
+}
+
+function renderMatrix(){
+  const scales = DATA.scales, m = DATA.matrix;
+  let html = '<table class="matrix"><tr><th></th>';
+  scales.forEach(s=> html += `<th>${s.name}<br><span style="font-weight:400;color:var(--muted)">${s.N.toLocaleString()}p</span></th>`);
+  html += '</tr>';
+  ORDER.forEach(task=>{
+    html += `<tr><td class="task"><b>${task}</b><br><span>${DATA.task_desc[task]}</span></td>`;
+    m.forEach(col=>{
+      const c = col.profile[task];
+      html += `<td><div class="cell" style="background:${accColor(c.acc,c.pass)}">`
+        + `<span class="pf">${c.pass?'✓':'·'}</span>${(c.acc*100).toFixed(0)}%</div></td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  document.getElementById('matrix').innerHTML = html;
+}
+
+function renderBattery(){
+  const rows = ORDER.map(t=>`<li style="margin:6px 0"><b style="color:${COLORS[t]}">${t}</b> — ${DATA.task_desc[t]}
+    <span style="color:var(--muted)">(chance ${(DATA.chance[t]*100).toFixed(2)}%)</span></li>`).join('');
+  document.getElementById('battery').innerHTML =
+    `<p style="color:var(--muted);margin:0 0 8px">Each probe is a short token sequence <code class="k">[TASK] inputs = answer</code>;
+     only the answer is graded. Parity (XOR) is deliberately the hardest — it never emerges at these tiny scales, mirroring
+     the persistent gaps the paper documents.</p><ul style="padding-left:18px">${rows}</ul>`;
+}
+
+function drawLines(){
+  const cv=document.getElementById('lineCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height, ml=44,mr=14,mt=16,mb=40;
+  ctx.clearRect(0,0,W,H);
+  const scales=DATA.scales, n=scales.length;
+  const X=i=> ml + (W-ml-mr)*(n===1?0.5:i/(n-1));
+  const Y=v=> mt + (1-v)*(H-mt-mb);
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let g=0;g<=5;g++){ const v=g/5,y=Y(v); ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(W-mr,y); ctx.stroke(); ctx.fillText((v*100).toFixed(0)+'%',6,y+3); }
+  scales.forEach((s,i)=> ctx.fillText(s.name, X(i)-14, H-mb+16));
+  // threshold
+  const yt=Y(DATA.pass_threshold); ctx.strokeStyle='#e2e8f0'; ctx.setLineDash([5,4]); ctx.beginPath(); ctx.moveTo(ml,yt); ctx.lineTo(W-mr,yt); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='#e2e8f0'; ctx.fillText('pass ≥ 80%', W-mr-88, yt-5);
+  ORDER.forEach(task=>{
+    ctx.strokeStyle=COLORS[task]; ctx.lineWidth=2.2; ctx.beginPath();
+    DATA.matrix.forEach((col,i)=>{ const x=X(i), y=Y(col.profile[task].acc); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+    DATA.matrix.forEach((col,i)=>{ const x=X(i), y=Y(col.profile[task].acc);
+      ctx.fillStyle=COLORS[task]; ctx.beginPath(); ctx.arc(x,y,3.2,0,7); ctx.fill(); });
+  });
+  const leg = ORDER.map(t=>`<span><span class="sw" style="background:${COLORS[t]}"></span>${t}</span>`).join('');
+  document.getElementById('lineLegend').innerHTML = leg;
+}
+
+function drawCount(){
+  const cv=document.getElementById('countCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height, ml=40,mr=14,mt=16,mb=40;
+  ctx.clearRect(0,0,W,H);
+  const m=DATA.matrix, n=m.length, total=DATA.tasks.length;
+  const X=i=> ml + (W-ml-mr)*(i+0.5)/n;
+  const Y=v=> mt + (1-v/total)*(H-mt-mb);
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let g=0;g<=total;g++){ const y=Y(g); ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(W-mr,y); ctx.stroke(); ctx.fillText(g,10,y+3); }
+  const bw=(W-ml-mr)/n*0.5;
+  m.forEach((col,i)=>{ const x=X(i), y=Y(col.n_pass);
+    const g=ctx.createLinearGradient(0,y,0,H-mb); g.addColorStop(0,'#a78bfa'); g.addColorStop(1,'rgba(167,139,250,.15)');
+    ctx.fillStyle=g; ctx.fillRect(x-bw/2,y,bw,H-mb-y);
+    ctx.fillStyle='#e8ecf7'; ctx.font='bold 14px monospace'; ctx.fillText(col.n_pass+'/'+total, x-14, y-7);
+    ctx.fillStyle='#93a0c0'; ctx.font='11px sans-serif';
+    ctx.fillText(col.scale, x-14, H-mb+16); ctx.fillText(col.N.toLocaleString()+'p', x-22, H-mb+29);
+  });
+  // trend line
+  ctx.strokeStyle='#ddd6fe'; ctx.lineWidth=1.5; ctx.beginPath();
+  m.forEach((col,i)=>{ const x=X(i), y=Y(col.n_pass); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+}
+
+function renderAll(){ renderMatrix(); renderBattery(); drawLines(); drawCount(); }
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/capability_profile.json',{cache:'no-store'});
+      if(r.ok){ DATA=await r.json(); } }catch(e){}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
