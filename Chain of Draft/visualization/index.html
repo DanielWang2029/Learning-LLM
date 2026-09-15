@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chain of Draft — same accuracy, a fraction of the tokens</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --std: #fb7185;      /* standard / direct */
+    --cot: #a78bfa;      /* chain of thought */
+    --cod: #34d399;      /* chain of draft */
+    --accent: #34d399;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #123a2a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--cod); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(251,113,133,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #fb7185, #a78bfa 45%, #34d399);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 820px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 880px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+  @media (max-width: 860px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; color: #cfe8ff;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* style cards */
+  .style { border:1px solid var(--line); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.015); display:flex; flex-direction:column; }
+  .style h5 { margin: 0 0 4px; font-size: 15px; display:flex; align-items:center; gap:8px; }
+  .dot { width:12px;height:12px;border-radius:50%;display:inline-block; }
+  .style p.desc { color: var(--muted); font-size: 12.5px; margin: 4px 0 12px; }
+  .trace {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13px;
+    background:#0d132a; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    word-break: break-word; min-height: 66px; color:#cfe8ff;
+  }
+  .trace .pfx { color: var(--muted); }
+  .style .foot { margin-top:12px; display:flex; gap:10px; align-items:baseline; }
+  .style .big { font-size: 26px; font-weight: 800; }
+  .style .unit { color: var(--muted); font-size: 12px; }
+  .tag-ok { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); }
+
+  /* bars */
+  .gaterow { display:flex; align-items:center; gap:12px; margin:10px 0; }
+  .gaterow .lab { width: 150px; color: var(--muted); font-size:13px; }
+  .bar-track { flex:1; height: 20px; border-radius: 8px; background:#0d132a; border:1px solid var(--line); overflow:hidden; }
+  .bar-fill { height:100%; transition: width .7s ease; }
+  .gaterow .val { width: 64px; text-align:right; font-variant-numeric: tabular-nums; font-weight:700; }
+
+  /* metrics */
+  .metrics { display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .metrics { grid-template-columns: repeat(2,1fr);} }
+  .metric { text-align:center; background: var(--panel-2); border:1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .metric .v { font-size: 26px; font-weight: 800; background: linear-gradient(90deg,#a78bfa,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .metric .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin: 10px 0 12px; flex-wrap: wrap; }
+  button.play { background: var(--panel-2); color: var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 16px; cursor:pointer; font-size:13px; }
+  button.play:hover { border-color: var(--accent); }
+  .stepinfo { color: var(--muted); font-size: 13px; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  table.map { width:100%; border-collapse: collapse; font-size: 13px; }
+  table.map td, table.map th { border:1px solid var(--line); padding:8px 10px; text-align:left; }
+  table.map th { color: var(--muted); font-weight:600; }
+  .swatch { width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:6px; }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:14px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Chain of Draft</h1>
+  <p>Let a model <b>think step by step</b> — but write each step as a <b>terse draft</b> instead of a paragraph. On a multi-step task, Chain of Draft <b>matches Chain-of-Thought accuracy</b> while emitting a small <b>fraction of the tokens</b>. Everything below comes from one tiny LM trained on CPU in this folder and prompted three ways.</p>
+  <div class="badges">
+    <span class="badge">Xu et al., 2025</span>
+    <span class="badge">arXiv:2502.18600</span>
+    <span class="badge">Prompting strategy</span>
+    <span class="badge">Token efficiency</span>
+    <span class="badge">One model, 3 styles</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">One problem, three ways to answer</h2>
+  <p class="section-sub">The task is a chained single-digit addition <b>mod 10</b> (running sum). The <i>same</i> trained model is prompted with a style tag and produces the completion below. Notice reasoning helps a lot — but Chain of Draft keeps only the essential arithmetic.</p>
+  <div class="grid3" id="style-cards"></div>
+  <div class="legend-row">
+    <span><span class="swatch" style="background:var(--std)"></span>Standard — answer only (no reasoning)</span>
+    <span><span class="swatch" style="background:var(--cot)"></span>Chain of Thought — verbose prose</span>
+    <span><span class="swatch" style="background:var(--cod)"></span>Chain of Draft — minimal drafts</span>
+  </div>
+
+  <h2 class="section-title">Same reasoning skeleton, fewer words</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>The idea</h4>
+      <p class="small">Both CoT and CoD walk the <b>identical</b> sequence of sub-results. They differ only in how each step is written — natural-language prose vs. a bare equation. Accuracy comes from <i>showing the steps</i>; cost comes from <i>how wordy they are</i>.</p>
+      <div class="formula">step k:  s_k = (s_{k-1} + a_k) mod 10
+
+CoT :  "<span style="color:var(--cot)">3 plus 5 is 8</span>"      &rarr; many word tokens
+CoD :  "<span style="color:var(--cod)">3+5=8</span>"             &rarr; only the essentials
+answer:  #s_n</div>
+    </div>
+    <div class="card">
+      <h4>Why direct answering fails</h4>
+      <p class="small">Composing several dependent <code class="k">mod 10</code> steps in a single shot is hard for a tiny model — there is nowhere to "hold" the running sum. Emitting intermediate results turns one hard problem into several trivial <code class="k">(a+b) mod 10</code> lookups, which the model solves reliably.</p>
+      <div class="formula">Standard:  S 3+5+2+9 = #?      (compute all at once → weak)
+CoT/CoD :  show s_1, s_2, s_3 first  (each step easy → strong)</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The token race</h2>
+  <p class="section-sub">Play the reasoning back one step at a time. Both reach the same answer; watch the running token count diverge.</p>
+  <div class="card">
+    <div class="controls">
+      <button class="play" id="play">▶ Play the two chains</button>
+      <span class="stepinfo" id="race-info"></span>
+    </div>
+    <div class="grid2">
+      <div>
+        <h5><span class="dot" style="background:var(--cot)"></span>Chain of Thought</h5>
+        <div class="trace" id="race-cot"></div>
+        <div class="foot"><span class="big" id="race-cot-tok" style="color:var(--cot)">0</span><span class="unit">tokens so far</span></div>
+      </div>
+      <div>
+        <h5><span class="dot" style="background:var(--cod)"></span>Chain of Draft</h5>
+        <div class="trace" id="race-cod"></div>
+        <div class="foot"><span class="big" id="race-cod-tok" style="color:var(--cod)">0</span><span class="unit">tokens so far</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Accuracy vs. token cost (held-out)</h2>
+  <p class="section-sub">On problems the model never saw during training. Reasoning (CoT/CoD) is far more accurate than answering directly — and CoD gets there with a small fraction of CoT's tokens.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Held-out accuracy</h4>
+      <p class="small">Exact-answer accuracy over the held-out set.</p>
+      <div id="acc-bars"></div>
+    </div>
+    <div class="card">
+      <h4>Mean completion length (tokens)</h4>
+      <p class="small">Characters generated after the prompt (this char-level model's tokens).</p>
+      <div id="tok-bars"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Results from this folder's model</h2>
+  <div class="metrics" id="metrics"></div>
+
+  <h2 class="section-title">Code &rarr; paper map</h2>
+  <div class="card">
+    <table class="map">
+      <tr><th>Component</th><th>File</th><th>Paper</th></tr>
+      <tr><td>Three prompting styles (Standard / CoT / CoD)</td><td><code class="k">src/task.py</code> · <code class="k">render_*</code></td><td>§2, §3.1</td></tr>
+      <tr><td>Chain-of-Draft terse rendering</td><td><code class="k">render_cod</code></td><td>§3.1 (drafts)</td></tr>
+      <tr><td>Tiny decoder-only LM (one model, all styles)</td><td><code class="k">src/model.py</code> · <code class="k">TinyGPT</code></td><td>—</td></tr>
+      <tr><td>Train on all styles, eval accuracy + tokens</td><td><code class="k">demo/run_demo.py</code></td><td>§4 (acc/latency)</td></tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Chain of Draft: Thinking Faster by Writing Less”</b>, Xu et al., 2025.
+    Accuracy, token counts and the example traces on this page are produced by <code class="k">python demo/run_demo.py</code> in this folder.
+    Serve the folder (<code class="k">python -m http.server</code>) to load live data from <code class="k">data/cod_run.json</code>.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in real run (data/cod_run.json). Over http, live data is fetched instead.
+const BAKED = {"meta":{"num_terms":4,"params":416674,"n_eval":150},"results":{"S":{"name":"Standard (direct)","acc":0.11333333333333333,"tokens":3.0,"example":{"prompt":"S2+9+8+8=","completion":"#2.","pred":2,"answer":7}},"C":{"name":"Chain of Thought","acc":1.0,"tokens":59.0,"example":{"prompt":"C2+9+8+8=","completion":"2 plus 9 is 1, 1 plus 8 is 9, 9 plus 8 is 7, answer is 7#7.","pred":7,"answer":7}},"D":{"name":"Chain of Draft","acc":0.9933333333333333,"tokens":20.0,"example":{"prompt":"D2+9+8+8=","completion":"2+9=1 1+8=9 9+8=7#7.","pred":7,"answer":7}}},"cod_token_fraction":33.89830508474576};
+
+let DATA = BAKED;
+const COL = { S: "var(--std)", C: "var(--cot)", D: "var(--cod)" };
+
+function styleCards() {
+  const el = document.getElementById("style-cards"); el.innerHTML = "";
+  ["S","C","D"].forEach(k => {
+    const r = DATA.results[k];
+    const ok = r.example.pred === r.example.answer;
+    const badge = ok
+      ? `<span class="tag-ok" style="color:var(--cod);border-color:var(--cod)">✓ correct</span>`
+      : `<span class="tag-ok" style="color:var(--std);border-color:var(--std)">✗ wrong (${r.example.pred})</span>`;
+    const d = document.createElement("div"); d.className = "style";
+    d.innerHTML = `
+      <h5><span class="dot" style="background:${COL[k]}"></span>${r.name}</h5>
+      <p class="desc">${k==="S"?"Answer only — no steps shown.":k==="C"?"Full prose for every step.":"Only the equation per step."}</p>
+      <div class="trace"><span class="pfx">${r.example.prompt}</span>${r.example.completion}</div>
+      <div class="foot">
+        <span class="big" style="color:${COL[k]}">${(r.acc*100).toFixed(0)}%</span><span class="unit">accuracy</span>
+        <span class="big" style="color:${COL[k]};margin-left:auto">${r.tokens.toFixed(0)}</span><span class="unit">tokens</span>
+      </div>
+      <div style="margin-top:10px">${badge}</div>`;
+    el.appendChild(d);
+  });
+}
+
+// ---- bars
+function bars(elId, entries, unit) {
+  const el = document.getElementById(elId); el.innerHTML = "";
+  const mx = Math.max(...entries.map(e => e[1]));
+  entries.forEach(([lab, v, col]) => {
+    const row = document.createElement("div"); row.className = "gaterow";
+    const disp = unit === "%" ? (v*100).toFixed(0)+"%" : v.toFixed(0);
+    row.innerHTML = `<div class="lab">${lab}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%;background:${col}"></div></div>
+      <div class="val">${disp}</div>`;
+    el.appendChild(row);
+    requestAnimationFrame(() => { row.querySelector(".bar-fill").style.width = Math.max(2, v/mx*100) + "%"; });
+  });
+}
+function renderBars() {
+  const R = DATA.results;
+  bars("acc-bars", [
+    [R.S.name, R.S.acc, "var(--std)"],
+    [R.C.name, R.C.acc, "var(--cot)"],
+    [R.D.name, R.D.acc, "var(--cod)"],
+  ], "%");
+  bars("tok-bars", [
+    [R.S.name, R.S.tokens, "var(--std)"],
+    [R.C.name, R.C.tokens, "var(--cot)"],
+    [R.D.name, R.D.tokens, "var(--cod)"],
+  ], "n");
+}
+
+// ---- metrics
+function renderMetrics() {
+  const R = DATA.results;
+  const frac = DATA.cod_token_fraction;
+  const items = [
+    [(R.C.acc*100).toFixed(0)+"%", "Chain-of-Thought accuracy"],
+    [(R.D.acc*100).toFixed(0)+"%", "Chain-of-Draft accuracy (matches CoT)"],
+    [frac.toFixed(0)+"%", "of CoT's tokens used by CoD"],
+    [(100-frac).toFixed(0)+"%", "tokens saved vs. CoT"],
+  ];
+  const el = document.getElementById("metrics"); el.innerHTML="";
+  items.forEach(([v,l])=>{ const d=document.createElement("div"); d.className="metric";
+    d.innerHTML=`<div class="v">${v}</div><div class="l">${l}</div>`; el.appendChild(d); });
+}
+
+// ---- token race: reveal each chain step by step, count cumulative tokens.
+// Split into (chunk, separator) so concatenation reproduces the completion
+// EXACTLY — the running counts then match the reported token totals.
+function splitSteps(kind, completion) {
+  const hashAt = completion.indexOf("#");
+  const reasoning = completion.slice(0, hashAt);   // steps before the answer
+  const answerPart = completion.slice(hashAt);     // "#7."
+  const sep = kind === "C" ? ", " : " ";
+  const steps = reasoning.split(sep).filter(Boolean);
+  const parts = [];
+  steps.forEach((s, i) => parts.push({ text: s, sep: i === 0 ? "" : sep }));
+  parts.push({ text: answerPart, sep: "" });        // answer attaches directly
+  return parts;
+}
+function setupRace() {
+  const cot = DATA.results.C.example.completion;
+  const cod = DATA.results.D.example.completion;
+  const cSteps = splitSteps("C", cot), dSteps = splitSteps("D", cod);
+  const elC = document.getElementById("race-cot"), elD = document.getElementById("race-cod");
+  const tC = document.getElementById("race-cot-tok"), tD = document.getElementById("race-cod-tok");
+  const info = document.getElementById("race-info");
+  const btn = document.getElementById("play");
+  let timer = null;
+
+  function reset() {
+    elC.textContent = ""; elD.textContent = ""; tC.textContent = "0"; tD.textContent = "0";
+    info.textContent = "";
+  }
+  function run() {
+    reset();
+    const n = Math.max(cSteps.length, dSteps.length);
+    let i = 0, cAcc = "", dAcc = "";
+    btn.disabled = true; btn.textContent = "▶ Playing…";
+    timer = setInterval(() => {
+      if (i < cSteps.length) { cAcc += cSteps[i].sep + cSteps[i].text; elC.textContent = cAcc; tC.textContent = cAcc.length; }
+      if (i < dSteps.length) { dAcc += dSteps[i].sep + dSteps[i].text; elD.textContent = dAcc; tD.textContent = dAcc.length; }
+      info.textContent = `step ${Math.min(i+1, n)} / ${n}`;
+      i++;
+      if (i >= n) {
+        clearInterval(timer);
+        btn.disabled = false; btn.textContent = "▶ Replay";
+        info.textContent = `done — CoD used ${dAcc.length} vs CoT's ${cAcc.length} tokens for the same answer`;
+      }
+    }, 650);
+  }
+  btn.onclick = run;
+  reset();
+  // draw the completed state once so the panel isn't empty on load
+  elC.textContent = cot; tC.textContent = cot.length;
+  elD.textContent = cod; tD.textContent = cod.length;
+  info.textContent = "showing final chains — press play to watch them build";
+}
+
+function initAll(){ styleCards(); renderBars(); renderMetrics(); setupRace(); }
+
+(async function init(){
+  if (location.protocol.startsWith("http")) {
+    try { const res = await fetch("../data/cod_run.json", {cache:"no-store"});
+      if (res.ok) { DATA = await res.json(); } } catch(e) {}
+  }
+  initAll();
+})();
+</script>
+</body>
+</html>
