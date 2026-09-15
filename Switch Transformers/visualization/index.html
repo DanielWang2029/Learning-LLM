@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Switch Transformers — Sparse MoE Visualization</title>
+<style>
+  :root{--bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--a:#22d3ee;--b:#a78bfa;--c:#fb7185;--d:#f59e0b;--e:#34d399;--shadow:0 10px 30px rgba(0,0,0,.35);
+    --ex0:#22d3ee;--ex1:#a78bfa;--ex2:#fb7185;--ex3:#34d399;}
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+       radial-gradient(1000px 500px at 100% 0%,#24123a 0%,transparent 60%),var(--bg);
+       color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--a);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 50%,rgba(52,211,153,.14));border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:34px;background:linear-gradient(90deg,#22d3ee,#a78bfa 50%,#34d399);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:800px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;} .section-sub{color:var(--muted);margin:0 0 18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;white-space:pre-wrap;}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  .kpi{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;}
+  .kpi div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .kpi b{font-size:18px;color:var(--e);} .kpi span{display:block;color:var(--muted);font-size:12px;}
+  .heat{display:grid;gap:4px;margin-top:6px;}
+  .hrow{display:grid;gap:4px;grid-auto-flow:column;align-items:center;}
+  .cell{aspect-ratio:2/1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#031018;font-weight:700;}
+  .rowlab,.collab{color:var(--muted);font-size:12px;text-align:center;}
+  .bars{margin-top:6px;} .barrow{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px;}
+  .barrow .lab{width:52px;color:var(--muted);} .track{flex:1;background:#0d132a;border:1px solid var(--line);border-radius:8px;height:22px;display:flex;overflow:hidden;}
+  .seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#031018;font-weight:700;}
+  .legend{display:flex;gap:14px;align-items:center;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap;}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Switch Transformers</h1>
+  <p>Replace a transformer's dense feed-forward layer with many <b>experts</b> and a router that sends each token to
+  just <b>one</b> of them (top-1). Parameters grow with the number of experts, but the compute per token stays constant.
+  A load-balancing loss keeps the experts evenly used.</p>
+  <div class="badges">
+    <span class="badge">Fedus et al., 2021</span>
+    <span class="badge">arXiv:2101.03961</span>
+    <span class="badge">Top-1 routing</span>
+    <span class="badge">Sparse MoE</span>
+    <span class="badge">Load balancing</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">1 · Sparse top-1 routing</h2>
+  <p class="section-sub">A lightweight router scores the experts and each token takes the single best one. Only that
+  expert runs — so most of the network's parameters are idle for any given token.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>The Switch layer</h4>
+      <canvas id="route" width="1000" height="460"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ex0)"></span>expert 0</span>
+        <span><span class="swatch" style="background:var(--ex1)"></span>expert 1</span>
+        <span><span class="swatch" style="background:var(--ex2)"></span>expert 2</span>
+        <span><span class="swatch" style="background:var(--ex3)"></span>expert 3</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Router + load-balancing loss</h4>
+      <div class="formula">p        = softmax(router(x))         # gate probs
+expert   = argmax(p)                  # top-1 pick
+y        = p[expert] · Expert(x)      # gated output
+
+load-balancing loss (paper Eq. 4-6):
+  aux = α · E · Σ_i  f_i · P_i
+    f_i = fraction of tokens sent to expert i
+    P_i = mean router prob for expert i
+  minimized when both are uniform (1/E)</div>
+      <div class="kpi">
+        <div><b id="kpi-tot">–</b><span>params in all experts</span></div>
+        <div><b id="kpi-per">–</b><span>params run per token (top-1)</span></div>
+      </div>
+      <p class="small" style="margin-top:8px">Capacity scales with the number of experts; the per-token FLOPs do not.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">2 · Experts specialize by input type</h2>
+  <p class="section-sub">On a task where each token's label depends on its <b>type</b>, the router learns to send every
+  type to its own expert. This is the real per-type routing histogram from the demo (<b id="acc">–</b> accuracy).</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Routing histogram (row = input type, col = expert)</h4>
+      <div id="heat" class="heat"></div>
+      <p class="small" style="margin-top:10px">Each type is routed almost entirely to a single expert — the diagonal
+      structure of emergent specialization.</p>
+    </div>
+    <div class="card">
+      <h4>Why specialization emerges here</h4>
+      <ul style="color:var(--ink);padding-left:18px">
+        <li>Experts see only a token's <b>value</b>; the router sees its <b>type</b>.</li>
+        <li>An expert handed two types would face <b>conflicting</b> labels for the same value — it can't fit both.</li>
+        <li>So the lowest-loss solution routes each type to a dedicated expert. (See <code class="k">src/model.py</code>.)</li>
+      </ul>
+      <p class="small">This is a sharpened version of why real MoE routers specialize: dividing the input space among
+      experts reduces interference and raises effective capacity.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">3 · Load balancing spreads the tokens</h2>
+  <p class="section-sub">On a task where any expert can serve any token, the router will happily collapse onto a few
+  experts — unless the load-balancing loss pushes usage toward uniform.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Expert usage: with vs. without the aux loss</h4>
+      <div id="bars" class="bars"></div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--ex0)"></span>exp0</span>
+        <span><span class="swatch" style="background:var(--ex1)"></span>exp1</span>
+        <span><span class="swatch" style="background:var(--ex2)"></span>exp2</span>
+        <span><span class="swatch" style="background:var(--ex3)"></span>exp3</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Read-out</h4>
+      <div class="kpi">
+        <div><b id="kpi-off">–</b><span>max expert load, aux OFF</span></div>
+        <div><b id="kpi-on">–</b><span>max expert load, aux ON</span></div>
+      </div>
+      <p class="small" style="margin-top:12px">Without the auxiliary loss the busiest expert takes a large share (and some
+      sit idle); with it, usage is close to the ideal even split. Balanced routing matters at scale because a collapsed
+      router wastes the parameters (and hardware) devoted to unused experts.</p>
+    </div>
+  </div>
+
+  <div class="footer">Interactive companion to <b>“Switch Transformers: Scaling to Trillion Parameter Models…”</b>
+  (Fedus et al., 2021). Data from <code class="k">demo/run_demo.py</code> → <code class="k">data/switch_results.json</code>.</div>
+</div>
+
+<script>
+const BAKED={"meta":{"n_types":4,"values_per_type":8,"vocab_size":32,"n_classes":6},"n_experts":4,
+"specialization":{"accuracy":1.0,"hist":[[0,0,0,8242],[8217,0,0,0],[0,0,8229,0],[0,8080,0,0]],
+"usage":[0.2508,0.2466,0.2511,0.2515],"peak_per_type":[1,1,1,1]},
+"load_balancing":{"aux_off":{"accuracy":1.0,"usage":[0.4973,0.0,0.2511,0.2515],"max_load":0.4973},
+"aux_on":{"accuracy":1.0,"usage":[0.2508,0.2466,0.2511,0.2515],"max_load":0.2515}},
+"params":{"expert_params_total":16768,"per_token_ffn_params":4192,"total_params":17546}};
+let DATA=BAKED;
+const EXC=['#22d3ee','#a78bfa','#fb7185','#34d399','#f59e0b','#f472b6'];
+
+function drawRoute(){
+  const c=document.getElementById('route'),ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const E=DATA.n_experts, tokens=8;
+  const tx=W*0.10, rx=W*0.42, ex=W*0.80;
+  // tokens
+  const assign=[3,0,2,1,3,0,2,1];
+  ctx.font='13px monospace';
+  for(let i=0;i<tokens;i++){const ty=60+i*(H-100)/(tokens-1);
+    ctx.fillStyle='#1a2340';ctx.strokeStyle='#2a3352';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(tx,ty,14,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#93a0c0';ctx.textAlign='center';ctx.fillText('t'+i,tx,ty+4);
+    // line to router
+    ctx.strokeStyle='#2a3352';ctx.beginPath();ctx.moveTo(tx+14,ty);ctx.lineTo(rx-40,H/2);ctx.stroke();
+  }
+  // router
+  ctx.fillStyle='#131a2e';ctx.strokeStyle='#f59e0b';ctx.lineWidth=2;
+  ctx.fillRect(rx-40,H/2-40,80,80);ctx.strokeRect(rx-40,H/2-40,80,80);
+  ctx.fillStyle='#f59e0b';ctx.textAlign='center';ctx.fillText('router',rx,H/2-2);ctx.fillText('top-1',rx,H/2+16);
+  // experts
+  for(let e=0;e<E;e++){const ey=60+e*(H-120)/(E-1);
+    ctx.fillStyle=EXC[e];ctx.globalAlpha=.18;ctx.fillRect(ex-46,ey-22,92,44);ctx.globalAlpha=1;
+    ctx.strokeStyle=EXC[e];ctx.lineWidth=2;ctx.strokeRect(ex-46,ey-22,92,44);
+    ctx.fillStyle=EXC[e];ctx.fillText('expert '+e,ex,ey+4);
+    // routed tokens from router to this expert (colored by chosen)
+  }
+  // draw one highlighted route per token to its expert
+  for(let i=0;i<tokens;i++){const ty=60+i*(H-100)/(tokens-1);const e=assign[i];const ey=60+e*(H-120)/(E-1);
+    ctx.strokeStyle=EXC[e];ctx.globalAlpha=.85;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(rx+40,H/2);ctx.lineTo(ex-46,ey);ctx.stroke();ctx.globalAlpha=1;}
+  ctx.fillStyle='#93a0c0';ctx.fillText('tokens',tx,30);ctx.fillText('experts (only 1 runs per token)',ex,30);
+}
+
+function heatColor(t){const s=[[13,19,42],[26,60,90],[34,120,120],[52,211,153]];
+  const x=Math.max(0,Math.min(1,t))*(s.length-1),i=Math.floor(x),f=x-i,a=s[i],b=s[Math.min(i+1,s.length-1)];
+  return`rgb(${a.map((v,k)=>Math.round(v+(b[k]-v)*f)).join(',')})`;}
+function drawHeat(){
+  const H=DATA.specialization.hist,E=DATA.n_experts,el=document.getElementById('heat');el.innerHTML='';
+  // header row
+  const head=document.createElement('div');head.className='hrow';head.style.gridTemplateColumns=`60px repeat(${E},1fr)`;
+  const corner=document.createElement('div');head.appendChild(corner);
+  for(let e=0;e<E;e++){const d=document.createElement('div');d.className='collab';d.textContent='exp'+e;head.appendChild(d);}
+  el.appendChild(head);
+  H.forEach((row,ti)=>{const total=row.reduce((a,b)=>a+b,0)||1;
+    const r=document.createElement('div');r.className='hrow';r.style.gridTemplateColumns=`60px repeat(${E},1fr)`;
+    const lab=document.createElement('div');lab.className='rowlab';lab.textContent='type'+ti;r.appendChild(lab);
+    row.forEach((v)=>{const frac=v/total;const cell=document.createElement('div');cell.className='cell';
+      cell.style.background=heatColor(frac);cell.textContent=(frac*100).toFixed(0)+'%';
+      cell.title=`type${ti} → ${(frac*100).toFixed(1)}%`;r.appendChild(cell);});
+    el.appendChild(r);});
+}
+function usageBar(label,usage){
+  const row=document.createElement('div');row.className='barrow';
+  const lab=document.createElement('span');lab.className='lab';lab.textContent=label;row.appendChild(lab);
+  const track=document.createElement('div');track.className='track';
+  usage.forEach((u,e)=>{const seg=document.createElement('div');seg.className='seg';
+    seg.style.width=(u*100)+'%';seg.style.background=EXC[e];
+    if(u>0.06)seg.textContent=(u*100).toFixed(0)+'%';seg.title=`exp${e}: ${(u*100).toFixed(1)}%`;track.appendChild(seg);});
+  row.appendChild(track);return row;
+}
+function drawBars(){
+  const el=document.getElementById('bars');el.innerHTML='';
+  el.appendChild(usageBar('OFF',DATA.load_balancing.aux_off.usage));
+  el.appendChild(usageBar('ON',DATA.load_balancing.aux_on.usage));
+}
+function hydrate(){
+  document.getElementById('kpi-tot').textContent=DATA.params.expert_params_total.toLocaleString();
+  document.getElementById('kpi-per').textContent=DATA.params.per_token_ffn_params.toLocaleString();
+  document.getElementById('acc').textContent=(DATA.specialization.accuracy*100).toFixed(0)+'%';
+  document.getElementById('kpi-off').textContent=(DATA.load_balancing.aux_off.max_load*100).toFixed(0)+'%';
+  document.getElementById('kpi-on').textContent=(DATA.load_balancing.aux_on.max_load*100).toFixed(0)+'%';
+  drawRoute();drawHeat();drawBars();
+}
+window.addEventListener('resize',drawRoute);
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/switch_results.json',{cache:'no-store'});if(r.ok)DATA=await r.json();}catch(e){}}hydrate();})();
+</script>
+</body>
+</html>
