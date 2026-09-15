@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Native Sparse Attention — three gated branches</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --cmp: #22d3ee;      /* compression */
+    --slc: #a78bfa;      /* selection */
+    --win: #34d399;      /* sliding window */
+    --full: #fb7185;     /* full attention */
+    --accent: #a78bfa;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--cmp); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 45%, #34d399);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 800px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 860px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+  @media (max-width: 860px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; color: #cfe8ff;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* branch cards */
+  .branch { border:1px solid var(--line); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.015); }
+  .branch h5 { margin: 0 0 4px; font-size: 15px; display:flex; align-items:center; gap:8px; }
+  .dot { width:12px;height:12px;border-radius:50%;display:inline-block; }
+  .branch p { color: var(--muted); font-size: 12.5px; margin: 4px 0 10px; }
+
+  /* key strip diagram */
+  .keys { display:flex; gap:4px; flex-wrap: wrap; margin-top:6px; }
+  .kcell { width: 20px; height: 20px; border-radius: 5px; border:1px solid var(--line); background:#0d132a; }
+  .qcell { width: 20px; height: 20px; border-radius: 5px; border:1px solid var(--accent); background: rgba(167,139,250,.25);
+           display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent); }
+  .legend-row { display:flex; align-items:center; gap:16px; margin-top:14px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .swatch { width:14px;height:14px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:6px; }
+
+  /* gate bars */
+  .gaterow { display:flex; align-items:center; gap:12px; margin:10px 0; }
+  .gaterow .lab { width: 120px; color: var(--muted); font-size:13px; }
+  .bar-track { flex:1; height: 18px; border-radius: 8px; background:#0d132a; border:1px solid var(--line); overflow:hidden; }
+  .bar-fill { height:100%; transition: width .5s ease; }
+  .gaterow .val { width: 48px; text-align:right; font-variant-numeric: tabular-nums; font-weight:700; }
+
+  /* metrics */
+  .metrics { display:grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .metrics { grid-template-columns: repeat(2,1fr);} }
+  .metric { text-align:center; background: var(--panel-2); border:1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .metric .v { font-size: 26px; font-weight: 800; background: linear-gradient(90deg,#22d3ee,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .metric .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin: 6px 0 12px; flex-wrap: wrap; }
+  input[type=range] { flex:1; min-width:180px; accent-color: var(--accent); }
+  .stepinfo { color: var(--muted); font-size: 13px; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  table.map { width:100%; border-collapse: collapse; font-size: 13px; }
+  table.map td, table.map th { border:1px solid var(--line); padding:8px 10px; text-align:left; }
+  table.map th { color: var(--muted); font-weight:600; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Native Sparse Attention</h1>
+  <p>A drop-in attention that is <b>sparse by construction and trainable end-to-end</b>. Every query is answered by <b>three parallel branches</b> — <span style="color:var(--cmp)">compressed</span> coarse tokens, <span style="color:var(--slc)">selected</span> important blocks, and a local <span style="color:var(--win)">sliding window</span> — merged by a learned <b>gate</b>. Everything below is driven by two tiny models trained head-to-head on CPU in this folder.</p>
+  <div class="badges">
+    <span class="badge">Yuan et al., 2025</span>
+    <span class="badge">arXiv:2502.11089</span>
+    <span class="badge">Sparse Attention</span>
+    <span class="badge">Natively Trainable</span>
+    <span class="badge">Gated 3-branch</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The three branches, per query</h2>
+  <p class="section-sub">Instead of scoring a query against <i>all</i> past keys (full attention), NSA routes it through three cheap paths. Each looks at a different, small subset of key positions; a learned gate decides how much to trust each. The strip shows which key positions branch touches for the highlighted query <span style="color:var(--accent)">q</span>.</p>
+  <div class="grid3">
+    <div class="branch">
+      <h5><span class="dot" style="background:var(--cmp)"></span>1 · Compression</h5>
+      <p>Keys/values are mean-pooled into coarse block tokens — cheap <b>global</b> context. §3.3.1</p>
+      <div class="keys" id="strip-cmp"></div>
+    </div>
+    <div class="branch">
+      <h5><span class="dot" style="background:var(--slc)"></span>2 · Selection</h5>
+      <p>Reuse compression scores to pick the top-<i>n</i> important blocks; attend their <b>fine</b> keys. The trainable sparse core. §3.3.2</p>
+      <div class="keys" id="strip-slc"></div>
+    </div>
+    <div class="branch">
+      <h5><span class="dot" style="background:var(--win)"></span>3 · Sliding window</h5>
+      <p>The most recent <i>w</i> tokens — guarantees strong <b>local</b> modeling so the sparse paths need not relearn it. §3.3.3</p>
+      <div class="keys" id="strip-win"></div>
+    </div>
+  </div>
+  <div class="legend-row">
+    <span><span class="swatch" style="background:rgba(167,139,250,.25);border:1px solid var(--accent)"></span>query q</span>
+    <span><span class="swatch" style="background:var(--cmp)"></span>compressed block</span>
+    <span><span class="swatch" style="background:var(--slc)"></span>selected fine keys</span>
+    <span><span class="swatch" style="background:var(--win)"></span>window keys</span>
+    <span><span class="swatch" style="background:#0d132a;border:1px solid var(--line)"></span>not attended</span>
+  </div>
+  <div class="controls" style="margin-top:14px">
+    <span class="stepinfo">move the query &nbsp;q &rarr;</span>
+    <input type="range" id="q-scrub" min="0" max="1" value="0" />
+    <span class="stepinfo" id="q-info"></span>
+  </div>
+
+  <h2 class="section-title">How the branches combine</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Gated output <span class="section-sub" style="font-size:12px">(paper Eq. 5)</span></h4>
+      <p class="small">Each branch produces its own attention output; a per-query gate <code class="k">g</code> (softmax of a linear map of the query) mixes them.</p>
+      <div class="formula">o = g_cmp·Attn(q, K̃_cmp, Ṽ_cmp)      # compressed
+  + g_slc·Attn(q, K_slc,  V_slc )      # selected blocks
+  + g_win·Attn(q, K_win,  V_win )      # sliding window
+
+g = softmax(W_g · q)        (g_cmp + g_slc + g_win = 1)</div>
+    </div>
+    <div class="card">
+      <h4>Block selection <span class="section-sub" style="font-size:12px">(paper §3.3.2)</span></h4>
+      <p class="small">Selection is made <b>trainable</b> by reusing the compression attention weights as an importance score — no separate scorer, no non-differentiable detour on the forward path.</p>
+      <div class="formula">p_block = softmax(q · K̃_cmp)         # per-block importance
+I = top-n( p_block )                 # indices of chosen blocks
+K_slc, V_slc = fine keys/values of blocks in I</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Learned gate weights (this folder's model)</h2>
+  <p class="section-sub">Averaged over held-out queries on the <b>repeat-induction</b> task (a random block repeated twice, so predicting the 2nd copy needs a long-range jump one period back). The window alone can't reach that far, so the model leans on <span style="color:var(--slc)">selection</span>.</p>
+  <div class="card" id="gate-card"></div>
+
+  <h2 class="section-title">Does sparse match full? &nbsp;And how much is saved?</h2>
+  <p class="section-sub">Two identical tiny models were trained head-to-head: one with full causal attention, one with NSA. NSA <b>matches</b> full-attention accuracy while a full-context query touches fewer key positions.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Held-out accuracy</h4>
+      <p class="small">Next-token accuracy on second-copy positions (induction required).</p>
+      <div id="acc-bars"></div>
+    </div>
+    <div class="card">
+      <h4>Key positions touched by a full-context query</h4>
+      <p class="small">Full attention scores every past key; NSA scores only compressed + selected + window.</p>
+      <div id="pos-bars"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Why it wins at scale</h2>
+  <p class="section-sub">NSA's per-query budget grows only as <code class="k">⌈L/block⌉ + n·block + window</code> (compression is the sole term that grows with length, and only sub-linearly), while full attention grows as <code class="k">L</code>. At the paper's 64k-token regime the gap is enormous. Curve below is computed from this run's exact NSA configuration.</p>
+  <div class="card">
+    <canvas id="scale" width="1100" height="420" style="width:100%;height:auto"></canvas>
+    <div class="legend-row">
+      <span><span class="swatch" style="background:var(--full)"></span>full attention (= L)</span>
+      <span><span class="swatch" style="background:var(--slc)"></span>NSA budget</span>
+      <span id="scale-note" style="margin-left:auto"></span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Results from this folder's models</h2>
+  <div class="metrics" id="metrics"></div>
+
+  <h2 class="section-title">Code &rarr; paper map</h2>
+  <div class="card">
+    <table class="map">
+      <tr><th>Component</th><th>File</th><th>Paper</th></tr>
+      <tr><td>Three-branch gated attention</td><td><code class="k">src/nsa.py</code> · <code class="k">NSAAttention</code></td><td>§3.1, Eq. 5</td></tr>
+      <tr><td>Compression (blockwise pooling)</td><td><code class="k">NSAAttention.forward</code> (cmp)</td><td>§3.3.1</td></tr>
+      <tr><td>Top-n block selection</td><td><code class="k">NSAAttention.forward</code> (slc)</td><td>§3.3.2</td></tr>
+      <tr><td>Sliding window</td><td><code class="k">NSAAttention.forward</code> (win)</td><td>§3.3.3</td></tr>
+      <tr><td>Full-attention baseline</td><td><code class="k">src/nsa.py</code> · <code class="k">FullAttention</code></td><td>baseline</td></tr>
+      <tr><td>Tiny decoder + train/eval</td><td><code class="k">src/model.py</code> · <code class="k">demo/run_demo.py</code></td><td>—</td></tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Native Sparse Attention” (NSA)</b>, Yuan et al., 2025.
+    Models, metrics and the gate weights on this page are produced by <code class="k">python demo/run_demo.py</code> in this folder.
+    Serve the folder (<code class="k">python -m http.server</code>) to load live data from <code class="k">data/nsa_run.json</code>.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in real run (data/nsa_run.json). Over http, live data is fetched instead.
+const BAKED = {"meta":{"seq_len":64,"period":32,"block":8,"n_select":3,"window":8,"num_symbols":16},"accuracy":{"full":1.0,"nsa":0.9998124837875366},"positions":{"full":63.0,"nsa":49.890499114990234,"saved_pct":20.808731563507564,"context":63},"gate":{"compression":0.2727453112602234,"selection":0.492068275809288,"window":0.23518644273281097},"scaling":[{"length":64,"full":64,"nsa":40},{"length":128,"full":128,"nsa":48},{"length":256,"full":256,"nsa":64},{"length":512,"full":512,"nsa":96},{"length":1024,"full":1024,"nsa":160},{"length":4096,"full":4096,"nsa":544},{"length":16384,"full":16384,"nsa":2080},{"length":65536,"full":65536,"nsa":8224}]};
+
+let DATA = BAKED;
+
+// ---- interactive three-branch key strip
+function buildStrips() {
+  const m = DATA.meta;
+  const T = 40;                       // positions shown in the strip (compact)
+  const block = m.block, win = m.window, nsel = m.n_select, period = m.period;
+  const scrub = document.getElementById("q-scrub");
+  scrub.max = T - 1;
+  scrub.value = Math.min(T - 1, period + 6);   // a query in the 2nd copy
+
+  function render(qi) {
+    const nb = Math.ceil((qi + 1) / block);
+    // selection target = induction match one period back (+ its block neighbours)
+    const matchPos = Math.max(0, qi - period + 1);
+    const matchBlock = Math.floor(matchPos / block);
+    const sel = new Set();
+    for (let k = 0; k < nsel; k++) sel.add(Math.min(nb - 1, matchBlock + k - Math.floor(nsel/2)));
+    function fill(elId, kind) {
+      const el = document.getElementById(elId); el.innerHTML = "";
+      for (let i = 0; i < T; i++) {
+        if (i === qi) { const q = document.createElement("div"); q.className = "qcell"; q.textContent = "q"; el.appendChild(q); continue; }
+        const c = document.createElement("div"); c.className = "kcell";
+        const causal = i <= qi;
+        if (!causal) { c.style.opacity = ".25"; el.appendChild(c); continue; }
+        if (kind === "cmp") {
+          // color every block boundary lightly; the coarse token summarises the block
+          const b = Math.floor(i / block);
+          c.style.background = (b % 2 === 0) ? "rgba(34,211,238,.30)" : "rgba(34,211,238,.16)";
+        } else if (kind === "slc") {
+          if (sel.has(Math.floor(i / block))) c.style.background = "var(--slc)";
+        } else if (kind === "win") {
+          if (qi - i < win) c.style.background = "var(--win)";
+        }
+        el.appendChild(c);
+      }
+    }
+    fill("strip-cmp", "cmp"); fill("strip-slc", "slc"); fill("strip-win", "win");
+    document.getElementById("q-info").textContent =
+      `q at position ${qi} · window covers ${win} recent · selection jumps back ~${period} to the first copy`;
+  }
+  scrub.oninput = () => render(+scrub.value);
+  render(+scrub.value);
+}
+
+// ---- gate weights
+function renderGate() {
+  const g = DATA.gate;
+  const rows = [
+    ["Compression", g.compression, "var(--cmp)"],
+    ["Selection", g.selection, "var(--slc)"],
+    ["Sliding window", g.window, "var(--win)"],
+  ];
+  const el = document.getElementById("gate-card"); el.innerHTML = "";
+  rows.forEach(([lab, v, col]) => {
+    const row = document.createElement("div"); row.className = "gaterow";
+    row.innerHTML = `<div class="lab">${lab}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%;background:${col}"></div></div>
+      <div class="val">${(v*100).toFixed(0)}%</div>`;
+    el.appendChild(row);
+    requestAnimationFrame(() => { row.querySelector(".bar-fill").style.width = (v*100) + "%"; });
+  });
+}
+
+// ---- accuracy + positions bars
+function twoBar(elId, a, b, la, lb, cb, unit) {
+  const el = document.getElementById(elId); el.innerHTML = "";
+  const mx = Math.max(a, b);
+  [[la, a, "var(--full)"], [lb, b, cb]].forEach(([lab, v, col]) => {
+    const row = document.createElement("div"); row.className = "gaterow";
+    const disp = unit === "%" ? (v*100).toFixed(1)+"%" : v.toFixed(1);
+    row.innerHTML = `<div class="lab">${lab}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:0%;background:${col}"></div></div>
+      <div class="val">${disp}</div>`;
+    el.appendChild(row);
+    requestAnimationFrame(() => { row.querySelector(".bar-fill").style.width = (v/mx*100) + "%"; });
+  });
+}
+function renderCompare() {
+  twoBar("acc-bars", DATA.accuracy.full, DATA.accuracy.nsa, "Full attention", "NSA", "var(--slc)", "%");
+  twoBar("pos-bars", DATA.positions.full, DATA.positions.nsa, "Full attention", "NSA", "var(--slc)", "n");
+}
+
+// ---- scaling curve (log-log)
+function renderScale() {
+  const cv = document.getElementById("scale"); const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, pad = 56;
+  ctx.clearRect(0,0,W,H);
+  const pts = DATA.scaling;
+  const xs = pts.map(p=>p.length);
+  const ys = pts.flatMap(p=>[p.full, p.nsa]);
+  const lx = v => Math.log10(v);
+  const xmin = lx(Math.min(...xs)), xmax = lx(Math.max(...xs));
+  const ymin = lx(Math.min(...ys)), ymax = lx(Math.max(...ys));
+  const X = v => pad + (lx(v)-xmin)/(xmax-xmin)*(W-2*pad);
+  const Y = v => H-pad - (lx(v)-ymin)/(ymax-ymin)*(H-2*pad);
+  // grid
+  ctx.strokeStyle = "#2a3352"; ctx.fillStyle = "#93a0c0"; ctx.font = "12px ui-monospace, monospace";
+  ctx.lineWidth = 1;
+  xs.forEach(v => { ctx.globalAlpha=.35; ctx.beginPath(); ctx.moveTo(X(v),pad); ctx.lineTo(X(v),H-pad); ctx.stroke();
+    ctx.globalAlpha=1; ctx.textAlign="center"; ctx.fillText(v>=1024?(v/1024)+"k":v, X(v), H-pad+18); });
+  ctx.textAlign="right";
+  [10,100,1000,10000,100000].forEach(v=>{ if(v<Math.min(...ys)||v>Math.max(...ys)*1.2) return;
+    ctx.globalAlpha=.25; ctx.beginPath(); ctx.moveTo(pad,Y(v)); ctx.lineTo(W-pad,Y(v)); ctx.stroke();
+    ctx.globalAlpha=1; ctx.fillText(v>=1000?(v/1000)+"k":v, pad-8, Y(v)+4); });
+  ctx.textAlign="center"; ctx.fillText("context length L  (log)", W/2, H-14);
+  // lines
+  function line(key, col) {
+    ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath();
+    pts.forEach((p,i)=>{ const x=X(p.length), y=Y(p[key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+    ctx.fillStyle = col; pts.forEach(p=>{ ctx.beginPath(); ctx.arc(X(p.length),Y(p[key]),3.5,0,7); ctx.fill(); });
+  }
+  line("full", getComputedStyle(document.documentElement).getPropertyValue("--full").trim());
+  line("nsa", getComputedStyle(document.documentElement).getPropertyValue("--slc").trim());
+  const last = pts[pts.length-1];
+  document.getElementById("scale-note").textContent =
+    `at L=${last.length>=1024?(last.length/1024)+"k":last.length}: ${(100*(1-last.nsa/last.full)).toFixed(0)}% fewer positions`;
+}
+
+// ---- metrics tiles
+function renderMetrics() {
+  const p = DATA;
+  const items = [
+    [(p.accuracy.full*100).toFixed(0)+"%", "full-attention accuracy"],
+    [(p.accuracy.nsa*100).toFixed(0)+"%", "NSA accuracy (matches full)"],
+    [p.positions.saved_pct.toFixed(0)+"%", `fewer positions (L=${p.positions.context})`],
+    [(p.gate.selection*100).toFixed(0)+"%", "gate mass on selection branch"],
+  ];
+  const el = document.getElementById("metrics"); el.innerHTML="";
+  items.forEach(([v,l])=>{ const d=document.createElement("div"); d.className="metric";
+    d.innerHTML=`<div class="v">${v}</div><div class="l">${l}</div>`; el.appendChild(d); });
+}
+
+function initAll(){ buildStrips(); renderGate(); renderCompare(); renderScale(); renderMetrics(); }
+
+(async function init(){
+  if (location.protocol.startsWith("http")) {
+    try { const res = await fetch("../data/nsa_run.json", {cache:"no-store"});
+      if (res.ok) { DATA = await res.json(); } } catch(e) {}
+  }
+  initAll();
+})();
+</script>
+</body>
+</html>
