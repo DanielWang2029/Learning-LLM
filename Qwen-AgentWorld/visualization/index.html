@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Qwen-AgentWorld — Language World Model</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--state:#22d3ee;--action:#a78bfa;--next:#34d399;--goal:#f59e0b;--path:#fb7185;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%,#123a2f 0%,transparent 60%),var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--state)}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(52,211,153,.14));
+    border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#34d399 75%,#f59e0b);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:840px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px;max-width:880px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:860px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .statline{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:150px}
+  .stat .v{font-size:26px;font-weight:800}.stat .l{color:var(--muted);font-size:12px;margin-top:2px}
+  /* world-model loop */
+  .loop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin:6px 0}
+  .node{border:1px solid var(--line);border-radius:12px;padding:12px 16px;text-align:center;min-width:130px;background:var(--panel-2)}
+  .node.s{border-color:var(--state)}.node.a{border-color:var(--action)}
+  .node.wm{border-color:var(--next);background:linear-gradient(180deg,rgba(52,211,153,.12),transparent)}
+  .node.ns{border-color:var(--next)}
+  .node .t{font-weight:800}.node .d{color:var(--muted);font-size:12px;margin-top:3px}
+  .chev{color:var(--muted);font-size:26px}
+  /* grid */
+  #grid{display:grid;gap:4px;margin:0 auto;max-width:420px}
+  .cellg{aspect-ratio:1/1;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);position:relative}
+  .cellg.wall{background:#05070f;border-color:#05070f}
+  .cellg.path{background:rgba(251,113,133,.25);border-color:var(--path);color:#fff}
+  .cellg.start{background:rgba(34,211,238,.3);border-color:var(--state);color:#fff;font-weight:700}
+  .cellg.goal{background:rgba(245,158,11,.3);border-color:var(--goal);color:#fff;font-weight:700}
+  .cellg.agent{box-shadow:0 0 0 3px #fff inset}
+  .controls{display:flex;align-items:center;gap:12px;margin-top:14px;justify-content:center;flex-wrap:wrap}
+  button{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:10px;
+    padding:8px 16px;cursor:pointer;font-size:14px}
+  button:hover{border-color:var(--state)}
+  input[type=range]{width:220px}
+  .legend{display:flex;gap:14px;color:var(--muted);font-size:12px;margin-top:10px;flex-wrap:wrap;justify-content:center}
+  .chip{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  .rolls{font-family:ui-monospace,monospace;font-size:13px;line-height:1.9}
+  .match{color:var(--next);font-weight:700}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Qwen-AgentWorld · Language World Model</h1>
+  <p>A world model predicts the <b>next state</b> from <b>(state, action)</b>. Once learned, an agent can plan
+  and roll out trajectories <b>in imagination</b> — never touching the real (costly, risky) environment — and
+  still reach its goal.</p>
+  <div class="badges">
+    <span class="badge">Alibaba, 2026</span>
+    <span class="badge">arXiv:2606.24597</span>
+    <span class="badge">(state, action) → next state</span>
+    <span class="badge">Imagined Rollouts</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The world-model loop</h2>
+  <p class="section-sub">Feed the predicted next state back in as the current state to imagine an entire
+  trajectory from a single starting point.</p>
+  <div class="card">
+    <div class="loop">
+      <div class="node s"><div class="t">state sₜ</div><div class="d">grid cell (row, col)</div></div>
+      <div class="chev">+</div>
+      <div class="node a"><div class="t">action aₜ</div><div class="d">up / down / left / right</div></div>
+      <div class="chev">›</div>
+      <div class="node wm"><div class="t">World Model</div><div class="d">P(sₜ₊₁ | sₜ, aₜ)</div></div>
+      <div class="chev">›</div>
+      <div class="node ns"><div class="t">next state sₜ₊₁</div><div class="d">fed back in ↺</div></div>
+    </div>
+    <div class="formula" style="margin-top:14px">policy:       sₜ → aₜ
+world model:  (sₜ, aₜ) → sₜ₊₁          # the missing piece for general agents
+plan:         search actions in imagination until sₜ = goal</div>
+  </div>
+
+  <h2 class="section-title">Measured on the demo run</h2>
+  <div class="statline" id="stats"></div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="card">
+      <h4>Imagined plan, executed in the real environment</h4>
+      <p class="small">The route was found by BFS <b>inside the world model</b>. Press play to watch the agent
+      follow it around the wall from start (cyan) to goal (gold).</p>
+      <div id="grid"></div>
+      <div class="controls">
+        <button id="play">▶ Play</button>
+        <button id="reset">⟲ Reset</button>
+        <input type="range" id="slider" min="0" value="0" />
+        <span id="stepinfo" class="small"></span>
+      </div>
+      <div class="legend">
+        <span><span class="chip start" style="background:rgba(34,211,238,.6)"></span>start</span>
+        <span><span class="chip" style="background:rgba(245,158,11,.6)"></span>goal</span>
+        <span><span class="chip" style="background:rgba(251,113,133,.5)"></span>planned path</span>
+        <span><span class="chip" style="background:#05070f;border:1px solid #333"></span>wall</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Imagined vs. real rollout</h4>
+      <p class="small">The same action sequence rolled out by the world model and by the true environment.
+      They match step for step — the model has learned the dynamics.</p>
+      <div class="rolls" id="rolls"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Qwen-AgentWorld: Language World Models for General Agents”</b> (Alibaba, 2026).
+    Data from <code class="k">demo/run_demo.py</code> → <code class="k">data/world_model_result.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"size": 6, "walls": [3, 9, 15, 21, 27], "start": 0, "goal": 5, "acc_all": 1.0, "acc_held_out": 1.0, "plan_actions": [1, 1, 1, 1, 1, 3, 3, 3, 3, 0, 0, 0, 0, 0, 3], "plan_action_names": ["down", "down", "down", "down", "down", "right", "right", "right", "right", "up", "up", "up", "up", "up", "right"], "imagined_states": [0, 6, 12, 18, 24, 30, 31, 32, 33, 34, 28, 22, 16, 10, 4, 5], "real_states": [0, 6, 12, 18, 24, 30, 31, 32, 33, 34, 28, 22, 16, 10, 4, 5], "imagined_matches_real": true, "plan_reaches_goal": true, "planning_success_rate": 1.0};
+
+let D, agentStep=0, timer=null;
+
+function render(data){
+  D=data;
+  const stats=[
+    ["next-state acc", (D.acc_all*100).toFixed(0)+"%", "all transitions"],
+    ["held-out acc", (D.acc_held_out*100).toFixed(0)+"%", "unseen (state,action)"],
+    ["planning success", (D.planning_success_rate*100).toFixed(0)+"%", "imagined plans, real env"],
+    ["imagined = real", D.imagined_matches_real?"yes":"no", "rollout match"],
+  ];
+  document.getElementById('stats').innerHTML=stats.map(s=>
+    `<div class="stat"><div class="v">${s[1]}</div><div class="l">${s[0]} — ${s[2]}</div></div>`).join('');
+
+  document.getElementById('slider').max=D.imagined_states.length-1;
+  buildGrid();
+  buildRolls();
+  drawAgent();
+}
+
+function buildGrid(){
+  const g=document.getElementById('grid');
+  g.style.gridTemplateColumns=`repeat(${D.size},1fr)`;
+  g.innerHTML='';
+  const walls=new Set(D.walls), path=new Set(D.imagined_states);
+  for(let c=0;c<D.size*D.size;c++){
+    const d=document.createElement('div');d.className='cellg';d.id='cell'+c;
+    if(walls.has(c))d.classList.add('wall');
+    else if(c===D.start){d.classList.add('start');d.textContent='S';}
+    else if(c===D.goal){d.classList.add('goal');d.textContent='G';}
+    else if(path.has(c)){d.classList.add('path');}
+    g.appendChild(d);
+  }
+}
+
+function buildRolls(){
+  const el=document.getElementById('rolls');
+  const im=D.imagined_states, re=D.real_states, an=D.plan_action_names;
+  let rows='<div>step&nbsp;&nbsp;action&nbsp;&nbsp;imagined&nbsp;&nbsp;real</div>';
+  for(let i=0;i<im.length;i++){
+    const same=im[i]===re[i];
+    const act=i===0?'&nbsp;·&nbsp;':an[i-1];
+    rows+=`<div>${String(i).padStart(2,'0')}&nbsp;&nbsp;${act.padEnd?act:''}
+      <span style="color:var(--action)">${act}</span>&nbsp;→&nbsp;
+      cell ${String(im[i]).padStart(2,'0')} &nbsp; cell ${String(re[i]).padStart(2,'0')}
+      ${same?'<span class="match">✓</span>':'<span style="color:#fb7185">✗</span>'}</div>`;
+  }
+  el.innerHTML=rows;
+}
+
+function drawAgent(){
+  document.querySelectorAll('.cellg').forEach(c=>c.classList.remove('agent'));
+  const cell=document.getElementById('cell'+D.imagined_states[agentStep]);
+  if(cell)cell.classList.add('agent');
+  const an=D.plan_action_names;
+  document.getElementById('stepinfo').textContent=
+    `step ${agentStep}/${D.imagined_states.length-1}`+
+    (agentStep>0?`  ·  ${an[agentStep-1]}`:'  ·  start');
+  document.getElementById('slider').value=agentStep;
+}
+
+document.getElementById('slider').addEventListener('input',e=>{agentStep=+e.target.value;drawAgent();});
+document.getElementById('reset').addEventListener('click',()=>{clearInterval(timer);timer=null;agentStep=0;drawAgent();});
+document.getElementById('play').addEventListener('click',()=>{
+  if(timer){clearInterval(timer);timer=null;return;}
+  if(agentStep>=D.imagined_states.length-1)agentStep=0;
+  timer=setInterval(()=>{
+    if(agentStep>=D.imagined_states.length-1){clearInterval(timer);timer=null;return;}
+    agentStep++;drawAgent();
+  },420);
+});
+
+(async function init(){
+  let data=BAKED;
+  if(location.protocol.startsWith('http')){
+    try{const r=await fetch('../data/world_model_result.json',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
+  }
+  render(data);
+})();
+</script>
+</body>
+</html>
