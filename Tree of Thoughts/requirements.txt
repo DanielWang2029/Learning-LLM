@@ -1,0 +1,7 @@
+# The Tree-of-Thoughts demo is pure Python standard library (a search over a
+# tiny game tree) — it runs in a fraction of a second with no tensors. numpy is
+# listed as the only optional dependency for anyone extending the analysis.
+#
+# Optionally install into the shared CPU environment with:
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+numpy>=1.26
