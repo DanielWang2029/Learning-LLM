@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Llama 2 — Grouped-Query Attention Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --q:#22d3ee; --kv:#fb7185; --mha:#64748b; --gqa:#34d399; --mqa:#f59e0b; --rlhf:#a78bfa;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #10203a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--q); }
+  header.hero { padding:40px 24px 28px; text-align:center; background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(52,211,153,.14) 45%, rgba(245,158,11,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px; background:linear-gradient(90deg,#22d3ee,#34d399 45%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; } @media (max-width:900px){ .grid3{grid-template-columns:1fr;} }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:900px){ .grid2{grid-template-columns:1fr;} }
+  .regime h4 { margin:0 0 2px; text-align:center; } .regime .tagline { text-align:center; color:var(--muted); font-size:12px; margin-bottom:10px; }
+  .heads-svg { width:100%; height:190px; display:block; }
+  .kvline { font-size:12px; color:var(--muted); text-align:center; margin-top:8px; }
+  .kvline b { color:var(--ink); }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  canvas { width:100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .kpi { display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; }
+  .kpi div { background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:8px 14px; }
+  .kpi b { font-size:20px; } .kpi span { color:var(--muted); font-size:12px; display:block; }
+  .bar-row { display:flex; align-items:center; gap:10px; margin:11px 0; }
+  .bar-row .name { width:150px; font-size:13px; } .bar-row .track { flex:1; background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; overflow:hidden; position:relative; }
+  .bar-row .fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; }
+  .bar-row .val { width:96px; text-align:right; font-variant-numeric:tabular-nums; }
+  .pipe { display:flex; align-items:stretch; gap:0; flex-wrap:wrap; }
+  .stage { flex:1; min-width:150px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:6px; background:var(--panel-2); }
+  .stage h5 { margin:0 0 6px; font-size:13px; } .stage p { margin:0; color:var(--muted); font-size:12px; }
+  .stage .num { font-size:11px; color:var(--rlhf); font-weight:700; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Llama 2 — Grouped-Query Attention</h1>
+  <p>Llama 2 keeps the LLaMA recipe (RMSNorm · RoPE · SwiGLU) and adds <b>Grouped-Query Attention (GQA)</b>: query heads share key/value heads in groups, shrinking the decode-time KV cache with near multi-head quality. Below: how MHA, GQA and MQA share K/V heads, and what that saves in memory.</p>
+  <div class="badges">
+    <span class="badge">Touvron et al., 2023</span>
+    <span class="badge">arXiv:2307.09288</span>
+    <span class="badge">Decoder-only</span>
+    <span class="badge">GQA</span>
+    <span class="badge">RLHF chat</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">MHA vs GQA vs MQA — who shares K/V heads?</h2>
+  <p class="section-sub">Cyan = query heads, red = key/value heads. Lines show which query heads read from which K/V head. Fewer K/V heads → smaller KV cache.</p>
+  <div class="grid3">
+    <div class="card regime"><h4 style="color:var(--mha)">MHA</h4><div class="tagline">Multi-Head — 1 K/V head per query head</div><svg class="heads-svg" id="svg-mha"></svg><div class="kvline" id="kv-mha"></div></div>
+    <div class="card regime" style="border-color:#34d39955"><h4 style="color:var(--gqa)">GQA <span style="font-size:12px">(Llama 2)</span></h4><div class="tagline">Grouped-Query — groups share a K/V head</div><svg class="heads-svg" id="svg-gqa"></svg><div class="kvline" id="kv-gqa"></div></div>
+    <div class="card regime"><h4 style="color:var(--mqa)">MQA</h4><div class="tagline">Multi-Query — 1 K/V head for all</div><svg class="heads-svg" id="svg-mqa"></svg><div class="kvline" id="kv-mqa"></div></div>
+  </div>
+
+  <h2 class="section-title">KV-cache memory at Llama-2-70B scale</h2>
+  <p class="section-sub">Cache size for one sequence at <span id="big-cfg"></span> (fp16). This is the memory that must be stored and re-read for every generated token — GQA is the sweet spot.</p>
+  <div class="card">
+    <div id="kv-bars"></div>
+    <p class="small" id="kv-note" style="margin-top:12px;color:var(--muted)"></p>
+  </div>
+
+  <h2 class="section-title">It learns: GQA training loss from a real run</h2>
+  <p class="section-sub">Actual loss recorded by <code class="k">demo/run_demo.py</code> training the tiny GQA model on the copy task (log scale). MHA, GQA and MQA all reach 100% on this task — GQA does not cost quality here.</p>
+  <div class="card">
+    <canvas id="loss-canvas" height="250"></canvas>
+    <div class="kpi" id="kpi"></div>
+  </div>
+
+  <h2 class="section-title">The Llama 2-Chat alignment pipeline (high level)</h2>
+  <p class="section-sub">Beyond architecture, Llama 2-Chat is aligned with a multi-stage RLHF pipeline (paper Section 3). This repo implements the architecture; the pipeline is summarized here for context.</p>
+  <div class="card">
+    <div class="pipe">
+      <div class="stage"><div class="num">1 · Pretrain</div><h5>Base LLM</h5><p>Decoder-only model (this repo) trained on ~2T tokens of public text.</p></div>
+      <div class="stage"><div class="num">2 · SFT</div><h5>Supervised fine-tuning</h5><p>Fine-tune on high-quality instruction/response demonstrations.</p></div>
+      <div class="stage"><div class="num">3 · Reward models</div><h5>Helpfulness + Safety</h5><p>Two reward models trained on human preference comparisons.</p></div>
+      <div class="stage"><div class="num">4 · RLHF</div><h5>Rejection sampling + PPO</h5><p>Optimize the policy against the reward models, iteratively.</p></div>
+      <div class="stage"><div class="num">→</div><h5>Llama 2-Chat</h5><p>A helpful, safer conversational model.</p></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Llama 2: Open Foundation and Fine-Tuned Chat Models”</b> (Touvron et al., 2023).
+    Diagram, loss curve and KV-cache numbers generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate the data.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "num_parameters":143808,"final_loss":0.0001,"final_accuracy":1.0,"elapsed_seconds":27.6,
+  "config":{"dim":64,"n_layers":3,"n_heads":8,"n_kv_heads":2,"seq_len":6,"vocab_size":16},
+  "loss_curve":[
+    {"step":1,"loss":2.7509},{"step":50,"loss":0.1077},{"step":100,"loss":0.003},
+    {"step":150,"loss":0.0016},{"step":200,"loss":0.0011},{"step":250,"loss":0.0008},
+    {"step":300,"loss":0.0006},{"step":350,"loss":0.0005},{"step":400,"loss":0.0004},
+    {"step":450,"loss":0.0003},{"step":500,"loss":0.0003},{"step":550,"loss":0.0003},
+    {"step":600,"loss":0.0002},{"step":650,"loss":0.0002},{"step":700,"loss":0.0002},
+    {"step":750,"loss":0.0002},{"step":800,"loss":0.0001}],
+  "regimes_demo":[
+    {"regime":"MHA","n_kv_heads":8,"acc":1.0,"kv_bytes":4608},
+    {"regime":"GQA","n_kv_heads":2,"acc":1.0,"kv_bytes":1152},
+    {"regime":"MQA","n_kv_heads":1,"acc":1.0,"kv_bytes":576}],
+  "big_config":{"n_layers":80,"n_heads":64,"head_dim":128,"seq_len":4096,"batch_size":1,"dtype_bytes":2,"n_kv_heads_gqa":8},
+  "kv_cache_big":[
+    {"regime":"MHA","n_kv_heads":64,"kv_bytes":10737418240,"reduction_vs_mha":1.0},
+    {"regime":"GQA","n_kv_heads":8,"kv_bytes":1342177280,"reduction_vs_mha":8.0},
+    {"regime":"MQA","n_kv_heads":1,"kv_bytes":167772160,"reduction_vs_mha":64.0}]
+};
+
+function humanBytes(n){ const u=["B","KB","MB","GB","TB"]; let i=0; while(n>=1024&&i<u.length-1){n/=1024;i++;} return n.toFixed(n<10?2:1)+" "+u[i]; }
+
+// ---- head-sharing diagrams (8 query heads)
+function drawHeads(svgId, nkv, color){
+  const svg=document.getElementById(svgId); const W=svg.clientWidth||300, H=190;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); const nq=8;
+  const qy=28, kvy=150, qr=9, kvw=Math.min(46,(W-40)/nkv-8), kvh=20;
+  const qx=i=>20+ i*((W-40)/(nq-1));
+  const groupSize=nq/nkv;
+  let out='';
+  // lines
+  for(let i=0;i<nq;i++){ const g=Math.floor(i/groupSize);
+    const kvcx=(W/ (nkv)) * (g+0.5);
+    out+=`<line x1="${qx(i)}" y1="${qy+qr}" x2="${kvcx}" y2="${kvy}" stroke="${color}" stroke-width="1.4" opacity="0.55"/>`; }
+  // query heads
+  for(let i=0;i<nq;i++) out+=`<circle cx="${qx(i)}" cy="${qy}" r="${qr}" fill="#22d3ee"/>`;
+  // kv heads
+  for(let g=0;g<nkv;g++){ const cx=(W/nkv)*(g+0.5); out+=`<rect x="${cx-kvw/2}" y="${kvy}" width="${kvw}" height="${kvh}" rx="5" fill="#fb7185"/>`; }
+  out+=`<text x="${W/2}" y="14" fill="#93a0c0" font-size="11" text-anchor="middle">8 query heads</text>`;
+  out+=`<text x="${W/2}" y="${kvy+kvh+16}" fill="#93a0c0" font-size="11" text-anchor="middle">${nkv} K/V head${nkv>1?'s':''}</text>`;
+  svg.innerHTML=out;
+}
+
+function drawLoss(data){
+  const canvas=document.getElementById('loss-canvas'); const ratio=window.devicePixelRatio||1;
+  const cssW=canvas.clientWidth||900, cssH=250; canvas.width=cssW*ratio; canvas.height=cssH*ratio;
+  const ctx=canvas.getContext('2d'); ctx.scale(ratio,ratio);
+  const W=cssW,H=cssH,pad={l:56,r:16,t:16,b:34}; const pts=data.loss_curve;
+  const steps=pts.map(p=>p.step), logs=pts.map(p=>Math.log10(Math.max(p.loss,1e-4)));
+  const xmin=Math.min(...steps),xmax=Math.max(...steps),ymin=Math.min(...logs),ymax=Math.max(...logs);
+  const X=s=>pad.l+(s-xmin)/(xmax-xmin)*(W-pad.l-pad.r), Y=l=>pad.t+(ymax-l)/((ymax-ymin)||1)*(H-pad.t-pad.b);
+  ctx.clearRect(0,0,W,H); ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let e=Math.ceil(ymin);e<=Math.floor(ymax);e++){const y=Y(e);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();ctx.fillText('1e'+e,6,y+4);}
+  [xmin,Math.round((xmin+xmax)/2),xmax].forEach(s=>ctx.fillText(String(s),X(s)-8,H-12)); ctx.fillText('training step',W/2-30,H-2);
+  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b); grad.addColorStop(0,'rgba(52,211,153,.35)'); grad.addColorStop(1,'rgba(52,211,153,0)');
+  ctx.beginPath(); ctx.moveTo(X(steps[0]),Y(logs[0])); for(let i=1;i<pts.length;i++) ctx.lineTo(X(steps[i]),Y(logs[i]));
+  ctx.lineTo(X(steps.at(-1)),H-pad.b); ctx.lineTo(X(steps[0]),H-pad.b); ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(X(steps[0]),Y(logs[0])); for(let i=1;i<pts.length;i++) ctx.lineTo(X(steps[i]),Y(logs[i]));
+  ctx.strokeStyle='#34d399'; ctx.lineWidth=2.5; ctx.stroke();
+  pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(X(steps[i]),Y(logs[i]),3,0,7);ctx.fillStyle='#22d3ee';ctx.fill();});
+}
+function fillKpi(data){ const c=data.config;
+  const rows=[['final copy accuracy',(data.final_accuracy*100).toFixed(0)+'%'],['final loss',data.final_loss],
+    ['parameters',data.num_parameters.toLocaleString()],['train time (CPU)',data.elapsed_seconds+'s'],
+    ['GQA config',`${c.n_heads} Q · ${c.n_kv_heads} KV`]];
+  document.getElementById('kpi').innerHTML=rows.map(([k,v])=>`<div><b>${v}</b><span>${k}</span></div>`).join(''); }
+
+function drawKvBars(data){
+  const rows=data.kv_cache_big; const max=Math.max(...rows.map(r=>r.kv_bytes));
+  const colors={MHA:'#64748b',GQA:'#34d399',MQA:'#f59e0b'};
+  document.getElementById('kv-bars').innerHTML=rows.map(r=>{
+    const pct=Math.max(6, r.kv_bytes/max*100);
+    return `<div class="bar-row"><div class="name" style="color:${colors[r.regime]}">${r.regime} <span style="color:var(--muted)">n_kv=${r.n_kv_heads}</span></div>
+      <div class="track"><div class="fill" style="width:${pct}%;background:${colors[r.regime]}"></div></div>
+      <div class="val">${humanBytes(r.kv_bytes)}</div>
+      <div style="width:64px;text-align:right;color:var(--muted)">${r.reduction_vs_mha}× </div></div>`;
+  }).join('');
+  document.getElementById('kv-note').innerHTML =
+    `GQA (n_kv=8) uses <b>${humanBytes(rows[1].kv_bytes)}</b> vs MHA's <b>${humanBytes(rows[0].kv_bytes)}</b> — an <b>${rows[1].reduction_vs_mha}× smaller</b> KV cache per sequence, with quality close to MHA. Formula: <code class="k">2 · n_layers · seq · n_kv_heads · head_dim · bytes</code>.`;
+}
+function fillBigCfg(data){ const b=data.big_config;
+  document.getElementById('big-cfg').textContent=`n_layers=${b.n_layers}, n_heads=${b.n_heads}, head_dim=${b.head_dim}, seq=${b.seq_len}`; }
+function fillDemoKv(data){
+  const m={}; (data.regimes_demo||[]).forEach(r=>m[r.regime]=r);
+  const fmt=r=>r?`<b>${humanBytes(r.kv_bytes)}</b> · acc ${(r.acc*100).toFixed(0)}%`:'';
+  const md=data.regimes_demo;
+  if(md){ document.getElementById('kv-mha').innerHTML='KV cache (demo): '+fmt(m['MHA']);
+    document.getElementById('kv-gqa').innerHTML='KV cache (demo): '+fmt(m['GQA']);
+    document.getElementById('kv-mqa').innerHTML='KV cache (demo): '+fmt(m['MQA']); }
+}
+
+(async function init(){ let data=BAKED;
+  if(location.protocol.startsWith('http')){ try{const r=await fetch('../data/llama2_demo.json',{cache:'no-store'}); if(r.ok) data=await r.json();}catch(e){} }
+  drawHeads('svg-mha',8,'#64748b'); drawHeads('svg-gqa',2,'#34d399'); drawHeads('svg-mqa',1,'#f59e0b');
+  fillBigCfg(data); drawKvBars(data); drawLoss(data); fillKpi(data); fillDemoKv(data);
+})();
+window.addEventListener('resize',()=>{ drawHeads('svg-mha',8,'#64748b'); drawHeads('svg-gqa',2,'#34d399'); drawHeads('svg-mqa',1,'#f59e0b'); drawLoss(BAKED); });
+</script>
+</body>
+</html>
