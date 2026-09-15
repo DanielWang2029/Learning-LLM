@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PaLM — Architecture Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --norm: #64748b;
+    --attn: #fb7185;
+    --ffn: #34d399;
+    --rope: #a78bfa;
+    --mqa: #22d3ee;
+    --sum: #f59e0b;
+    --gen: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #241041 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--mqa); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 40%, #fb7185 72%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+
+  .arch { display: grid; grid-template-columns: 1.05fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 900px) { .arch { grid-template-columns: 1fr; } }
+  .stack { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: var(--shadow); }
+  .stack h3 { margin: 2px 0 12px; text-align: center; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .nx { border: 1px dashed var(--line); border-radius: 12px; padding: 14px 12px; position: relative; margin: 6px 0; background: rgba(255,255,255,.015); }
+  .nx::before { content: "N × layers"; position: absolute; top: -11px; left: 14px; background: var(--panel); padding: 0 8px; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; }
+  .block { display: flex; align-items: center; gap: 10px; padding: 11px 13px; margin: 9px 0; border-radius: 11px; cursor: pointer; border: 1px solid transparent; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; background: var(--panel-2); user-select: none; }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .block .label { font-weight: 600; }
+  .block .sec { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .arrow { text-align: center; color: var(--line); font-size: 18px; line-height: 1; margin: -2px 0; }
+  .io { text-align: center; color: var(--muted); font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 8px 0; background: rgba(255,255,255,.02); }
+  .c-norm { background: linear-gradient(90deg, rgba(100,116,139,.18), transparent); }
+  .c-attn { background: linear-gradient(90deg, rgba(251,113,133,.16), transparent); }
+  .c-ffn  { background: linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .c-sum  { background: linear-gradient(90deg, rgba(245,158,11,.18), transparent); }
+  .c-gen  { background: linear-gradient(90deg, rgba(244,114,182,.16), transparent); }
+
+  .parallel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .branch { border: 1px solid var(--line); border-radius: 11px; padding: 8px; background: rgba(255,255,255,.02); }
+  .branch h5 { margin: 4px 0 8px; text-align:center; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+  .detail { position: sticky; top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 260px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .detail .formula { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line); font-family: "SFMono-Regular", ui-monospace, Consolas, monospace; font-size: 13.5px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; } .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; } .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  canvas { width: 100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .kpi { display:flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+  .kpi div { background: var(--panel-2); border:1px solid var(--line); border-radius: 10px; padding: 8px 14px; }
+  .kpi b { font-size: 20px; } .kpi span { color: var(--muted); font-size: 12px; display:block; }
+  .heads { display:flex; gap: 26px; justify-content: center; align-items: flex-end; margin-top: 8px; }
+  .headcol { text-align:center; }
+  .qh { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(180deg,#22d3ee,#0e7490); margin: 4px auto; box-shadow: var(--shadow); }
+  .kv { width: 46px; height: 46px; border-radius: 8px; background: linear-gradient(180deg,#fb7185,#9f1239); margin: 6px auto; box-shadow: var(--shadow); }
+  .lines { color: var(--muted); font-size: 12px; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  .pill { display:inline-block; font-size: 11px; padding: 2px 8px; border-radius:999px; border:1px solid var(--line); color: var(--muted); margin-left: 6px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>PaLM — Pathways Language Model</h1>
+  <p>An interactive map of PaLM's decoder-only block and the five architecture choices that set it apart from the original Transformer: <b>SwiGLU</b>, <b>parallel layers</b>, <b>multi-query attention</b>, <b>RoPE</b>, and <b>no biases</b>. Click any block to explore it.</p>
+  <div class="badges">
+    <span class="badge">Chowdhery et al., 2022</span>
+    <span class="badge">arXiv:2204.02311</span>
+    <span class="badge">Decoder-only</span>
+    <span class="badge">SwiGLU · MQA · RoPE</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The PaLM block, end to end</h2>
+  <p class="section-sub">A stack of identical decoder blocks. Unlike a standard Transformer, attention and the feed-forward network read from the <b>same</b> normalized input and their outputs are summed together onto the residual stream — the <b>parallel</b> formulation.</p>
+
+  <div class="arch">
+    <!-- Block diagram -->
+    <div class="stack">
+      <h3>One PaLM decoder block</h3>
+      <div class="io">token embeddings (weights tied with output) — input x</div>
+      <div class="arrow">↓</div>
+      <div class="block c-norm" data-key="norm"><span class="dot" style="background:var(--norm)"></span><span class="label">Shared LayerNorm (no bias)</span><span class="sec">§2</span></div>
+      <div class="arrow">↓ &nbsp;&nbsp; feeds BOTH branches &nbsp;&nbsp; ↓</div>
+      <div class="nx">
+        <div class="parallel">
+          <div class="branch">
+            <h5>Attention branch</h5>
+            <div class="block c-attn" data-key="mqa"><span class="dot" style="background:var(--attn)"></span><span class="label">Multi-Query Attn</span></div>
+            <div class="block c-rope" data-key="rope" style="background:linear-gradient(90deg,rgba(167,139,250,.16),transparent)"><span class="dot" style="background:var(--rope)"></span><span class="label">RoPE on Q,K</span></div>
+          </div>
+          <div class="branch">
+            <h5>MLP branch</h5>
+            <div class="block c-ffn" data-key="swiglu"><span class="dot" style="background:var(--ffn)"></span><span class="label">SwiGLU MLP</span></div>
+            <div class="io" style="margin:9px 0 0">gate ⊙ up → down</div>
+          </div>
+        </div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="block c-sum" data-key="parallel"><span class="dot" style="background:var(--sum)"></span><span class="label">Sum: x + Attn(LN x) + MLP(LN x)</span><span class="sec">§2</span></div>
+      <div class="arrow">↓ &nbsp; (repeat for N blocks) &nbsp; ↓</div>
+      <div class="block c-norm" data-key="finalnorm"><span class="dot" style="background:var(--norm)"></span><span class="label">Final LayerNorm (no bias)</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-gen" data-key="head"><span class="dot" style="background:var(--gen)"></span><span class="label">Tied Linear → vocab logits</span><span class="sec">§2</span></div>
+      <div class="arrow">↓</div>
+      <div class="io">next-token probabilities</div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a block</h3>
+      <div class="tag" id="d-tag">Every colored block is interactive.</div>
+      <div class="formula" id="d-formula">Select any component to reveal its role, equations, and the exact shapes/parameters it produces in the accompanying PyTorch code under <code class="k">src/</code>.</div>
+      <ul id="d-points"></ul>
+      <p class="hint" id="d-file"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Parallel vs. serial layers</h2>
+  <p class="section-sub">The single change with the biggest systems impact. PaLM reported ~15% faster training at scale with no quality loss for large models.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Standard (serial) <span class="pill">original Transformer</span></h4>
+      <div class="formula">y = x + Attention(LayerNorm₁(x))
+z = y + MLP(LayerNorm₂(y))
+
+# MLP must WAIT for attention to finish
+# two separate layer norms</div>
+    </div>
+    <div class="card">
+      <h4>PaLM (parallel) <span class="pill" style="color:var(--sum)">this repo</span></h4>
+      <div class="formula">z = x + Attention(LayerNorm(x)) + MLP(LayerNorm(x))
+
+# ONE shared layer norm
+# Attention and MLP run independently, then sum
+# their input projections can be fused</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Multi-Query Attention — one shared K/V head</h2>
+  <p class="section-sub">Every query head has its own projection, but all of them attend over a <b>single</b> shared key/value head. Same quality, far smaller KV cache at generation time.</p>
+  <div class="card">
+    <div class="heads" id="mqa-diagram">
+      <div class="headcol"><div class="qh"></div><div class="qh"></div><div class="qh"></div><div class="qh"></div><div class="lines">4 query heads (Q)</div></div>
+      <div class="headcol" style="font-size:26px;color:var(--muted)">→</div>
+      <div class="headcol"><div class="kv"></div><div class="lines">1 shared K/V head</div></div>
+    </div>
+    <p class="small" style="text-align:center;margin-top:12px;color:var(--muted)">In code (<code class="k">src/attention.py</code>): <code class="k">w_q → n_heads·head_dim</code>, but <code class="k">w_k, w_v → head_dim</code> only. The single K/V head is broadcast across all query heads with <code class="k">expand</code> (no extra memory).</p>
+  </div>
+
+  <h2 class="section-title">It learns: training loss from a real run</h2>
+  <p class="section-sub">This curve is the actual loss recorded by <code class="k">demo/run_demo.py</code> training this tiny PaLM on the copy task (log scale). All five PaLM features are active during this run.</p>
+  <div class="card">
+    <canvas id="loss-canvas" height="260"></canvas>
+    <div class="kpi" id="kpi"></div>
+    <p class="small" id="data-note" style="margin-top:12px"></p>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“PaLM: Scaling Language Modeling with Pathways”</b> (Chowdhery et al., 2022).
+    Diagram and loss curve generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate the data.
+  </div>
+</div>
+
+<script>
+// ---- Baked-in sample from a real demo run (data/palm_demo.json). If served
+// over http(s), the page tries to load the live file instead.
+const BAKED = {
+  "num_parameters": 105728,
+  "final_accuracy": 1.0,
+  "elapsed_seconds": 15.9,
+  "config": {"dim":64,"n_layers":3,"n_heads":4,"ffn_hidden":128,"seq_len":6,"vocab_size":16},
+  "loss_curve": [
+    {"step":1,"loss":2.8353},{"step":50,"loss":0.1547},{"step":100,"loss":0.0061},
+    {"step":150,"loss":0.0034},{"step":200,"loss":0.0023},{"step":250,"loss":0.0016},
+    {"step":300,"loss":0.0012},{"step":350,"loss":0.001},{"step":400,"loss":0.0008},
+    {"step":450,"loss":0.0007},{"step":500,"loss":0.0006},{"step":550,"loss":0.0005},
+    {"step":600,"loss":0.0004},{"step":650,"loss":0.0004},{"step":700,"loss":0.0003},
+    {"step":750,"loss":0.0003},{"step":800,"loss":0.0003}
+  ],
+  "example": {"content":[5,14,9,11,4,10],"generated":[5,14,9,11,4,10]}
+};
+
+const DETAILS = {
+  norm: {
+    title: "Shared LayerNorm (no bias)", tag: "PaLM §2 — No Biases + Parallel Layers",
+    formula: "h = LayerNorm(x)   # learned scale, NO bias\n\nthe SAME h feeds both the attention and MLP branches",
+    points: [
+      "A single normalization is shared by both parallel branches.",
+      "No bias term — PaLM removes biases everywhere for training stability.",
+      "Standard LayerNorm variance/scale, just without the shift parameter."
+    ],
+    file: "src/normalization.py → LayerNormNoBias; used in src/block.py"
+  },
+  mqa: {
+    title: "Multi-Query Attention", tag: "PaLM §2 — Multi-Query Attention",
+    formula: "Q = x·W_q  → (batch, n_heads, seq, head_dim)\nK = x·W_k  → (batch,   1,    seq, head_dim)\nV = x·W_v  → (batch,   1,    seq, head_dim)\n\nsingle K/V head broadcast to all query heads",
+    points: [
+      "All query heads share ONE key/value head.",
+      "Barely changes quality but shrinks the decode-time KV cache n_heads×.",
+      "Causal mask keeps it autoregressive (position i sees only ≤ i)."
+    ],
+    file: "src/attention.py → MultiQueryAttention"
+  },
+  rope: {
+    title: "Rotary Position Embeddings (RoPE)", tag: "PaLM §2 — RoPE Embeddings",
+    formula: "rotate q,k by an angle ∝ absolute position\nθ_i = pos / 10000^(2i/head_dim)\n\napplied to Q and K before the dot product",
+    points: [
+      "No learned or absolute position embeddings — nothing to store.",
+      "Attention score depends on the rotation DIFFERENCE, so it acts relative.",
+      "Extrapolates better to longer sequences than learned positions."
+    ],
+    file: "src/rope.py → RotaryEmbedding, apply_rotary"
+  },
+  swiglu: {
+    title: "SwiGLU MLP", tag: "PaLM §2 — SwiGLU Activation",
+    formula: "SwiGLU(x) = ( SiLU(x·W_gate) ⊙ (x·W_up) ) · W_down\n\nthree weight matrices, no biases",
+    points: [
+      "Replaces the ReLU two-layer MLP of the original Transformer.",
+      "A gating branch modulates the up-projection element-wise.",
+      "PaLM found SwiGLU 'significantly increased quality' over ReLU."
+    ],
+    file: "src/feedforward.py → SwiGLU"
+  },
+  parallel: {
+    title: "Parallel layers (sum)", tag: "PaLM §2 — Parallel Layers",
+    formula: "z = x + Attention(LN(x)) + MLP(LN(x))\n\n(vs serial: y=x+Attn(LN₁ x); z=y+MLP(LN₂ y))",
+    points: [
+      "Attention and MLP are computed from the same input and summed.",
+      "~15% faster training at scale; input projections can be fused.",
+      "Quality-neutral for large models (small gap at small scale)."
+    ],
+    file: "src/block.py → PaLMBlock.forward"
+  },
+  finalnorm: {
+    title: "Final LayerNorm", tag: "PaLM §2",
+    formula: "x = LayerNorm(x)   # before the output projection",
+    points: [
+      "A pre-output normalization stabilizes the logits.",
+      "Also bias-free, like every other norm in the model."
+    ],
+    file: "src/model.py → PaLM.norm_f"
+  },
+  head: {
+    title: "Tied output projection", tag: "PaLM §2 — shared embeddings",
+    formula: "logits = x · Eᵀ      # E is the input embedding matrix\nd_model → vocab_size",
+    points: [
+      "Input embedding and output projection share the same weight matrix.",
+      "Saves parameters and couples input/output token representations.",
+      "No bias on the projection."
+    ],
+    file: "src/model.py → lm_head.weight = tok_emb.weight"
+  }
+};
+
+const blocks = document.querySelectorAll('.block');
+const dTitle=document.getElementById('d-title'), dTag=document.getElementById('d-tag'),
+      dFormula=document.getElementById('d-formula'), dPoints=document.getElementById('d-points'),
+      dFile=document.getElementById('d-file');
+function show(key, el){
+  const d=DETAILS[key]; if(!d) return;
+  blocks.forEach(b=>b.classList.remove('active')); if(el) el.classList.add('active');
+  dTitle.textContent=d.title; dTag.textContent=d.tag; dFormula.textContent=d.formula;
+  dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); dFile.textContent=d.file;
+}
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+// ---- Loss curve
+function drawLoss(data){
+  const canvas=document.getElementById('loss-canvas');
+  const ratio=window.devicePixelRatio||1;
+  const cssW=canvas.clientWidth||900, cssH=260;
+  canvas.width=cssW*ratio; canvas.height=cssH*ratio;
+  const ctx=canvas.getContext('2d'); ctx.scale(ratio,ratio);
+  const W=cssW,H=cssH, pad={l:56,r:16,t:16,b:34};
+  const pts=data.loss_curve;
+  const steps=pts.map(p=>p.step), losses=pts.map(p=>Math.max(p.loss,1e-4));
+  const logs=losses.map(v=>Math.log10(v));
+  const xmin=Math.min(...steps), xmax=Math.max(...steps);
+  const ymin=Math.min(...logs), ymax=Math.max(...logs);
+  const X=s=>pad.l+(s-xmin)/(xmax-xmin)*(W-pad.l-pad.r);
+  const Y=l=>pad.t+(ymax-l)/(ymax-ymin||1)*(H-pad.t-pad.b);
+  ctx.clearRect(0,0,W,H);
+  // gridlines at powers of 10
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let e=Math.ceil(ymin); e<=Math.floor(ymax); e++){
+    const y=Y(e); ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+    ctx.fillText('1e'+e, 6, y+4);
+  }
+  // x ticks
+  [xmin, Math.round((xmin+xmax)/2), xmax].forEach(s=>{ ctx.fillText(String(s), X(s)-8, H-12); });
+  ctx.fillText('training step', W/2-30, H-2);
+  // area + line
+  const grad=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grad.addColorStop(0,'rgba(34,211,238,.35)'); grad.addColorStop(1,'rgba(34,211,238,0)');
+  ctx.beginPath(); ctx.moveTo(X(steps[0]),Y(logs[0]));
+  for(let i=1;i<pts.length;i++) ctx.lineTo(X(steps[i]),Y(logs[i]));
+  ctx.lineTo(X(steps[steps.length-1]),H-pad.b); ctx.lineTo(X(steps[0]),H-pad.b); ctx.closePath();
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(X(steps[0]),Y(logs[0]));
+  for(let i=1;i<pts.length;i++) ctx.lineTo(X(steps[i]),Y(logs[i]));
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2.5; ctx.stroke();
+  pts.forEach((p,i)=>{ ctx.beginPath(); ctx.arc(X(steps[i]),Y(logs[i]),3,0,7); ctx.fillStyle='#a78bfa'; ctx.fill(); });
+}
+
+function fillKpi(data){
+  const c=data.config;
+  const html=[
+    ['final copy accuracy', (data.final_accuracy*100).toFixed(0)+'%'],
+    ['parameters', data.num_parameters.toLocaleString()],
+    ['train time (CPU)', data.elapsed_seconds+'s'],
+    ['config', `dim ${c.dim} · ${c.n_layers}L · ${c.n_heads}H`]
+  ];
+  document.getElementById('kpi').innerHTML=html.map(([k,v])=>`<div><b>${v}</b><span>${k}</span></div>`).join('');
+  const ex=data.example;
+  document.getElementById('data-note').innerHTML =
+    `worked example — copy <code class="k">[${ex.content.join(', ')}]</code> → model produced <code class="k">[${ex.generated.join(', ')}]</code>`;
+}
+
+(async function init(){
+  let data=BAKED, note='';
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/palm_demo.json',{cache:'no-store'});
+      if(r.ok){ data=await r.json(); note=' (live data)'; } }catch(e){}
+  }
+  drawLoss(data); fillKpi(data);
+  show('parallel', document.querySelector('.block[data-key="parallel"]'));
+})();
+window.addEventListener('resize',()=>drawLoss(BAKED));
+</script>
+</body>
+</html>
