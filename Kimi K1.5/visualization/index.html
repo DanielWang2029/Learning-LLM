@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kimi k1.5 — RL with a Length Penalty</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --acc:#34d399; --len:#f59e0b; --pen:#22d3ee; --nopen:#fb7185; --accent:#a78bfa; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%), radial-gradient(1000px 500px at 100% 0%, #3a2a12 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--pen); }
+  header.hero { padding:40px 24px 28px; text-align:center; background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 50%, rgba(245,158,11,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:32px; letter-spacing:.5px; background:linear-gradient(90deg,#22d3ee,#a78bfa 55%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1120px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; }
+  .section-sub { color:var(--muted); margin:0 0 18px; max-width:840px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:860px){ .grid2 { grid-template-columns:1fr; } }
+  .card h4 { margin:0 0 6px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  .formula { margin:12px 0 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line); font-family:ui-monospace,monospace; font-size:13px; color:#cfe8ff; white-space:pre-wrap; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12.5px; color:var(--muted); }
+  .legend span b { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+
+  /* RL loop */
+  .loop { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; }
+  .node { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--panel-2); text-align:center; min-width:120px; }
+  .node .t { font-weight:700; font-size:13px; } .node .s { color:var(--muted); font-size:11.5px; margin-top:3px; }
+  .ar { color:var(--accent); font-size:22px; }
+
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:6px; }
+  @media (max-width:720px){ .metrics { grid-template-columns:1fr; } }
+  .metric { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .metric .row { display:flex; justify-content:space-between; align-items:baseline; margin:3px 0; }
+  .metric .lab { color:var(--muted); font-size:12px; } .metric .val { font-weight:800; font-size:16px; }
+  .metric h5 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; }
+  .pill.pen { background:rgba(34,211,238,.16); color:var(--pen); } .pill.nopen { background:rgba(251,113,133,.16); color:var(--nopen); }
+  .gens { font-family:ui-monospace,monospace; font-size:14px; margin-top:8px; }
+  .gen { padding:6px 10px; border-radius:8px; margin:5px 0; background:rgba(255,255,255,.02); border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Kimi k1.5 — RL for Reasoning with a Length Penalty</h1>
+  <p>An SFT warm-start makes a model accurate — but it "overthinks", emitting long reasoning chains. Left alone, RL does <b>not</b> curb that. Kimi k1.5 adds a <b>length penalty</b> to the reward that trims chains toward the minimum actually needed <b>without</b> sacrificing accuracy ("long2short"). The curves below are from a real GRPO-style run in this folder.</p>
+  <div class="badges">
+    <span class="badge">Kimi Team, 2025</span>
+    <span class="badge">arXiv:2501.12599</span>
+    <span class="badge">GRPO-style RL</span>
+    <span class="badge">Length penalty</span>
+    <span class="badge">long2short</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The RL loop</h2>
+  <p class="section-sub">For each problem we sample a <b>group</b> of completions, score them, standardize the reward within the group to get an advantage (GRPO — no value network), and update the policy. The reward is where the length penalty lives.</p>
+  <div class="card">
+    <div class="loop">
+      <div class="node"><div class="t">Policy</div><div class="s">think budget + answer</div></div>
+      <div class="ar">→</div>
+      <div class="node"><div class="t">Sample group</div><div class="s">G completions / problem</div></div>
+      <div class="ar">→</div>
+      <div class="node"><div class="t">Reward</div><div class="s">correctness + length</div></div>
+      <div class="ar">→</div>
+      <div class="node"><div class="t">Group advantage</div><div class="s">(r − mean) / std</div></div>
+      <div class="ar">→</div>
+      <div class="node"><div class="t">Update</div><div class="s">policy gradient</div></div>
+    </div>
+    <div class="formula">length reward (within each group; min_len,max_len = group's shortest/longest):
+  lambda_i     = 0.5 − (len_i − min_len) / (max_len − min_len)     # shorter ⇒ higher
+  len_reward_i = lambda_i            if the answer is correct
+               = min(0, lambda_i)    otherwise                     # never reward length on wrong answers
+  reward_i     = correctness_i + w · len_reward_i                  # w = 0 turns the penalty off</div>
+  </div>
+
+  <h2 class="section-title">Accuracy stays high — length only stays controlled with the penalty</h2>
+  <p class="section-sub">Two RL runs from the <b>same</b> warm-started policy (accurate but overthinking). Accuracy holds steady in both. But only the length-penalty run pulls the average chain down toward the ~3 steps actually needed; without it, chains stay long — RL alone does not curb overthinking.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Accuracy over RL iterations</h4>
+      <p class="small">Both objectives keep the reasoner accurate.</p>
+      <canvas id="acc-canvas" width="1000" height="520"></canvas>
+      <div class="legend">
+        <span><b style="background:var(--pen)"></b>length penalty</span>
+        <span><b style="background:var(--nopen)"></b>no penalty</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Mean chain length over RL iterations</h4>
+      <p class="small">The penalty pulls length down; without it, length stays high.</p>
+      <canvas id="len-canvas" width="1000" height="520"></canvas>
+      <div class="legend">
+        <span><b style="background:var(--pen)"></b>length penalty</span>
+        <span><b style="background:var(--nopen)"></b>no penalty</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Final numbers</h2>
+  <div class="metrics" id="metrics"></div>
+
+  <h2 class="section-title">What each policy emits</h2>
+  <p class="section-sub">A rendered completion from each final policy (<code class="k">T</code> = a scratch/think step, <code class="k">#</code> precedes the answer). Same accuracy ballpark, very different token cost.</p>
+  <div class="grid2">
+    <div class="card"><span class="pill nopen">no penalty</span><div class="gens" id="gen-no"></div></div>
+    <div class="card"><span class="pill pen">length penalty</span><div class="gens" id="gen-pen"></div></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Kimi k1.5: Scaling Reinforcement Learning with LLMs”</b>, Kimi Team, 2025.
+    Curves and numbers are produced by <code class="k">python demo/run_demo.py</code> in this folder.
+    Serve the folder to load live data from <code class="k">data/kimi_run.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"meta":{"problems":100,"group_size":8,"rl_iters":400,"len_weight":0.06,"max_think":8,"think_need":3},"chance_acc":0.07000000029802322,"start":{"acc":0.7599999904632568,"mean_len":7.42490291595459},"final":{"no_penalty":{"acc":0.7599999904632568,"mean_len":7.915594577789307},"length_penalty":{"acc":0.7599999904632568,"mean_len":3.0057778358459473}},"curves":{"no_penalty":[{"iter":0,"acc":0.7599999904632568,"mean_len":7.44288444519043},{"iter":4,"acc":0.7599999904632568,"mean_len":7.505072116851807},{"iter":8,"acc":0.7599999904632568,"mean_len":7.5542778968811035},{"iter":12,"acc":0.7599999904632568,"mean_len":7.595464706420898},{"iter":16,"acc":0.7599999904632568,"mean_len":7.631741046905518},{"iter":20,"acc":0.7599999904632568,"mean_len":7.6600661277771},{"iter":24,"acc":0.7599999904632568,"mean_len":7.683866500854492},{"iter":28,"acc":0.7599999904632568,"mean_len":7.703599452972412},{"iter":32,"acc":0.7599999904632568,"mean_len":7.7195563316345215},{"iter":36,"acc":0.7599999904632568,"mean_len":7.7325119972229},{"iter":40,"acc":0.7599999904632568,"mean_len":7.743414878845215},{"iter":44,"acc":0.7599999904632568,"mean_len":7.7521138191223145},{"iter":48,"acc":0.7599999904632568,"mean_len":7.760317802429199},{"iter":52,"acc":0.7599999904632568,"mean_len":7.768484592437744},{"iter":56,"acc":0.7599999904632568,"mean_len":7.775837421417236},{"iter":60,"acc":0.7599999904632568,"mean_len":7.784202575683594},{"iter":64,"acc":0.7599999904632568,"mean_len":7.79355525970459},{"iter":68,"acc":0.7599999904632568,"mean_len":7.800293922424316},{"iter":72,"acc":0.7599999904632568,"mean_len":7.805215835571289},{"iter":76,"acc":0.7599999904632568,"mean_len":7.808854103088379},{"iter":80,"acc":0.7599999904632568,"mean_len":7.8131232261657715},{"iter":84,"acc":0.7599999904632568,"mean_len":7.817284107208252},{"iter":88,"acc":0.7599999904632568,"mean_len":7.8206353187561035},{"iter":92,"acc":0.7599999904632568,"mean_len":7.823872089385986},{"iter":96,"acc":0.7599999904632568,"mean_len":7.826872825622559},{"iter":100,"acc":0.7599999904632568,"mean_len":7.82982063293457},{"iter":104,"acc":0.7599999904632568,"mean_len":7.832369804382324},{"iter":108,"acc":0.7599999904632568,"mean_len":7.834123134613037},{"iter":112,"acc":0.7599999904632568,"mean_len":7.836639881134033},{"iter":116,"acc":0.7599999904632568,"mean_len":7.839593887329102},{"iter":120,"acc":0.7599999904632568,"mean_len":7.842015266418457},{"iter":124,"acc":0.7599999904632568,"mean_len":7.844726085662842},{"iter":128,"acc":0.7599999904632568,"mean_len":7.847737789154053},{"iter":132,"acc":0.7599999904632568,"mean_len":7.850621223449707},{"iter":136,"acc":0.7599999904632568,"mean_len":7.852980136871338},{"iter":140,"acc":0.7599999904632568,"mean_len":7.855008125305176},{"iter":144,"acc":0.7599999904632568,"mean_len":7.8564276695251465},{"iter":148,"acc":0.7599999904632568,"mean_len":7.857461452484131},{"iter":152,"acc":0.7599999904632568,"mean_len":7.859038352966309},{"iter":156,"acc":0.7599999904632568,"mean_len":7.8600592613220215},{"iter":160,"acc":0.7599999904632568,"mean_len":7.86090612411499},{"iter":164,"acc":0.7599999904632568,"mean_len":7.862618446350098},{"iter":168,"acc":0.7599999904632568,"mean_len":7.864778518676758},{"iter":172,"acc":0.7599999904632568,"mean_len":7.867312431335449},{"iter":176,"acc":0.7599999904632568,"mean_len":7.869292259216309},{"iter":180,"acc":0.7599999904632568,"mean_len":7.87070369720459},{"iter":184,"acc":0.7599999904632568,"mean_len":7.871998310089111},{"iter":188,"acc":0.7599999904632568,"mean_len":7.873655796051025},{"iter":192,"acc":0.7599999904632568,"mean_len":7.874839782714844},{"iter":196,"acc":0.7599999904632568,"mean_len":7.875617980957031},{"iter":200,"acc":0.7599999904632568,"mean_len":7.8763909339904785},{"iter":204,"acc":0.7599999904632568,"mean_len":7.877079010009766},{"iter":208,"acc":0.7599999904632568,"mean_len":7.877405643463135},{"iter":212,"acc":0.7599999904632568,"mean_len":7.878103256225586},{"iter":216,"acc":0.7599999904632568,"mean_len":7.879133701324463},{"iter":220,"acc":0.7599999904632568,"mean_len":7.879616737365723},{"iter":224,"acc":0.7599999904632568,"mean_len":7.880354404449463},{"iter":228,"acc":0.7599999904632568,"mean_len":7.8808369636535645},{"iter":232,"acc":0.7599999904632568,"mean_len":7.8821187019348145},{"iter":236,"acc":0.7599999904632568,"mean_len":7.88307523727417},{"iter":240,"acc":0.7599999904632568,"mean_len":7.884332180023193},{"iter":244,"acc":0.7599999904632568,"mean_len":7.885439395904541},{"iter":248,"acc":0.7599999904632568,"mean_len":7.886652946472168},{"iter":252,"acc":0.7599999904632568,"mean_len":7.887443542480469},{"iter":256,"acc":0.7599999904632568,"mean_len":7.888101100921631},{"iter":260,"acc":0.7599999904632568,"mean_len":7.889019012451172},{"iter":264,"acc":0.7599999904632568,"mean_len":7.890711307525635},{"iter":268,"acc":0.7599999904632568,"mean_len":7.892030239105225},{"iter":272,"acc":0.7599999904632568,"mean_len":7.893157482147217},{"iter":276,"acc":0.7599999904632568,"mean_len":7.89410924911499},{"iter":280,"acc":0.7599999904632568,"mean_len":7.894733428955078},{"iter":284,"acc":0.7599999904632568,"mean_len":7.895134925842285},{"iter":288,"acc":0.7599999904632568,"mean_len":7.8963751792907715},{"iter":292,"acc":0.7599999904632568,"mean_len":7.897606372833252},{"iter":296,"acc":0.7599999904632568,"mean_len":7.8984198570251465},{"iter":300,"acc":0.7599999904632568,"mean_len":7.899438858032227},{"iter":304,"acc":0.7599999904632568,"mean_len":7.900101661682129},{"iter":308,"acc":0.7599999904632568,"mean_len":7.9005351066589355},{"iter":312,"acc":0.7599999904632568,"mean_len":7.900819301605225},{"iter":316,"acc":0.7599999904632568,"mean_len":7.90138053894043},{"iter":320,"acc":0.7599999904632568,"mean_len":7.902010917663574},{"iter":324,"acc":0.7599999904632568,"mean_len":7.90242338180542},{"iter":328,"acc":0.7599999904632568,"mean_len":7.902527809143066},{"iter":332,"acc":0.7599999904632568,"mean_len":7.9027252197265625},{"iter":336,"acc":0.7599999904632568,"mean_len":7.903207302093506},{"iter":340,"acc":0.7599999904632568,"mean_len":7.904132843017578},{"iter":344,"acc":0.7599999904632568,"mean_len":7.904953479766846},{"iter":348,"acc":0.7599999904632568,"mean_len":7.905491828918457},{"iter":352,"acc":0.7599999904632568,"mean_len":7.905615329742432},{"iter":356,"acc":0.7599999904632568,"mean_len":7.9055070877075195},{"iter":360,"acc":0.7599999904632568,"mean_len":7.905579566955566},{"iter":364,"acc":0.7599999904632568,"mean_len":7.905975818634033},{"iter":368,"acc":0.7599999904632568,"mean_len":7.906650543212891},{"iter":372,"acc":0.7599999904632568,"mean_len":7.907658576965332},{"iter":376,"acc":0.7599999904632568,"mean_len":7.908318042755127},{"iter":380,"acc":0.7599999904632568,"mean_len":7.908945560455322},{"iter":384,"acc":0.7599999904632568,"mean_len":7.909897327423096},{"iter":388,"acc":0.7599999904632568,"mean_len":7.911437511444092},{"iter":392,"acc":0.7599999904632568,"mean_len":7.912976264953613},{"iter":396,"acc":0.7599999904632568,"mean_len":7.914538383483887},{"iter":399,"acc":0.7599999904632568,"mean_len":7.915594577789307}],"length_penalty":[{"iter":0,"acc":0.7599999904632568,"mean_len":7.4076690673828125},{"iter":4,"acc":0.7599999904632568,"mean_len":7.33534574508667},{"iter":8,"acc":0.7599999904632568,"mean_len":7.260473728179932},{"iter":12,"acc":0.7599999904632568,"mean_len":7.172085762023926},{"iter":16,"acc":0.7599999904632568,"mean_len":7.066573143005371},{"iter":20,"acc":0.7599999904632568,"mean_len":6.94366455078125},{"iter":24,"acc":0.7599999904632568,"mean_len":6.801929473876953},{"iter":28,"acc":0.7599999904632568,"mean_len":6.6395463943481445},{"iter":32,"acc":0.7599999904632568,"mean_len":6.4588117599487305},{"iter":36,"acc":0.7599999904632568,"mean_len":6.263819694519043},{"iter":40,"acc":0.7599999904632568,"mean_len":6.0589799880981445},{"iter":44,"acc":0.7599999904632568,"mean_len":5.851399898529053},{"iter":48,"acc":0.7599999904632568,"mean_len":5.641472816467285},{"iter":52,"acc":0.7599999904632568,"mean_len":5.4351887702941895},{"iter":56,"acc":0.7599999904632568,"mean_len":5.234102249145508},{"iter":60,"acc":0.7599999904632568,"mean_len":5.036240577697754},{"iter":64,"acc":0.7599999904632568,"mean_len":4.8460283279418945},{"iter":68,"acc":0.7599999904632568,"mean_len":4.66826868057251},{"iter":72,"acc":0.7599999904632568,"mean_len":4.501211643218994},{"iter":76,"acc":0.7599999904632568,"mean_len":4.345684051513672},{"iter":80,"acc":0.7599999904632568,"mean_len":4.201334476470947},{"iter":84,"acc":0.7599999904632568,"mean_len":4.064747333526611},{"iter":88,"acc":0.7599999904632568,"mean_len":3.937802791595459},{"iter":92,"acc":0.7599999904632568,"mean_len":3.81978702545166},{"iter":96,"acc":0.7599999904632568,"mean_len":3.706986904144287},{"iter":100,"acc":0.7599999904632568,"mean_len":3.6000680923461914},{"iter":104,"acc":0.7599999904632568,"mean_len":3.4995083808898926},{"iter":108,"acc":0.7599999904632568,"mean_len":3.4064226150512695},{"iter":112,"acc":0.7599999904632568,"mean_len":3.3253893852233887},{"iter":116,"acc":0.7599999904632568,"mean_len":3.257106304168701},{"iter":120,"acc":0.7599999904632568,"mean_len":3.2026054859161377},{"iter":124,"acc":0.7599999904632568,"mean_len":3.161226987838745},{"iter":128,"acc":0.7599999904632568,"mean_len":3.1303560733795166},{"iter":132,"acc":0.7599999904632568,"mean_len":3.10752534866333},{"iter":136,"acc":0.7599999904632568,"mean_len":3.0900285243988037},{"iter":140,"acc":0.7599999904632568,"mean_len":3.077080726623535},{"iter":144,"acc":0.7599999904632568,"mean_len":3.0671305656433105},{"iter":148,"acc":0.7599999904632568,"mean_len":3.059314489364624},{"iter":152,"acc":0.7599999904632568,"mean_len":3.0530688762664795},{"iter":156,"acc":0.7599999904632568,"mean_len":3.048276901245117},{"iter":160,"acc":0.7599999904632568,"mean_len":3.044407606124878},{"iter":164,"acc":0.7599999904632568,"mean_len":3.0411345958709717},{"iter":168,"acc":0.7599999904632568,"mean_len":3.038243055343628},{"iter":172,"acc":0.7599999904632568,"mean_len":3.035625696182251},{"iter":176,"acc":0.7599999904632568,"mean_len":3.0333690643310547},{"iter":180,"acc":0.7599999904632568,"mean_len":3.0313541889190674},{"iter":184,"acc":0.7599999904632568,"mean_len":3.02948260307312},{"iter":188,"acc":0.7599999904632568,"mean_len":3.0278563499450684},{"iter":192,"acc":0.7599999904632568,"mean_len":3.026425838470459},{"iter":196,"acc":0.7599999904632568,"mean_len":3.0251522064208984},{"iter":200,"acc":0.7599999904632568,"mean_len":3.023960590362549},{"iter":204,"acc":0.7599999904632568,"mean_len":3.0228757858276367},{"iter":208,"acc":0.7599999904632568,"mean_len":3.021848440170288},{"iter":212,"acc":0.7599999904632568,"mean_len":3.020859479904175},{"iter":216,"acc":0.7599999904632568,"mean_len":3.0199925899505615},{"iter":220,"acc":0.7599999904632568,"mean_len":3.019174575805664},{"iter":224,"acc":0.7599999904632568,"mean_len":3.018355369567871},{"iter":228,"acc":0.7599999904632568,"mean_len":3.017589569091797},{"iter":232,"acc":0.7599999904632568,"mean_len":3.0168426036834717},{"iter":236,"acc":0.7599999904632568,"mean_len":3.016146183013916},{"iter":240,"acc":0.7599999904632568,"mean_len":3.015503168106079},{"iter":244,"acc":0.7599999904632568,"mean_len":3.0149426460266113},{"iter":248,"acc":0.7599999904632568,"mean_len":3.0144450664520264},{"iter":252,"acc":0.7599999904632568,"mean_len":3.013996124267578},{"iter":256,"acc":0.7599999904632568,"mean_len":3.0135672092437744},{"iter":260,"acc":0.7599999904632568,"mean_len":3.0131466388702393},{"iter":264,"acc":0.7599999904632568,"mean_len":3.0127437114715576},{"iter":268,"acc":0.7599999904632568,"mean_len":3.0123531818389893},{"iter":272,"acc":0.7599999904632568,"mean_len":3.0120081901550293},{"iter":276,"acc":0.7599999904632568,"mean_len":3.01169490814209},{"iter":280,"acc":0.7599999904632568,"mean_len":3.0113863945007324},{"iter":284,"acc":0.7599999904632568,"mean_len":3.0110840797424316},{"iter":288,"acc":0.7599999904632568,"mean_len":3.010768175125122},{"iter":292,"acc":0.7599999904632568,"mean_len":3.010486125946045},{"iter":296,"acc":0.7599999904632568,"mean_len":3.010197639465332},{"iter":300,"acc":0.7599999904632568,"mean_len":3.009964942932129},{"iter":304,"acc":0.7599999904632568,"mean_len":3.0097603797912598},{"iter":308,"acc":0.7599999904632568,"mean_len":3.009552240371704},{"iter":312,"acc":0.7599999904632568,"mean_len":3.009338617324829},{"iter":316,"acc":0.7599999904632568,"mean_len":3.0091283321380615},{"iter":320,"acc":0.7599999904632568,"mean_len":3.0089163780212402},{"iter":324,"acc":0.7599999904632568,"mean_len":3.0087101459503174},{"iter":328,"acc":0.7599999904632568,"mean_len":3.008513927459717},{"iter":332,"acc":0.7599999904632568,"mean_len":3.008333683013916},{"iter":336,"acc":0.7599999904632568,"mean_len":3.0081677436828613},{"iter":340,"acc":0.7599999904632568,"mean_len":3.0079991817474365},{"iter":344,"acc":0.7599999904632568,"mean_len":3.0078446865081787},{"iter":348,"acc":0.7599999904632568,"mean_len":3.0077149868011475},{"iter":352,"acc":0.7599999904632568,"mean_len":3.007572650909424},{"iter":356,"acc":0.7599999904632568,"mean_len":3.0073940753936768},{"iter":360,"acc":0.7599999904632568,"mean_len":3.007206678390503},{"iter":364,"acc":0.7599999904632568,"mean_len":3.007009506225586},{"iter":368,"acc":0.7599999904632568,"mean_len":3.006801128387451},{"iter":372,"acc":0.7599999904632568,"mean_len":3.0066351890563965},{"iter":376,"acc":0.7599999904632568,"mean_len":3.0064971446990967},{"iter":380,"acc":0.7599999904632568,"mean_len":3.0063552856445312},{"iter":384,"acc":0.7599999904632568,"mean_len":3.006221055984497},{"iter":388,"acc":0.7599999904632568,"mean_len":3.0061049461364746},{"iter":392,"acc":0.7599999904632568,"mean_len":3.0059831142425537},{"iter":396,"acc":0.7599999904632568,"mean_len":3.0058679580688477},{"iter":399,"acc":0.7599999904632568,"mean_len":3.0057778358459473}]},"samples":{"no_penalty":[{"text":"0>4=TTTTTTTT#4","ok":true},{"text":"0>5=TTTTTTTT#5","ok":true},{"text":"0>6=TTTTTTTT#6","ok":true}],"length_penalty":[{"text":"0>4=TTT#4","ok":true},{"text":"0>5=TTT#5","ok":true},{"text":"0>6=TTT#6","ok":true}]}};
+let DATA = BAKED;
+
+function lineChart(canvasId, seriesA, seriesB, yMax, yLabel) {
+  const c = document.getElementById(canvasId), ctx = c.getContext("2d");
+  const W = c.width, H = c.height, pad = 54;
+  ctx.clearRect(0,0,W,H);
+  // grid + axes
+  ctx.strokeStyle = "#1e2946"; ctx.lineWidth = 1; ctx.fillStyle = "#7c88ad"; ctx.font = "16px ui-monospace, monospace";
+  for (let g=0; g<=5; g++){
+    const y = pad + (H-2*pad)*g/5; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-14,y); ctx.stroke();
+    const v = (yMax*(5-g)/5); ctx.fillText(v.toFixed(yMax<=1?1:0), 6, y+5);
+  }
+  const maxIter = Math.max(seriesA[seriesA.length-1].iter, seriesB[seriesB.length-1].iter);
+  function plot(series, color, key) {
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+    series.forEach((pt,i) => {
+      const x = pad + (W-pad-14) * (pt.iter/maxIter);
+      const y = pad + (H-2*pad) * (1 - Math.min(pt[key],yMax)/yMax);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  const key = yLabel === "acc" ? "acc" : "mean_len";
+  plot(seriesB, getComputedStyle(document.documentElement).getPropertyValue('--nopen'), key);
+  plot(seriesA, getComputedStyle(document.documentElement).getPropertyValue('--pen'), key);
+  ctx.fillStyle = "#7c88ad"; ctx.fillText("iteration →", W-150, H-18);
+}
+
+function renderCharts() {
+  const cn = DATA.curves.no_penalty, cp = DATA.curves.length_penalty;
+  lineChart("acc-canvas", cp, cn, 1.0, "acc");
+  lineChart("len-canvas", cp, cn, DATA.meta.max_think, "len");
+}
+
+function renderMetrics() {
+  const f = DATA.final, s = DATA.start;
+  const chance = (DATA.chance_acc != null) ? DATA.chance_acc : null;
+  const el = document.getElementById("metrics"); el.innerHTML = "";
+  const cards = [
+    ["After warm-start", s.acc, s.mean_len, "", "reasoner trained; still overthinking"],
+    ["RL — no penalty", f.no_penalty.acc, f.no_penalty.mean_len, "nopen", "chain stays long"],
+    ["RL — length penalty", f.length_penalty.acc, f.length_penalty.mean_len, "pen", "chain trimmed to ~think_need"],
+  ];
+  cards.forEach(([name,acc,ml,cls,note])=>{
+    const d = document.createElement("div"); d.className="metric";
+    d.innerHTML = `<h5>${name} ${cls?`<span class="pill ${cls}">${cls==='pen'?'w>0':'w=0'}</span>`:''}</h5>
+      <div class="row"><span class="lab">accuracy</span><span class="val" style="color:var(--acc)">${(acc*100).toFixed(0)}%</span></div>
+      <div class="row"><span class="lab">mean chain length</span><span class="val" style="color:var(--len)">${ml.toFixed(2)}</span></div>
+      <div class="row"><span class="lab" style="font-size:11px">${note}</span></div>`;
+    el.appendChild(d);
+  });
+  if (chance != null) {
+    const note = document.createElement("p");
+    note.className = "section-sub"; note.style.marginTop = "12px";
+    note.innerHTML = `Before any training the reasoner is at chance (<b>${(chance*100).toFixed(0)}%</b>); the SFT-style warm-start raises it to <b>${(s.acc*100).toFixed(0)}%</b>, after which RL only adjusts the thinking budget.`;
+    el.parentNode.insertBefore(note, el.nextSibling);
+  }
+}
+
+function renderGens() {
+  function fill(id, arr) {
+    const el = document.getElementById(id); el.innerHTML="";
+    arr.forEach(g=>{ const d=document.createElement("div"); d.className="gen";
+      d.innerHTML = `${g.text}  <span style="color:${g.ok?'var(--acc)':'var(--nopen)'}">${g.ok?'✓':'✗'}</span>`; el.appendChild(d); });
+  }
+  fill("gen-no", DATA.samples.no_penalty);
+  fill("gen-pen", DATA.samples.length_penalty);
+}
+
+function initAll(){ renderCharts(); renderMetrics(); renderGens(); }
+(async function init(){
+  if (location.protocol.startsWith("http")) {
+    try { const r = await fetch("../data/kimi_run.json", {cache:"no-store"}); if (r.ok) DATA = await r.json(); } catch(e){}
+  }
+  initAll();
+})();
+window.addEventListener("resize", renderCharts);
+</script>
+</body>
+</html>
