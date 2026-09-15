@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gated DeltaNet-2 — Decoupling Erase and Write</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --ink: #e8ecf7;
+    --muted: #93a0c0;
+    --line: #2a3352;
+    --decay: #22d3ee;
+    --erase: #fb7185;
+    --write: #34d399;
+    --read: #a78bfa;
+    --state: #f59e0b;
+    --gen: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #241035 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--decay); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(251,113,133,.14), rgba(52,211,153,.14) 50%, rgba(34,211,238,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #fb7185, #34d399 45%, #22d3ee 80%, #a78bfa);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 820px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 21px; margin: 38px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 860px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula {
+    margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: "SFMono-Regular", ui-monospace, Consolas, monospace; font-size: 14px; color: #cfe8ff;
+    overflow-x: auto; white-space: pre-wrap;
+  }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* Interactive update pipeline */
+  .pipe { display: flex; flex-direction: column; gap: 0; align-items: stretch; }
+  .step {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 7px 0;
+    border-radius: 12px; cursor: pointer; border: 1px solid transparent; background: var(--panel-2);
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .step:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .step.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+  .step .label { font-weight: 600; }
+  .step .eq { margin-left: auto; font-family: ui-monospace, monospace; color: var(--muted); font-size: 13px; }
+  .arrow { text-align: center; color: var(--line); font-size: 16px; line-height: 1; margin: -2px 0; }
+  .detail { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 220px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; }
+  .detail li { margin: 5px 0; }
+
+  /* Vector chips */
+  .vecrow { display:flex; align-items:center; gap:8px; margin:8px 0; flex-wrap: wrap; }
+  .veclabel { width: 190px; color: var(--muted); font-size: 13px; }
+  .vec { display:flex; gap:5px; }
+  .comp { width: 40px; height: 34px; border-radius: 7px; display:flex; align-items:center; justify-content:center; font-family: ui-monospace, monospace; font-size:13px; color:#00121f; font-weight:600; }
+
+  /* Bars */
+  .bars { display:flex; flex-direction:column; gap:12px; margin-top:6px; }
+  .barrow { display:grid; grid-template-columns: 150px 1fr; align-items:center; gap:10px; }
+  .barrow .name { color: var(--muted); font-size: 13px; }
+  .track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; position:relative; overflow:hidden; }
+  .fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; font-weight:600; color:#00121f; }
+  .legend-row { display:flex; align-items:center; gap:14px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .swatch { display:inline-flex; align-items:center; gap:6px; }
+  .swatch i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  /* Sequence trace */
+  .seq { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .tok { min-width: 40px; padding:6px 8px; border-radius:8px; text-align:center; font-family: ui-monospace, monospace; font-size:12px; border:1px solid var(--line); position:relative; }
+  .tok .sub { display:block; font-size:10px; color:var(--muted); }
+  .tok.ok { outline: 2px solid #34d399; }
+  .tok.bad { outline: 2px solid #fb7185; }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Gated DeltaNet-2</h1>
+  <p>Decoupling <b style="color:var(--erase)">erase</b> and <b style="color:var(--write)">write</b> in linear attention. A fixed-size recurrent memory edits one association at a time using two <i>separate</i> channel-wise gates — one that decides what old content to remove, one that decides what new content to commit.</p>
+  <div class="badges">
+    <span class="badge">Hatamizadeh, Choi &amp; Kautz · 2026</span>
+    <span class="badge">arXiv:2605.22791</span>
+    <span class="badge">Linear Attention</span>
+    <span class="badge">Delta Rule</span>
+    <span class="badge">Channel-wise gates</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The Gated Delta Rule-2 update</h2>
+  <p class="section-sub">Linear attention keeps a fixed-size matrix state <code class="k">S ∈ R^(d_k×d_v)</code> and reads it with the query. Each token performs one memory edit. Click a stage to see its role and equation (paper §3.1).</p>
+
+  <div class="grid2">
+    <div class="pipe">
+      <div class="step" data-key="decay"><span class="dot" style="background:var(--decay)"></span><span class="label">1 · Channel-wise decay</span><span class="eq">S̄ = D_t · S</span></div>
+      <div class="arrow">↓</div>
+      <div class="step" data-key="erase"><span class="dot" style="background:var(--erase)"></span><span class="label">2 · Erase gate (key side)</span><span class="eq">e_t = b_t ⊙ k_t</span></div>
+      <div class="arrow">↓</div>
+      <div class="step" data-key="read"><span class="dot" style="background:var(--read)"></span><span class="label">3 · Read old content</span><span class="eq">r_t = S̄ᵀ e_t</span></div>
+      <div class="arrow">↓</div>
+      <div class="step" data-key="write"><span class="dot" style="background:var(--write)"></span><span class="label">4 · Write gate (value side)</span><span class="eq">z_t = w_t ⊙ v_t</span></div>
+      <div class="arrow">↓</div>
+      <div class="step" data-key="update"><span class="dot" style="background:var(--state)"></span><span class="label">5 · Rank-1 delta write</span><span class="eq">S = S̄ + k_t (z_t − r_t)ᵀ</span></div>
+      <div class="arrow">↓</div>
+      <div class="step" data-key="out"><span class="dot" style="background:var(--gen)"></span><span class="label">6 · Read out</span><span class="eq">o_t = Sᵀ q_t</span></div>
+    </div>
+
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a stage</h3>
+      <div class="tag" id="d-tag">The whole layer is one online memory edit per token.</div>
+      <div class="formula" id="d-formula">Gated Delta Rule-2 (Eq. 10):
+
+S_t = ( I − k_t (b_t ⊙ k_t)ᵀ ) D_t S_{t-1}  +  k_t (w_t ⊙ v_t)ᵀ
+o_t = S_tᵀ q_t
+
+b_t ∈ [0,1]^d_k : channel-wise ERASE gate  (key axis)
+w_t ∈ [0,1]^d_v : channel-wise WRITE gate  (value axis)
+D_t = diag(α_t)  : channel-wise decay (from KDA)</div>
+      <ul id="d-points"></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Why decouple? One scalar was doing two jobs</h2>
+  <p class="section-sub">DeltaNet / Gated DeltaNet / KDA use a single scalar gate <code class="k">β_t</code> for the active edit. But <b>erasing</b> is a key-side decision (which coordinates of the old read to remove) and <b>writing</b> is a value-side decision (which coordinates of the new value to commit). These need not agree, so Gated DeltaNet-2 gives each its own channel-wise gate.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Prior work: tied scalar gate</h4>
+      <div class="formula">DeltaNet:       S = (I − β k kᵀ) S + β k vᵀ
+Gated DeltaNet: S = α (I − β k kᵀ) S + β k vᵀ
+KDA:            S = (I − β k kᵀ) D S + β k vᵀ
+                     └────── one β for erase AND write ──────┘</div>
+      <p class="small">A single <code class="k">β</code> ties how much to forget on the key side to how much to store on the value side.</p>
+    </div>
+    <div class="card">
+      <h4>Gated DeltaNet-2: two gates</h4>
+      <div class="formula">e = b ⊙ k     b ∈ [0,1]^d_k   (erase, key axis)
+z = w ⊙ v     w ∈ [0,1]^d_v   (write, value axis)
+S = (I − k (b⊙k)ᵀ) D S + k (w⊙v)ᵀ</div>
+      <p class="small">Recovers KDA when <code class="k">b = w = β·1</code>, and Gated DeltaNet when the decay is scalar too — strictly more expressive.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Mechanism check — overwrite one key, then read it back</h2>
+  <p class="section-sub">Write <code class="k">(k₁,v₁)</code> and <code class="k">(k₂,v₂)</code> into the state, then <b>overwrite</b> key 1 with a new value, then read key 1. With the delta rule's erase step the old value is removed cleanly; plain additive linear attention (<code class="k">S += k vᵀ</code>, no erase) returns a scrambled sum. Values below are from <code class="k">demo/run_demo.py</code>, Part A.</p>
+  <div class="card">
+    <div id="mech"></div>
+    <div class="legend-row"><span>Read of key 1 should equal the latest value <b>v₁_new</b>.</span></div>
+  </div>
+
+  <h2 class="section-title">Learned recall: decoupled vs tied gate</h2>
+  <p class="section-sub">Two tiny models trained on key-value recall <i>with overwrites</i> (6 keys, some rewritten). Accuracy is split by whether the queried key was overwritten. Decoupling erase/write gives higher overall recall from the same fixed-size <span id="state-shape"></span> state. Data from Part B.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Gated DeltaNet-2 · decoupled gates</h4>
+      <div class="bars" id="bars-dec"></div>
+    </div>
+    <div class="card">
+      <h4>KDA-style · tied scalar gate</h4>
+      <div class="bars" id="bars-tied"></div>
+    </div>
+  </div>
+  <div class="legend-row" style="margin-top:14px">
+    <span class="swatch"><i style="background:var(--state)"></i>overall</span>
+    <span class="swatch"><i style="background:var(--erase)"></i>overwritten keys</span>
+    <span class="swatch"><i style="background:var(--write)"></i>never overwritten</span>
+    <span id="params-note"></span>
+  </div>
+
+  <h2 class="section-title">A sequence, token by token</h2>
+  <p class="section-sub">One held-out example the trained decoupled model solved. <span class="swatch"><i style="background:rgba(251,113,133,.4)"></i>write-key</span> and its <span class="swatch"><i style="background:rgba(52,211,153,.35)"></i>value</span> are stored; <span class="swatch"><i style="background:rgba(167,139,250,.4)"></i>query-key</span> tokens must recall the latest value (green outline = correct). The bars are the per-step <b>read</b> magnitude (how much old content is pulled) and <b>write</b> magnitude.</p>
+  <div class="card">
+    <div class="seq" id="seq"></div>
+    <div style="height:16px"></div>
+    <h4 style="margin:6px 0">Per-step erase-read magnitude <span style="color:var(--read);font-size:12px">rₜ = S̄ᵀeₜ</span></h4>
+    <canvas id="trace-canvas" width="1100" height="150" style="width:100%;height:150px;background:#0d132a;border-radius:10px;border:1px solid var(--line)"></canvas>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Gated DeltaNet-2: Decoupling Erase and Write in Linear Attention”</b> (2026).
+    Diagram and data generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate <code class="k">data/results.json</code>.
+  </div>
+</div>
+
+<script>
+// Baked-in results from a demo run (data/results.json). Served over http, the
+// page will try to load fresh data instead.
+const BAKED = {"mechanism_check":{"v1":[1.0,0.0,2.0,0.0],"v2":[0.0,3.0,0.0,1.0],"v1_new":[0.0,0.0,0.0,5.0],"gated_delta_read":[0.0,0.0,0.0,5.0],"additive_read":[1.0,0.0,2.0,5.0],"gated_delta_error":0.0,"additive_error":2.2361},"learned_recall":{"decoupled":{"overall":0.8515,"overwritten":0.9504,"not_overwritten":0.7525},"tied":{"overall":0.7010,"overwritten":0.9304,"not_overwritten":0.4717},"state_shape":[32,32],"num_parameters":19863},"sample_trace":{"tokens":[14,8,11,8,12,10,16,9,13,2,15,9,12,7,15,3,14,4,17,19,18,22,20,21],"targets":[-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,-100,8,2,7,9,4,3],"prediction":[5,14,7,14,7,8,5,8,10,9,17,8,2,8,9,5,9,8,8,2,7,9,4,3],"overwritten_query":[false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,true,true],"erase_read_norm":[0.0,4.07,3.468,5.732,1.435,0.358,0.372,0.697,2.042,0.857,2.894,3.34,1.613,1.032,3.635,1.313,1.491,3.773,0.573,0.656,0.144,0.182,0.535,0.096],"write_norm":[13.046,6.732,11.683,6.732,2.082,4.238,12.064,6.315,4.481,6.301,5.62,6.315,2.082,4.391,5.62,6.076,13.046,7.111,0.924,1.026,1.287,2.242,2.326,0.816]},"vocab":{"n_keys":6,"n_vals":10,"size":23,"val_base":1,"wkey_base":11,"qkey_base":17}};
+
+const DETAILS = {
+  decay: { title: "1 · Channel-wise decay", tag: "Inherited from KDA (Eq. 7)",
+    points: ["D_t = diag(α_t) shrinks each key channel of the state at its own learned rate.",
+             "Provides global forgetting — clears broad context before the targeted edit.",
+             "α_t = exp(g_t) with g_t ≤ 0, computed per channel from the token (Eq. 12)."] },
+  erase: { title: "2 · Erase gate (key side)", tag: "The paper's contribution (Eq. 8)",
+    points: ["b_t ∈ [0,1]^d_k selects which key coordinates address the old content to remove.",
+             "e_t = b_t ⊙ k_t is the gated direction used to READ the current association.",
+             "Independent of the write gate — erasing and writing are separate decisions."] },
+  read: { title: "3 · Read old content", tag: "Delta rule read (Eq. 9)",
+    points: ["r_t = S̄ᵀ e_t is the value currently stored along the gated erase direction.",
+             "This is the 'subtract the current read before writing' step of the delta rule.",
+             "Reading before writing is what lets a rewrite REPLACE rather than ADD."] },
+  write: { title: "4 · Write gate (value side)", tag: "The paper's contribution (Eq. 8)",
+    points: ["w_t ∈ [0,1]^d_v selects which value coordinates of the candidate to commit.",
+             "z_t = w_t ⊙ v_t is the gated write target.",
+             "Lives on a different axis than the erase gate — hence 'decoupled'."] },
+  update: { title: "5 · Rank-1 delta write", tag: "Gated Delta Rule-2 (Eq. 9-10)",
+    points: ["S = S̄ + k_t (z_t − r_t)ᵀ writes the residual between target and current read.",
+             "If the target already matches the read, the state is unchanged.",
+             "One outer product → rank-1 edit → O(d_k·d_v) work, independent of context length."] },
+  out: { title: "6 · Read out", tag: "Linear attention read (Eq. 1)",
+    points: ["o_t = S_tᵀ q_t queries the fixed-size state with the current query.",
+             "No softmax over the sequence — constant memory, linear time.",
+             "In the layer this is RMS-normed, gated by SiLU, and projected back."] },
+};
+
+function bindDetail(data) {
+  const steps = document.querySelectorAll('.step');
+  const dT = document.getElementById('d-title'), dTag = document.getElementById('d-tag'), dP = document.getElementById('d-points');
+  function show(key, el) {
+    const d = DETAILS[key]; if (!d) return;
+    steps.forEach(s => s.classList.remove('active'));
+    if (el) el.classList.add('active');
+    dT.textContent = d.title; dTag.textContent = d.tag;
+    dP.innerHTML = d.points.map(p => `<li>${p}</li>`).join('');
+  }
+  steps.forEach(s => s.addEventListener('click', () => show(s.dataset.key, s)));
+  show('erase', document.querySelector('.step[data-key="erase"]'));
+}
+
+function heatColor(t) {
+  const stops = [[13,19,42],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];
+  const x = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+  const i = Math.floor(x), f = x - i;
+  const a = stops[i], b = stops[Math.min(i+1, stops.length-1)];
+  const c = a.map((v,k) => Math.round(v + (b[k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+function vecRow(label, vec, color) {
+  const maxv = Math.max(1, ...vec.map(Math.abs));
+  const chips = vec.map(x => {
+    const bg = x === 0 ? '#0d132a' : color;
+    const col = x === 0 ? 'var(--muted)' : '#00121f';
+    const op = x === 0 ? 1 : (0.35 + 0.65*Math.abs(x)/maxv);
+    return `<div class="comp" style="background:${bg};opacity:${op};color:${col}">${x}</div>`;
+  }).join('');
+  return `<div class="vecrow"><div class="veclabel">${label}</div><div class="vec">${chips}</div></div>`;
+}
+
+function drawMech(data) {
+  const m = data.mechanism_check;
+  const el = document.getElementById('mech');
+  el.innerHTML =
+    vecRow('write value  v₁', m.v1, 'var(--write)') +
+    vecRow('overwrite value  v₁_new', m.v1_new, 'var(--state)') +
+    `<div style="height:8px"></div>` +
+    vecRow('Gated Delta Rule-2  read(k₁)', m.gated_delta_read, 'var(--decay)') +
+    vecRow('additive linear attn  read(k₁)', m.additive_read, 'var(--erase)') +
+    `<div class="vecrow"><div class="veclabel">error vs v₁_new</div>` +
+    `<div style="color:var(--decay)">gated-delta: <b>${m.gated_delta_error.toFixed(3)}</b></div>` +
+    `<div style="color:var(--erase);margin-left:18px">additive: <b>${m.additive_error.toFixed(3)}</b> (scrambled)</div></div>`;
+}
+
+function drawBars(containerId, res) {
+  const rows = [
+    ['overall', res.overall, 'var(--state)'],
+    ['overwritten', res.overwritten, 'var(--erase)'],
+    ['never overwritten', res.not_overwritten, 'var(--write)'],
+  ];
+  document.getElementById(containerId).innerHTML = rows.map(([n,v,c]) =>
+    `<div class="barrow"><div class="name">${n}</div>
+     <div class="track"><div class="fill" style="width:${(v*100).toFixed(1)}%;background:${c}">${(v*100).toFixed(1)}%</div></div></div>`
+  ).join('');
+}
+
+function drawSeq(data) {
+  const t = data.sample_trace, vb = data.vocab;
+  const el = document.getElementById('seq');
+  function classify(tok) {
+    if (tok >= vb.qkey_base) return ['Q'+(tok-vb.qkey_base), 'query-key', 'rgba(167,139,250,.4)'];
+    if (tok >= vb.wkey_base) return ['K'+(tok-vb.wkey_base), 'write-key', 'rgba(251,113,133,.4)'];
+    if (tok >= vb.val_base) return ['v'+(tok-vb.val_base), 'value', 'rgba(52,211,153,.35)'];
+    return ['PAD','', 'transparent'];
+  }
+  el.innerHTML = t.tokens.map((tok, i) => {
+    const [lab, kind, bg] = classify(tok);
+    const scored = t.targets[i] !== -100;
+    let cls = 'tok';
+    if (scored) cls += (t.prediction[i] === t.targets[i]) ? ' ok' : ' bad';
+    let sub = kind;
+    if (scored) sub = '→ v' + (t.targets[i]-vb.val_base) + (t.overwritten_query[i] ? ' *' : '');
+    return `<div class="${cls}" style="background:${bg}" title="token id ${tok}">${lab}<span class="sub">${sub}</span></div>`;
+  }).join('');
+}
+
+function drawTrace(data) {
+  const t = data.sample_trace;
+  const canvas = document.getElementById('trace-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, n = t.erase_read_norm.length;
+  ctx.clearRect(0,0,W,H);
+  const maxv = Math.max(...t.erase_read_norm, ...t.write_norm, 1);
+  const bw = W / n;
+  for (let i=0;i<n;i++){
+    const er = t.erase_read_norm[i]/maxv*(H-30);
+    const wr = t.write_norm[i]/maxv*(H-30);
+    ctx.fillStyle = 'rgba(52,211,153,.55)';
+    ctx.fillRect(i*bw+4, H-20-wr, bw/2-4, wr);
+    ctx.fillStyle = 'rgba(167,139,250,.9)';
+    ctx.fillRect(i*bw+bw/2, H-20-er, bw/2-4, er);
+    if (t.targets[i] !== -100) { ctx.fillStyle = '#93a0c0'; ctx.font='10px monospace'; ctx.fillText('Q', i*bw+bw/2-3, H-6); }
+  }
+  ctx.fillStyle = 'rgba(52,211,153,.9)'; ctx.font='12px sans-serif'; ctx.fillText('■ write magnitude  zₜ', 10, 16);
+  ctx.fillStyle = 'rgba(167,139,250,.95)'; ctx.fillText('■ erase-read magnitude  rₜ', 180, 16);
+}
+
+function render(data) {
+  bindDetail(data);
+  drawMech(data);
+  drawBars('bars-dec', data.learned_recall.decoupled);
+  drawBars('bars-tied', data.learned_recall.tied);
+  document.getElementById('state-shape').textContent = data.learned_recall.state_shape.join('×');
+  document.getElementById('params-note').innerHTML =
+    `&nbsp;· both models: ${data.learned_recall.num_parameters.toLocaleString()} params, fixed ${data.learned_recall.state_shape.join('×')} state`;
+  drawSeq(data);
+  drawTrace(data);
+}
+
+(async function init() {
+  if (location.protocol.startsWith('http')) {
+    try {
+      const res = await fetch('../data/results.json', {cache:'no-store'});
+      if (res.ok) { render(await res.json()); return; }
+    } catch (e) {}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>
