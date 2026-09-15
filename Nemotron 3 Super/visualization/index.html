@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nemotron 3 Super — Hybrid Mamba-Attention</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--mamba:#34d399;--attn:#fb7185;--moe:#a78bfa;--cyan:#22d3ee;--gold:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%,#123a2f 0%,transparent 60%),var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--cyan)}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(52,211,153,.14),rgba(251,113,133,.14) 45%,rgba(167,139,250,.14));
+    border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;
+    background:linear-gradient(90deg,#34d399,#22d3ee 40%,#fb7185 75%,#a78bfa);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:840px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px;max-width:880px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:860px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .statline{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:150px}
+  .stat .v{font-size:26px;font-weight:800}.stat .l{color:var(--muted);font-size:12px;margin-top:2px}
+  canvas{width:100%;height:240px;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+  ul{margin:10px 0 0;padding-left:18px}li{margin:5px 0}
+  .legend{display:flex;gap:16px;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap}
+  .sw{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  /* stack */
+  .stack{display:flex;flex-direction:column;gap:8px;max-width:340px;margin:0 auto}
+  .lyr{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:11px;
+    padding:11px 14px;background:var(--panel-2);font-weight:600}
+  .lyr .tag{margin-left:auto;font-size:11px;color:var(--muted);font-weight:400}
+  .lyr.M{border-color:var(--mamba);background:linear-gradient(90deg,rgba(52,211,153,.14),transparent)}
+  .lyr.A{border-color:var(--attn);background:linear-gradient(90deg,rgba(251,113,133,.14),transparent)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .io{text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:10px;
+    padding:8px;background:rgba(255,255,255,.02)}
+  .arrow{text-align:center;color:var(--line)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Nemotron 3 Super · Hybrid Mamba-Attention</h1>
+  <p>Most layers are <b>Mamba-2 SSM</b> layers — a linear-time recurrence with a fixed-size state — interleaved
+  with a few full <b>attention</b> layers for global interaction. Linear where possible, quadratic only where it
+  pays off.</p>
+  <div class="badges">
+    <span class="badge">NVIDIA, 2026</span>
+    <span class="badge">arXiv:2604.12374</span>
+    <span class="badge">Mamba-2 SSM</span>
+    <span class="badge">Hybrid + MoE</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The hybrid stack</h2>
+  <p class="section-sub">This demo's tiny stack (from <code class="k">demo/run_demo.py</code>) — mostly linear
+  SSM layers with a single attention layer, mirroring Nemotron's mostly-Mamba pattern.</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="stack" id="stack"></div>
+    </div>
+    <div class="card">
+      <h4>Selective SSM recurrence (Mamba-2)</h4>
+      <div class="formula">aₜ = exp(−Δₜ · exp(A))        # input-dependent decay
+Hₜ = aₜ · Hₜ₋₁ + xₜ · Bₜ      # write token into state
+yₜ = ⟨Hₜ, Cₜ⟩ + D · xₜ        # read state out</div>
+      <ul>
+        <li><b>Fixed-size state H</b> ⇒ O(L) time, O(1) memory per step.</li>
+        <li>Δ, B, C are functions of the token — the model <i>selects</i> what to keep.</li>
+        <li>Attention layers add O(L²) global mixing where it matters most.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">It learns long-range recall</h2>
+  <p class="section-sub">Recall a token from position 0 after a long span of distractors — measured accuracy
+  during training.</p>
+  <div class="statline" id="stats"></div>
+  <div class="card">
+    <canvas id="acc" width="1100" height="240"></canvas>
+    <div class="legend"><span><span class="sw" style="background:var(--mamba)"></span>recall accuracy</span>
+      <span><span class="sw" style="background:var(--gold)"></span>chance</span></div>
+  </div>
+
+  <h2 class="section-title">Linear (SSM) vs quadratic (attention)</h2>
+  <p class="section-sub">Measured forward time per layer. The SSM grows linearly with length; attention grows
+  super-linearly, so its time relative to the SSM keeps climbing. (This naive Python SSM carries loop overhead —
+  the point is the growth <i>rate</i>: real Mamba uses a parallel-scan kernel and is fast in wall-clock too.)</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Measured forward time</h4>
+      <canvas id="timing" width="700" height="240"></canvas>
+      <div class="legend"><span><span class="sw" style="background:var(--mamba)"></span>SSM (linear)</span>
+        <span><span class="sw" style="background:var(--attn)"></span>attention (quadratic)</span></div>
+    </div>
+    <div class="card">
+      <h4>Asymptotic op count</h4>
+      <canvas id="cost" width="700" height="240"></canvas>
+      <div class="legend"><span><span class="sw" style="background:var(--mamba)"></span>SSM ∝ L</span>
+        <span><span class="sw" style="background:var(--attn)"></span>attention ∝ L²</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Nemotron 3 Super: Hybrid Mamba-Transformer MoE”</b> (NVIDIA, 2026).
+    Data from <code class="k">demo/run_demo.py</code> → <code class="k">data/hybrid_result.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"seq_len": 48, "pattern": "Mamba-SSM \u2192 Mamba-SSM \u2192 Attention", "layer_kinds": ["M", "M", "A"], "n_ssm": 2, "n_attn": 1, "final_acc": 1.0, "chance": 0.1, "acc_curve": [{"step": 1, "acc": 0.10000000149011612}, {"step": 100, "acc": 1.0}, {"step": 200, "acc": 1.0}, {"step": 300, "acc": 1.0}, {"step": 400, "acc": 1.0}], "timing": {"lengths": [32, 64, 128, 256], "ssm_ms": [1.376, 2.629, 5.278, 10.37], "attn_ms": [0.182, 0.463, 1.574, 5.138]}, "cost_curve": {"lengths": [64, 128, 256, 512, 1024, 2048, 4096], "ssm_linear": [64, 128, 256, 512, 1024, 2048, 4096], "attn_quadratic": [64, 256, 1024, 4096, 16384, 65536, 262144]}, "vocab": 21};
+
+function render(D){
+  // stack
+  const names={M:["Mamba-SSM","linear · O(L)","M"],A:["Attention","global · O(L²)","A"]};
+  const s=document.getElementById('stack');
+  let html='<div class="io">tokens → embedding</div><div class="arrow">↓</div>';
+  D.layer_kinds.forEach(k=>{
+    const info=names[k];
+    html+=`<div class="lyr ${k}"><span class="dot" style="background:${k==='M'?'var(--mamba)':'var(--attn)'}"></span>
+      ${info[0]}<span class="tag">${info[1]}</span></div><div class="arrow">↓</div>`;
+  });
+  html+='<div class="io">LM head → logits</div>';
+  s.innerHTML=html;
+
+  const stats=[
+    ["recall accuracy",(D.final_acc*100).toFixed(0)+"%",`len ${D.seq_len}, chance ${(D.chance*100).toFixed(0)}%`],
+    ["SSM layers",D.n_ssm,"linear-time"],
+    ["attention layers",D.n_attn,"quadratic-time"],
+    ["state","fixed size","O(1) memory / step"],
+  ];
+  document.getElementById('stats').innerHTML=stats.map(x=>
+    `<div class="stat"><div class="v">${x[1]}</div><div class="l">${x[0]} — ${x[2]}</div></div>`).join('');
+
+  drawAcc(D.acc_curve,D.chance);
+  drawTiming(D.timing);
+  drawCost(D.cost_curve);
+}
+
+function grid(ctx,W,H,pad){ctx.strokeStyle='#1e2946';ctx.lineWidth=1;
+  for(let g=0;g<=5;g++){const y=pad+g/5*(H-2*pad);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();}}
+
+function drawAcc(curve,chance){
+  const cv=document.getElementById('acc'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);grid(ctx,W,H,pad);
+  const xs=curve.map(c=>c.step),ys=curve.map(c=>c.acc);
+  const X=i=>pad+i/(xs.length-1)*(W-2*pad),Y=v=>H-pad-v*(H-2*pad);
+  ctx.strokeStyle='#f59e0b';ctx.setLineDash([6,5]);ctx.beginPath();ctx.moveTo(pad,Y(chance));ctx.lineTo(W-pad,Y(chance));ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ys.forEach((v,i)=>{const x=X(i),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2.8;ctx.stroke();
+  ys.forEach((v,i)=>{ctx.fillStyle='#34d399';ctx.beginPath();ctx.arc(X(i),Y(v),3.5,0,7);ctx.fill();});
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach((s,i)=>ctx.fillText('step '+s,X(i)-18,H-pad+16));ctx.fillText('accuracy',6,pad-6);
+}
+
+function drawTiming(t){
+  const cv=document.getElementById('timing'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);grid(ctx,W,H,pad);
+  const xs=t.lengths,a=t.ssm_ms,b=t.attn_ms,mx=Math.max(...a,...b)*1.1;
+  const X=i=>pad+i/(xs.length-1)*(W-2*pad),Y=v=>H-pad-v/mx*(H-2*pad);
+  function line(d,c){ctx.beginPath();d.forEach((v,i)=>{const x=X(i),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=c;ctx.lineWidth=2.8;ctx.stroke();
+    d.forEach((v,i)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(X(i),Y(v),3.5,0,7);ctx.fill();});}
+  line(a,'#34d399');line(b,'#fb7185');
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach((L,i)=>ctx.fillText('L='+L,X(i)-12,H-pad+16));ctx.fillText('ms',6,pad-6);
+}
+
+function drawCost(cc){
+  const cv=document.getElementById('cost'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);
+  const xs=cc.lengths,l=cc.ssm_linear,q=cc.attn_quadratic,all=l.concat(q);
+  const ymin=Math.log10(Math.min(...all)),ymax=Math.log10(Math.max(...all));
+  const xmin=Math.log10(xs[0]),xmax=Math.log10(xs[xs.length-1]);
+  const X=v=>pad+(Math.log10(v)-xmin)/(xmax-xmin)*(W-2*pad);
+  const Y=v=>H-pad-(Math.log10(v)-ymin)/(ymax-ymin)*(H-2*pad);
+  grid(ctx,W,H,pad);
+  function line(d,c,dash){ctx.beginPath();ctx.setLineDash(dash||[]);
+    d.forEach((v,i)=>{const x=X(xs[i]),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=c;ctx.lineWidth=2.6;ctx.stroke();ctx.setLineDash([]);}
+  line(q,'#fb7185');line(l,'#34d399',[7,5]);
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach(v=>ctx.fillText(v>=1024?(v/1024)+'K':v,X(v)-8,H-pad+16));
+  ctx.fillText('ops (log)',6,pad-6);ctx.fillText('length →',W-pad-70,H-8);
+}
+
+(async function init(){
+  let D=BAKED;
+  if(location.protocol.startsWith('http')){
+    try{const r=await fetch('../data/hybrid_result.json',{cache:'no-store'});if(r.ok)D=await r.json();}catch(e){}
+  }
+  render(D);
+})();
+</script>
+</body>
+</html>
