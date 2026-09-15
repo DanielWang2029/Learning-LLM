@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>T5 — Text-to-Text Transfer Transformer</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;--line:#2a3352;
+    --tok:#22d3ee;--pos:#a78bfa;--seg:#f0abfc;--attn:#fb7185;--ffn:#34d399;--norm:#64748b;--mlm:#f59e0b;--cls:#38bdf8;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--tok)}
+  header.hero{padding:40px 24px 28px;text-align:center;background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(245,158,11,.14));border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:820px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px}
+  .arch{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  @media(max-width:820px){.arch{grid-template-columns:1fr}}
+  .stack{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .stack h3{margin:2px 0 12px;text-align:center;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .nx{border:1px dashed var(--line);border-radius:12px;padding:10px;position:relative;margin:6px 0;background:rgba(255,255,255,.015)}
+  .nx::before{content:"N \00d7 (bidirectional layers)";position:absolute;top:-11px;left:14px;background:var(--panel);padding:0 8px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px}
+  .block{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:9px 0;border-radius:11px;cursor:pointer;border:1px solid transparent;transition:transform .12s,box-shadow .12s,border-color .12s;background:var(--panel-2);user-select:none}
+  .block:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .block.active{border-color:#fff3;box-shadow:0 0 0 2px #ffffff22,var(--shadow)}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .block .label{font-weight:600}.block .sec{margin-left:auto;font-size:11px;color:var(--muted)}
+  .arrow{text-align:center;color:var(--line);font-size:18px;margin:-3px 0}
+  .c-tok{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent)}
+  .c-pos{background:linear-gradient(90deg,rgba(167,139,250,.16),transparent)}
+  .c-seg{background:linear-gradient(90deg,rgba(240,171,252,.16),transparent)}
+  .c-attn{background:linear-gradient(90deg,rgba(251,113,133,.16),transparent)}
+  .c-ffn{background:linear-gradient(90deg,rgba(52,211,153,.16),transparent)}
+  .c-norm{background:linear-gradient(90deg,rgba(100,116,139,.18),transparent)}
+  .c-mlm{background:linear-gradient(90deg,rgba(245,158,11,.16),transparent)}
+  .io{text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px;margin:8px 0;background:rgba(255,255,255,.02)}
+  .detail{position:sticky;top:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-height:260px}
+  .detail h3{margin:0 0 4px;font-size:18px}.detail .tag{font-size:12px;color:var(--muted)}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);font-family:"SFMono-Regular",ui-monospace,Consolas,monospace;font-size:14px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  .detail ul{margin:10px 0 0;padding-left:18px}.detail li{margin:5px 0}
+  .hint{color:var(--muted);font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .cell{width:100%;aspect-ratio:1/1;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#00121f;transition:transform .1s}
+  .cell:hover{transform:scale(1.12);outline:2px solid #fff;z-index:2}
+  .heat{display:grid;gap:3px}.heat .row{display:grid;gap:3px;grid-auto-flow:column}
+  .heat-wrap{display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:center}
+  .ylabels{display:grid;gap:3px}.ylabels div{display:flex;align-items:center;justify-content:flex-end;font-size:11px;color:var(--muted)}
+  .xlabels{display:grid;grid-auto-flow:column;gap:3px;text-align:center;font-size:11px;color:var(--muted)}
+  .legend-row{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--muted);font-size:12px}
+  .legend-bar{height:10px;flex:1;border-radius:6px;background:linear-gradient(90deg,#0b1020,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a)}
+  .sample-note{color:var(--muted);font-size:12px;margin-top:10px}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .tokline{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  .chip{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);font-family:ui-monospace,monospace}
+  .chip.mask{background:linear-gradient(90deg,rgba(245,158,11,.35),rgba(245,158,11,.15));border-color:#f59e0b}
+  .chip.cls{background:linear-gradient(90deg,rgba(56,189,248,.35),rgba(56,189,248,.12));border-color:#38bdf8}
+  .chip.pred{background:linear-gradient(90deg,rgba(52,211,153,.30),rgba(52,211,153,.10));border-color:#34d399}
+  .metric{font-size:34px;font-weight:700;background:linear-gradient(90deg,#34d399,#22d3ee);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+<style>
+ canvas{width:100%;height:200px;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+ .mono{font-family:ui-monospace,monospace}
+ .t2t{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+ @media(max-width:820px){.t2t{grid-template-columns:1fr}}
+ .box{background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:ui-monospace,monospace;color:#cfe8ff}
+ .toklist{display:flex;gap:5px;flex-wrap:wrap}
+ .tk{padding:4px 8px;border-radius:7px;border:1px solid var(--line);background:var(--panel-2);font-family:ui-monospace,monospace;font-size:13px}
+ .tk.sent{background:linear-gradient(90deg,rgba(245,158,11,.35),rgba(245,158,11,.12));border-color:#f59e0b}
+ .tk.masked{opacity:.35;text-decoration:line-through}
+ .accrow{display:flex;align-items:center;gap:10px;margin:8px 0}
+ .accrow .name{width:70px;color:var(--muted)}
+ .track{flex:1;height:14px;background:#0d132a;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+ .track .fill{height:100%;background:linear-gradient(90deg,#a78bfa,#34d399)}
+ .accrow .pct{width:52px;text-align:right;font-weight:700}
+ .arrowr{font-size:26px;color:var(--muted);text-align:center}
+</style></head><body>
+<header class="hero"><h1>T5</h1>
+ <p>Exploring the Limits of Transfer Learning with a <b>Unified Text-to-Text Transformer</b>. Every problem — translation, classification, our toy reverse/sort/copy — becomes "input string → output string", handled by one <b>encoder–decoder</b> model, pre-trained by <b>span corruption</b>.</p>
+ <div class="badges"><span class="badge">Raffel et al. · 2020</span><span class="badge">arXiv:1910.10683</span><span class="badge">Encoder–Decoder</span><span class="badge">Span corruption</span></div></header>
+<div class="wrap">
+ <h2 class="section-title">One framework: text in, text out</h2>
+ <p class="section-sub">A task token selects the behaviour; the architecture never changes. Below are real examples from the trained model.</p>
+ <div class="card"><div id="t2t"></div></div>
+
+ <h2 class="section-title">Pre-training objective: span corruption</h2>
+ <p class="section-sub">Random contiguous spans of the input are dropped and replaced by sentinel tokens (<span class="mono" style="color:var(--mlm)">&lt;X0&gt;,&lt;X1&gt;…</span>). The decoder must regenerate the missing spans, each announced by its sentinel.</p>
+ <div class="grid2">
+   <div class="card"><h4>A corruption example</h4>
+     <div class="small">original</div><div class="toklist" id="orig"></div>
+     <div class="small" style="margin-top:10px">encoder input (spans → sentinels)</div><div class="toklist" id="enc"></div>
+     <div class="small" style="margin-top:10px">decoder target (the dropped spans)</div><div class="toklist" id="tgt"></div>
+     <p class="sample-note" id="recon-note"></p></div>
+   <div class="card"><h4>Pre-training loss</h4><canvas id="pre" width="1000" height="200"></canvas>
+     <p class="sample-note">Toy sentences follow a fixed successor grammar, so dropped spans are predictable from the surrounding context.</p></div>
+ </div>
+
+ <h2 class="section-title">One model, many tasks (after fine-tuning)</h2>
+ <div class="grid2">
+   <div class="card"><h4>Exact-match accuracy per task</h4><div id="accs"></div><p class="sample-note" id="mean-note"></p></div>
+   <div class="card"><h4>Encoder–decoder architecture</h4>
+     <div class="formula">memory = Encoder(embed(src))          (bidirectional)
+h = Decoder(embed(tgt), memory)       (causal + cross-attn)
+y = softmax(h W)                      shared vocab</div>
+     <p class="small">The decoder's <b>cross-attention</b> is where the output sequence consults the input — shown below.</p></div>
+ </div>
+
+ <h2 class="section-title">Decoder → encoder cross-attention (task: reverse)</h2>
+ <p class="section-sub">Row = output position, column = input position. For <b>reverse</b>, the bright anti-diagonal shows each output token attending to the mirror-image input token. Hover for values.</p>
+ <div class="card"><div id="heat"></div><div class="legend-row"><span>low</span><span class="legend-bar"></span><span>high</span></div>
+   <p class="sample-note" id="attn-note"></p></div>
+ <div class="footer">Interactive companion to <b>T5</b> (Raffel et al., 2020). Generated from <code class="k">src/</code> via <code class="k">python demo/run_demo.py</code>.</div>
+</div>
+<script>
+const BAKED={"tasks":["copy","reverse","sort"],"accuracies":{"copy":1.0,"reverse":1.0,"sort":0.95},"examples":{"copy":{"input":[27,17,30,21,18,25],"expected":[27,17,30,21,18,25],"got":[27,17,30,21,18,25]},"reverse":{"input":[17,17,14,20,24,16],"expected":[16,24,20,14,17,17],"got":[16,24,20,14,17,17]},"sort":{"input":[13,13,29,26,18,13],"expected":[13,13,13,18,26,29],"got":[13,13,18,26,26,29]}},"mean_accuracy":0.9833,"span_reconstruction_acc":0.9516,"pretrain_curve":[{"step":1,"loss":3.6919},{"step":200,"loss":0.7056},{"step":400,"loss":0.3779},{"step":600,"loss":0.2109},{"step":800,"loss":0.1814}],"task_curve":[{"step":1,"loss":10.9936},{"step":200,"loss":1.6641},{"step":400,"loss":1.0298},{"step":600,"loss":0.872},{"step":800,"loss":0.4592},{"step":1000,"loss":0.2087},{"step":1200,"loss":0.1101},{"step":1400,"loss":0.13},{"step":1600,"loss":0.0527}],"cross_attention":{"task":"reverse","encoder_input":[10,16,15,25,24,15,19],"decoder_input":[1,19,15,24,25,15,16],"src_labels":["10","16","15","25","24","15","19"],"tgt_labels":["<s>","19","15","24","25","15","16"],"matrix":[[0.5797,0.0,0.0,0.0,0.0,0.0222,0.3981],[0.0528,0.0,0.0,0.0003,0.0142,0.816,0.1167],[0.0008,0.0,0.0,0.0456,0.9212,0.0297,0.0027],[0.0,0.0002,0.0285,0.8726,0.0985,0.0001,0.0],[0.0,0.0981,0.859,0.0418,0.001,0.0,0.0],[0.0008,0.9702,0.0286,0.0001,0.0,0.0,0.0002],[0.4643,0.4159,0.0029,0.0,0.0,0.0022,0.1147]]},"span_example":{"encoder_input":[16,3,18,27,20,13,25,24,22,30,28,26],"target":[3,31,2]},"example_text":[16,31,18,27,20,13,25,24,22,30,28,26],"sentinels":[3,4,5,6,7,8]};
+function heatColor(t){const s=[[11,16,32],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];const x=Math.max(0,Math.min(1,t))*(s.length-1);const i=Math.floor(x),f=x-i;const a=s[i],b=s[Math.min(i+1,s.length-1)];const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f));return`rgb(${c[0]},${c[1]},${c[2]})`;}
+function renderHeat(id,m,rl,cl){const el=document.getElementById(id);const cols=cl.length;const w=document.createElement('div');w.className='heat-wrap';
+ const yl=document.createElement('div');yl.className='ylabels';yl.style.gridTemplateRows=`repeat(${m.length},1fr)`;rl.forEach(l=>{const dd=document.createElement('div');dd.textContent=l;yl.appendChild(dd);});
+ const h=document.createElement('div');h.className='heat';h.style.gridTemplateRows=`repeat(${m.length},1fr)`;
+ m.forEach((row,ri)=>{const r=document.createElement('div');r.className='row';r.style.gridTemplateColumns=`repeat(${cols},1fr)`;row.slice(0,cols).forEach((v,ci)=>{const c=document.createElement('div');c.className='cell';c.style.background=heatColor(v);if(v>=0.3)c.textContent=v.toFixed(2).replace(/^0/,'');c.title=`${rl[ri]} -> ${cl[ci]} : ${v.toFixed(4)}`;r.appendChild(c);});h.appendChild(r);});
+ const sp=document.createElement('div');const xl=document.createElement('div');xl.className='xlabels';xl.style.gridTemplateColumns=`repeat(${cols},1fr)`;cl.forEach(l=>{const dd=document.createElement('div');dd.textContent=l;xl.appendChild(dd);});
+ w.appendChild(yl);w.appendChild(h);w.appendChild(sp);w.appendChild(xl);el.innerHTML='';el.appendChild(w);}
+function drawLoss(id,curve,color){const cv=document.getElementById(id);const ctx=cv.getContext('2d');const W=cv.width,H=cv.height,pad=30;ctx.clearRect(0,0,W,H);
+ const xmax=Math.max(...curve.map(p=>p.step)),ymax=Math.max(...curve.map(p=>p.loss)),ymin=Math.min(...curve.map(p=>p.loss));
+ ctx.strokeStyle='#1e2946';for(let g=0;g<=4;g++){const y=pad+(H-2*pad)*g/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-8,y);ctx.stroke();}
+ ctx.beginPath();curve.forEach((p,i)=>{const x=pad+(W-pad-8)*(p.step/xmax);const y=pad+(H-2*pad)*(1-(p.loss-ymin)/(ymax-ymin));i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();
+ ctx.fillStyle='#93a0c0';ctx.font='11px monospace';ctx.fillText('loss '+ymax.toFixed(1),4,pad);ctx.fillText(ymin.toFixed(2),4,H-pad);}
+function tkspan(v,cls){return `<span class="tk ${cls||''}">${v}</span>`;}
+function renderT2T(d){
+ const el=document.getElementById('t2t');el.innerHTML='';
+ d.tasks.forEach(t=>{const ex=d.examples[t];const row=document.createElement('div');row.className='t2t';
+  row.innerHTML=`<div class="box">${t}: [ ${ex.input.join(' ')} ]</div><div class="arrowr">→</div><div class="box">[ ${ex.got.join(' ')} ]${JSON.stringify(ex.got)===JSON.stringify(ex.expected)?' <span style="color:#34d399">✓</span>':''}</div>`;
+  el.appendChild(row);const gap=document.createElement('div');gap.style.height='8px';el.appendChild(gap);});
+}
+function renderSpan(d){
+ const sent=new Set(d.sentinels);
+ const enc=d.span_example.encoder_input, tgt=d.span_example.target, orig=d.example_text;
+ const oe=document.getElementById('orig');oe.innerHTML=orig.map(v=>tkspan(v)).join('');
+ const ee=document.getElementById('enc');ee.innerHTML=enc.map(v=>tkspan(v,sent.has(v)?'sent':'')).join('');
+ const te=document.getElementById('tgt');te.innerHTML=tgt.map(v=>tkspan(v,sent.has(v)?'sent':(v===2?'':''))).join('');
+ document.getElementById('recon-note').textContent='span reconstruction token accuracy: '+(d.span_reconstruction_acc*100).toFixed(1)+'%';
+}
+function draw(d,note){
+ renderT2T(d);renderSpan(d);drawLoss('pre',d.pretrain_curve,'#f59e0b');
+ const accs=document.getElementById('accs');accs.innerHTML='';
+ d.tasks.forEach(t=>{const a=d.accuracies[t]*100;const row=document.createElement('div');row.className='accrow';
+  row.innerHTML=`<div class="name mono">${t}</div><div class="track"><div class="fill" style="width:${a}%"></div></div><div class="pct">${a.toFixed(0)}%</div>`;accs.appendChild(row);});
+ document.getElementById('mean-note').textContent='mean task accuracy: '+(d.mean_accuracy*100).toFixed(1)+'%  ·  '+note;
+ const ca=d.cross_attention;renderHeat('heat',ca.matrix,ca.tgt_labels,ca.src_labels);
+ document.getElementById('attn-note').textContent='task: '+ca.task+' · encoder input '+JSON.stringify(ca.encoder_input);
+}
+(async function(){if(location.protocol.startsWith('http')){try{const r=await fetch('../data/t5_sample.json',{cache:'no-store'});if(r.ok){const j=await r.json();j.span_example=BAKED.span_example;j.example_text=BAKED.example_text;j.sentinels=BAKED.sentinels;draw(j,'live data');return;}}catch(e){}}draw(BAKED,'baked-in sample');})();
+</script></body></html>
