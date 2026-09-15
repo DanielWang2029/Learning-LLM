@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mixtral of Experts — Sparse Top-2 MoE</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340;
+    --ink: #e8ecf7; --muted: #93a0c0; --line: #2a3352;
+    --accent: #a78bfa; --gate: #22d3ee; --hot: #f59e0b; --good:#34d399; --bad:#fb7185;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #1a1740 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #10233a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header.hero { padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(167,139,250,.16), rgba(34,211,238,.12) 50%, rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line); }
+  header.hero h1 { margin: 0; font-size: 34px; letter-spacing:.5px;
+    background: linear-gradient(90deg,#a78bfa,#22d3ee 45%,#f59e0b);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 800px; }
+  .badges { margin-top: 14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+    background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width: 900px){ .grid2 { grid-template-columns:1fr; } }
+  .card { background: var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; } .card p.small { color: var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* routing diagram */
+  .route { display:grid; grid-template-columns: 90px 1fr; gap:14px; align-items:center; }
+  .token-chip { background: rgba(34,211,238,.16); border:1px solid #2b6b7d; color:#cdf4ff;
+    border-radius:10px; padding:14px; text-align:center; font-family:ui-monospace,monospace; font-weight:700; }
+  .experts { display:grid; grid-template-columns: repeat(8,1fr); gap:8px; }
+  .expert { border:1px solid var(--line); border-radius:10px; padding:10px 6px; text-align:center; font-size:12px;
+    background: var(--panel-2); position:relative; transition: all .2s; }
+  .expert .en { font-weight:700; } .expert .gw { color:var(--muted); font-size:11px; margin-top:3px; }
+  .expert.chosen { border-color:#f59e0b; box-shadow:0 0 0 2px rgba(245,158,11,.35); background: rgba(245,158,11,.10); }
+  .expert.dim { opacity:.4; }
+
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  @media (max-width:760px){ .metrics { grid-template-columns:1fr 1fr; } }
+  .metric { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; }
+  .metric .big { font-size:20px; font-weight:700; } .metric .lbl { color:var(--muted); font-size:12px; }
+
+  /* param donut */
+  .paramwrap { display:flex; gap:20px; align-items:center; flex-wrap:wrap; }
+
+  /* token x expert heatmap */
+  .heat { display:grid; gap:2px; }
+  .hrow { display:grid; grid-auto-flow:column; gap:2px; }
+  .hcell { aspect-ratio:1/1; border-radius:3px; }
+  .hlabels { display:grid; grid-auto-flow:column; gap:2px; font-size:10px; color:var(--muted); text-align:center; }
+
+  /* load bars */
+  .loadbars { display:grid; grid-template-columns: repeat(8,1fr); gap:8px; align-items:end; height:150px; }
+  .lb { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%; }
+  .lb .bar { width:70%; border-radius:6px 6px 0 0; }
+  .lb .t { font-size:11px; color:var(--muted); margin-top:4px; }
+  .legend-row { display:flex; align-items:center; gap:14px; margin-top:12px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .sw { width:14px; height:14px; border-radius:4px; display:inline-block; vertical-align:-2px; margin-right:5px; }
+  .footer { color: var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Mixtral of Experts</h1>
+  <p>A sparse <b>Mixture-of-Experts</b> transformer: 8 expert MLPs and a router that sends each token to only its
+  <b>top-2</b> experts. Many parameters, few <i>active</i> per token. Every figure below is <b>real</b> data from
+  this folder's demo run.</p>
+  <div class="badges">
+    <span class="badge">Mistral AI, 2024</span>
+    <span class="badge">arXiv 2401.04088</span>
+    <span class="badge">Top-2 of 8 Experts</span>
+    <span class="badge">Load Balancing</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Top-2 routing for one token</h2>
+  <p class="section-sub">The router scores all 8 experts with a softmax; the token is processed by the 2
+  highest-scoring experts, whose gate weights are renormalized to sum to 1.</p>
+  <div class="card">
+    <div class="route">
+      <div class="token-chip" id="rtok">token</div>
+      <div class="experts" id="rexperts"></div>
+    </div>
+    <p class="small" id="gate-note" style="margin-top:14px"></p>
+  </div>
+
+  <h2 class="section-title">Total vs active parameters</h2>
+  <p class="section-sub">Because only <span id="tk"></span> of <span id="ne"></span> experts run per token, the model
+  is much bigger than its per-token compute. This is why MoE gets "more parameters for the same FLOPs".</p>
+  <div class="card">
+    <div class="paramwrap">
+      <canvas id="donut" width="220" height="220" style="width:220px;height:220px;background:transparent;border:none"></canvas>
+      <div style="flex:1;min-width:260px">
+        <div class="metrics">
+          <div class="metric"><div class="lbl">total params</div><div class="big" style="color:var(--accent)" id="m-total"></div></div>
+          <div class="metric"><div class="lbl">active / token (top-2)</div><div class="big" style="color:var(--hot)" id="m-active"></div></div>
+          <div class="metric"><div class="lbl">% active per token</div><div class="big" id="m-frac"></div></div>
+          <div class="metric"><div class="lbl">Switch top-1 (contrast)</div><div class="big" style="color:var(--gate)" id="m-top1"></div></div>
+        </div>
+        <p class="small" id="param-note" style="margin-top:14px"></p>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Expert specialization — token → expert map</h2>
+  <p class="section-sub">After training, routing is a stable function of the input token: each token consistently
+  goes to a dominant expert. The heatmap is 32 tokens (rows, grouped into 4 domains) × 8 experts (columns);
+  brighter = larger share of that token's routing. Mean dominant-expert share:
+  <b id="peak"></b>.</p>
+  <div class="card">
+    <div class="grid2" style="grid-template-columns: 30px 300px; max-width:360px;">
+      <div id="tok-ylabels" style="display:grid;gap:2px;font-size:10px;color:var(--muted)"></div>
+      <div>
+        <div id="tok-heat" class="heat"></div>
+        <div id="tok-xlabels" class="hlabels" style="margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="legend-row"><span>low</span><span class="sw" style="width:120px;height:12px;background:linear-gradient(90deg,#0d132a,#3b1d5e,#7c2d8a,#d6407f,#f59e0b,#fde68a)"></span><span>high routing share</span></div>
+  </div>
+
+  <h2 class="section-title">Load balancing — with vs without the aux loss</h2>
+  <p class="section-sub">The auxiliary load-balancing loss keeps the router from over-using a few experts. On this
+  balanced toy task routing stays fairly even either way, but the aux loss visibly tightens it — max/min usage
+  drops from <b id="ratio-no"></b> to <b id="ratio-yes"></b>. At scale this prevents experts from collapsing.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--good)">WITH load-balancing loss</h4>
+      <div class="loadbars" id="load-aux"></div>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--bad)">WITHOUT load-balancing loss</h4>
+      <div class="loadbars" id="load-noaux"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h4>Top-2 (Mixtral) vs Top-1 (Switch Transformers)</h4>
+    <p class="small">Both are sparse MoE. Switch routes each token to a single expert (top-1) for maximum sparsity;
+    Mixtral routes to two (top-2), combining them for a bit more capacity per token at a modest compute increase.
+    Everything else — 8 experts, a router, and a load-balancing loss — is shared.</p>
+    <div id="accbox" class="metric" style="display:inline-block"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Mixtral of Experts</b> (Mistral AI, 2024 · arXiv 2401.04088).
+    Data baked from <code class="k">data/mixtral_results.json</code> — regenerate with
+    <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config": {"n_experts": 8, "top_k": 2, "n_domains": 4, "domain_size": 8, "vocab_size": 32, "seq_len": 16, "total_params": 120896, "active_params": 47168, "active_params_top1": 34880, "params_per_expert": 12288}, "results": {"accuracy": 1.0}, "expert_load_with_aux": [0.10716145485639572, 0.12799479067325592, 0.14244791865348816, 0.1126302108168602, 0.13138021528720856, 0.12018229067325592, 0.13502603769302368, 0.12317708134651184], "expert_load_without_aux": [0.07526041567325592, 0.11927083134651184, 0.1959635466337204, 0.10247395932674408, 0.13619790971279144, 0.09817708283662796, 0.14752604067325592, 0.12513020634651184], "balance_with_aux": 0.9981576664391462, "balance_without_aux": 0.982441670032372, "imbalance_ratio_with_aux": 1.3292831722411655, "imbalance_ratio_without_aux": 2.6038063287412427, "token_expert": [[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.11290322244167328, 0.0, 0.8870967626571655, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.2704918086528778, 0.0, 0.7295082211494446, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0], [0.347457617521286, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6525423526763916], [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.1652892529964447, 0.8347107172012329, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.12903225421905518, 0.8709677457809448, 0.0], [0.0, 0.9067796468734741, 0.0, 0.0, 0.0, 0.0, 0.09322033822536469, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]], "mean_token_peak": 0.9650501701980829, "example_gate": {"router_probs": [0.1753, 0.1591, 0.0576, 0.114, 0.4061, 0.0241, 0.0363, 0.0276], "top_experts": [4, 0], "top_weights": [0.6985, 0.3015]}, "aux_curve": {"step": [1, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400], "aux": [1.061, 1.0211, 1.0212, 1.0289, 1.0152, 1.024, 1.0254, 1.0079, 1.0072, 1.007, 1.0043, 1.0129, 1.0102, 1.0084, 1.0041, 1.0022, 1.0132], "acc": [0.0695, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]}};
+
+function heatColor(t){ const stops=[[13,19,42],[59,29,94],[124,45,138],[214,64,127],[245,158,11],[253,230,138]];
+  const x=Math.max(0,Math.min(1,t))*(stops.length-1); const i=Math.floor(x), f=x-i;
+  const a=stops[i], b=stops[Math.min(i+1,stops.length-1)]; const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+function render(d){
+  const c=d.config;
+  document.getElementById('tk').textContent=c.top_k;
+  document.getElementById('ne').textContent=c.n_experts;
+
+  // gate diagram
+  const g=d.example_gate;
+  document.getElementById('rtok').innerHTML = 'input<br>token';
+  const ex=document.getElementById('rexperts'); ex.innerHTML='';
+  for(let e=0;e<c.n_experts;e++){ const chosen=g.top_experts.includes(e);
+    const slot=g.top_experts.indexOf(e);
+    const div=document.createElement('div'); div.className='expert '+(chosen?'chosen':'dim');
+    div.innerHTML=`<div class="en">E${e}</div><div class="gw">p=${g.router_probs[e].toFixed(2)}</div>`+
+      (chosen?`<div class="gw" style="color:#f59e0b">w=${g.top_weights[slot].toFixed(2)}</div>`:'');
+    ex.appendChild(div); }
+  document.getElementById('gate-note').innerHTML =
+    `Router picks <b style="color:#f59e0b">E${g.top_experts[0]}</b> (w=${g.top_weights[0].toFixed(2)}) and `+
+    `<b style="color:#f59e0b">E${g.top_experts[1]}</b> (w=${g.top_weights[1].toFixed(2)}); the other `+
+    `${c.n_experts-2} experts are skipped for this token.`;
+
+  // params
+  document.getElementById('m-total').textContent=c.total_params.toLocaleString();
+  document.getElementById('m-active').textContent=c.active_params.toLocaleString();
+  document.getElementById('m-frac').textContent=(c.active_params/c.total_params*100).toFixed(0)+'%';
+  document.getElementById('m-top1').textContent=c.active_params_top1.toLocaleString();
+  document.getElementById('param-note').innerHTML =
+    `Each of the ${c.n_experts} experts has ${c.params_per_expert.toLocaleString()} params. Running only `+
+    `${c.top_k} of them per token means <b>${(c.active_params/c.total_params*100).toFixed(0)}%</b> of the `+
+    `parameters are active for any given token.`;
+  drawDonut(c.active_params, c.total_params);
+
+  // token x expert heatmap
+  const te=d.token_expert;
+  const heat=document.getElementById('tok-heat'); heat.innerHTML='';
+  heat.style.gridTemplateRows=`repeat(${te.length},1fr)`;
+  te.forEach((row,ri)=>{ const r=document.createElement('div'); r.className='hrow';
+    r.style.gridTemplateColumns=`repeat(${row.length},1fr)`;
+    row.forEach((v,ci)=>{ const cell=document.createElement('div'); cell.className='hcell';
+      cell.style.background=heatColor(v); cell.title=`token ${ri} -> E${ci}: ${(v*100).toFixed(0)}%`;
+      r.appendChild(cell); });
+    heat.appendChild(r); });
+  const yl=document.getElementById('tok-ylabels'); yl.innerHTML='';
+  yl.style.gridTemplateRows=`repeat(${te.length},1fr)`;
+  te.forEach((_,ri)=>{ const el=document.createElement('div');
+    el.textContent = (ri%c.domain_size===0)?('d'+(ri/c.domain_size)) : '';
+    el.style.display='flex'; el.style.alignItems='center'; yl.appendChild(el); });
+  const xl=document.getElementById('tok-xlabels'); xl.innerHTML='';
+  xl.style.gridTemplateColumns=`repeat(${c.n_experts},1fr)`;
+  for(let e=0;e<c.n_experts;e++){ const el=document.createElement('div'); el.textContent='E'+e; xl.appendChild(el); }
+  document.getElementById('peak').textContent=(d.mean_token_peak*100).toFixed(0)+'%';
+
+  // load bars
+  function bars(host, load, color){ const el=document.getElementById(host); el.innerHTML='';
+    const mx=Math.max(...load);
+    load.forEach((v,e)=>{ const col=document.createElement('div'); col.className='lb';
+      const bar=document.createElement('div'); bar.className='bar';
+      bar.style.height=(v/mx*100)+'%'; bar.style.background=color;
+      const t=document.createElement('div'); t.className='t'; t.innerHTML=`E${e}<br>${(v*100).toFixed(0)}%`;
+      col.appendChild(bar); col.appendChild(t); el.appendChild(col); }); }
+  bars('load-aux', d.expert_load_with_aux, 'var(--good)');
+  bars('load-noaux', d.expert_load_without_aux, 'var(--bad)');
+  document.getElementById('ratio-no').textContent=d.imbalance_ratio_without_aux.toFixed(2)+'x';
+  document.getElementById('ratio-yes').textContent=d.imbalance_ratio_with_aux.toFixed(2)+'x';
+
+  document.getElementById('accbox').innerHTML =
+    `<div class="lbl">next-token accuracy (this demo)</div><div class="big" style="color:var(--good)">`+
+    `${(d.results.accuracy*100).toFixed(1)}%</div>`;
+}
+
+function drawDonut(active, total){
+  const cv=document.getElementById('donut'), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,cx=W/2,cy=H/2,r=88,rin=54; ctx.clearRect(0,0,W,H);
+  const frac=active/total;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.arc(cx,cy,rin,0,Math.PI*2,true);
+  ctx.fillStyle='#1a2340'; ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+frac*Math.PI*2);
+  ctx.closePath(); ctx.fillStyle='#f59e0b'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,rin,0,Math.PI*2); ctx.fillStyle='#131a2e'; ctx.fill();
+  ctx.fillStyle='#e8ecf7'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center';
+  ctx.fillText((frac*100).toFixed(0)+'%', cx, cy-2);
+  ctx.fillStyle='#93a0c0'; ctx.font='11px sans-serif'; ctx.fillText('active/token', cx, cy+16);
+}
+
+(async function init(){
+  let d=BAKED;
+  if(location.protocol.startsWith('http')){ try{ const res=await fetch('../data/mixtral_results.json',{cache:'no-store'});
+    if(res.ok) d=await res.json(); }catch(e){} }
+  render(d);
+})();
+</script>
+</body>
+</html>
