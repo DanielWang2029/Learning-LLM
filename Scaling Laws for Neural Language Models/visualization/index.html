@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scaling Laws for Neural Language Models — Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0;
+    --line:#2a3352; --a:#22d3ee; --b:#a78bfa; --c:#fb7185; --d:#f59e0b; --e:#34d399;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+       radial-gradient(1000px 500px at 100% 0%,#24123a 0%,transparent 60%),var(--bg);
+       color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--a);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(244,114,182,.14));
+    border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:780px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;}
+  .section-sub{color:var(--muted);margin:0 0 18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:"SFMono-Regular",ui-monospace,Consolas,monospace;font-size:14px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap;}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  .kpi{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;}
+  .kpi div{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .kpi b{font-size:20px;color:var(--a);} .kpi span{display:block;color:var(--muted);font-size:12px;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);}
+  th{color:var(--muted);font-weight:600;} td:first-child,th:first-child{text-align:left;}
+  .pipeline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+  .step{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:150px;text-align:center;}
+  .step .t{font-weight:700;} .step .s{color:var(--muted);font-size:12px;}
+  .chev{color:var(--line);font-size:22px;}
+  .tip{position:fixed;pointer-events:none;background:#0d132a;border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;color:var(--ink);opacity:0;transition:opacity .1s;z-index:9;}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+  .legend{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap;}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:5px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Scaling Laws for Neural Language Models</h1>
+  <p>Train language models of many sizes on the same data and their losses fall on a
+  <b>straight line in log-log space</b> — a power law <code class="k">L(N) = (Nc / N)^α</code>.
+  This page plots the real losses measured by the demo in this folder.</p>
+  <div class="badges">
+    <span class="badge">Kaplan et al., 2020</span>
+    <span class="badge">arXiv:2001.08361</span>
+    <span class="badge">Power law in model size</span>
+    <span class="badge">Predictable improvement</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">The power law of scale</h2>
+  <p class="section-sub">Loss vs non-embedding parameter count <b>N</b>, on log-log axes. Points are the
+  trained models; the line is the least-squares power-law fit. Hover a point for its values.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Loss vs. model size (log-log)</h4>
+      <p class="small">A power law appears as a straight, downward line here. Both axes are logarithmic.</p>
+      <canvas id="plot" width="1000" height="560"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--a)"></span>trained models (N, loss)</span>
+        <span><span class="swatch" style="background:var(--d)"></span>fitted power law L(N)=(Nc/N)^α</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>What the fit says</h4>
+      <div class="formula">L(N) ≈ (Nc / N) ^ α_N          (paper Eq. 1.1)
+
+taking logs:
+  log L = α·log(Nc) − α·log N
+        = b − α·log N          ← a straight line</div>
+      <div class="kpi">
+        <div><b id="kpi-alpha">–</b><span>fitted exponent α_N</span></div>
+        <div><b id="kpi-r2">–</b><span>log-log R²</span></div>
+        <div><b id="kpi-n">–</b><span>models trained</span></div>
+      </div>
+      <p class="small" style="margin-top:14px">The paper measures α_N ≈ 0.076 for real LMs across seven orders of
+      magnitude. Our tiny CPU reproduction recovers a comparably small exponent on a synthetic corpus —
+      the point is the <i>shape</i>: a clean straight line.</p>
+      <table id="tbl">
+        <thead><tr><th>N (non-emb)</th><th>layers</th><th>d_model</th><th>val loss</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 class="section-title">How the demo produces this</h2>
+  <p class="section-sub">Everything on this page comes from <code class="k">demo/run_demo.py</code>.</p>
+  <div class="card">
+    <div class="pipeline">
+      <div class="step"><div class="t">Synthetic corpus</div><div class="s">order-3 Markov, fixed seed</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="t">Train a size series</div><div class="s">6 tiny GPTs, varying width/depth</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="t">Record final loss</div><div class="s">held-out val loss per model</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="t">Fit L(N)</div><div class="s">least squares in log-log space</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="t">Straight line</div><div class="s">R² &gt; 0.9</div></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:22px">
+    <div class="card">
+      <h4>Why bigger is predictably better</h4>
+      <p class="small">The scaling law lets you extrapolate: measure a few small models, fit the line, and read off how
+      much loss a much larger model would reach — before paying to train it.</p>
+      <ul style="color:var(--ink);padding-left:18px">
+        <li>The exponent α_N is the <b>slope</b> of the log-log line.</li>
+        <li>N counts <b>non-embedding</b> parameters (paper §2.1).</li>
+        <li>The relationship is smooth over many orders of magnitude — no sharp thresholds.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Counting N (paper §2.1)</h4>
+      <div class="formula">N ≈ 12 · n_layer · d_model²   (transformer blocks)
+
+embeddings & the output un-embedding
+are excluded from N</div>
+      <p class="small">Each model's N is computed exactly in <code class="k">src/tiny_lm.py</code> (<code class="k">num_params</code>),
+      then paired with its measured loss.</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Scaling Laws for Neural Language Models”</b> (Kaplan et al., 2020).
+    Data generated by <code class="k">demo/run_demo.py</code> → <code class="k">data/scaling_results.json</code>.
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+// Baked-in results from a demo run (data/scaling_results.json). Served over http, the page loads live data.
+const BAKED = {"points":[{"N":1908,"n_layer":1,"d_model":12,"loss":3.0973},{"N":3312,"n_layer":1,"d_model":16,"loss":3.0722},{"N":7272,"n_layer":1,"d_model":24,"loss":2.9778},{"N":25472,"n_layer":2,"d_model":32,"loss":2.6321},{"N":56640,"n_layer":2,"d_model":48,"loss":2.2884},{"N":150080,"n_layer":3,"d_model":64,"loss":2.2233}],
+"fit":{"alpha":0.08540,"Nc":1583728997.2,"r2":0.9483},
+"curve":{"N":[1908,2492.55,3256.19,4253.79,5557.02,7259.53,9483.62,12389.11,16184.76,21143.27,27620.93,36083.13,47137.9,61579.51,80445.58,105091.64,137288.5,150080],"loss":[3.2026,3.1303,3.0597,2.9906,2.9232,2.8572,2.7927,2.7297,2.6681,2.6079,2.5491,2.4915,2.4353,2.3804,2.3266,2.2741,2.2228,2.2060]}};
+
+let DATA = BAKED;
+
+function draw() {
+  const c = document.getElementById('plot');
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  const m = {l:70, r:24, t:20, b:52};
+  const pts = DATA.points, curve = DATA.curve;
+  const allN = pts.map(p=>p.N).concat(curve.N);
+  const allL = pts.map(p=>p.loss).concat(curve.loss);
+  const lgNmin = Math.log10(Math.min(...allN)), lgNmax = Math.log10(Math.max(...allN));
+  const lgLmin = Math.log10(Math.min(...allL)), lgLmax = Math.log10(Math.max(...allL));
+  const padN = (lgNmax-lgNmin)*0.06, padL=(lgLmax-lgLmin)*0.12;
+  const x0=lgNmin-padN, x1=lgNmax+padN, y0=lgLmin-padL, y1=lgLmax+padL;
+  const X = v => m.l + (Math.log10(v)-x0)/(x1-x0)*(W-m.l-m.r);
+  const Y = v => H-m.b - (Math.log10(v)-y0)/(y1-y0)*(H-m.t-m.b);
+
+  // grid + axes
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='12px monospace'; ctx.lineWidth=1;
+  for (let e=Math.ceil(x0); e<=Math.floor(x1); e++){
+    const gx=X(Math.pow(10,e)); ctx.beginPath(); ctx.moveTo(gx,m.t); ctx.lineTo(gx,H-m.b); ctx.stroke();
+    ctx.textAlign='center'; ctx.fillText('10^'+e, gx, H-m.b+18);
+  }
+  const lticks=[2,2.5,3,3.5,4];
+  lticks.forEach(l=>{ if(l>=Math.pow(10,y0)&&l<=Math.pow(10,y1)){ const gy=Y(l);
+    ctx.strokeStyle='#1e2946'; ctx.beginPath(); ctx.moveTo(m.l,gy); ctx.lineTo(W-m.r,gy); ctx.stroke();
+    ctx.textAlign='right'; ctx.fillStyle='#93a0c0'; ctx.fillText(l.toFixed(1), m.l-8, gy+4); }});
+  ctx.fillStyle='#93a0c0'; ctx.textAlign='center';
+  ctx.fillText('non-embedding parameters  N  (log scale)', (m.l+W-m.r)/2, H-6);
+  ctx.save(); ctx.translate(16,(m.t+H-m.b)/2); ctx.rotate(-Math.PI/2); ctx.fillText('validation loss (log)',0,0); ctx.restore();
+
+  // fitted curve
+  ctx.strokeStyle='#f59e0b'; ctx.lineWidth=3; ctx.beginPath();
+  curve.N.forEach((n,i)=>{ const gx=X(n),gy=Y(curve.loss[i]); i?ctx.lineTo(gx,gy):ctx.moveTo(gx,gy); });
+  ctx.stroke();
+
+  // points
+  window._plotPts=[];
+  pts.forEach(p=>{ const gx=X(p.N), gy=Y(p.loss);
+    ctx.beginPath(); ctx.arc(gx,gy,7,0,7); ctx.fillStyle='#22d3ee'; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='#0d132a'; ctx.stroke();
+    window._plotPts.push({gx,gy,p});
+  });
+}
+
+function hydrate() {
+  document.getElementById('kpi-alpha').textContent = DATA.fit.alpha.toFixed(4);
+  document.getElementById('kpi-r2').textContent = DATA.fit.r2.toFixed(3);
+  document.getElementById('kpi-n').textContent = DATA.points.length;
+  const tb = document.querySelector('#tbl tbody'); tb.innerHTML='';
+  DATA.points.forEach(p=>{ const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${p.N.toLocaleString()}</td><td>${p.n_layer}</td><td>${p.d_model}</td><td>${p.loss.toFixed(3)}</td>`;
+    tb.appendChild(tr); });
+  draw();
+}
+
+// tooltip
+const tip=document.getElementById('tip');
+document.getElementById('plot').addEventListener('mousemove', ev=>{
+  const c=ev.currentTarget, r=c.getBoundingClientRect();
+  const sx=c.width/r.width, sy=c.height/r.height;
+  const mx=(ev.clientX-r.left)*sx, my=(ev.clientY-r.top)*sy;
+  let hit=null; (window._plotPts||[]).forEach(o=>{ if(Math.hypot(o.gx-mx,o.gy-my)<12) hit=o; });
+  if(hit){ tip.style.opacity=1; tip.style.left=(ev.clientX+12)+'px'; tip.style.top=(ev.clientY+12)+'px';
+    tip.innerHTML=`N=${hit.p.N.toLocaleString()} · d=${hit.p.d_model} · L=${hit.p.loss.toFixed(3)}`; }
+  else tip.style.opacity=0;
+});
+document.getElementById('plot').addEventListener('mouseleave',()=>tip.style.opacity=0);
+window.addEventListener('resize',draw);
+
+(async function(){
+  if(location.protocol.startsWith('http')){
+    try{ const res=await fetch('../data/scaling_results.json',{cache:'no-store'});
+      if(res.ok){ DATA=await res.json(); } }catch(e){}
+  }
+  hydrate();
+})();
+</script>
+</body>
+</html>
