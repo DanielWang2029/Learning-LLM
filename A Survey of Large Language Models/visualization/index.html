@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A Survey of Large Language Models — Taxonomy & Lifecycle</title>
+<style>
+  :root{ --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --pre:#22d3ee; --adapt:#34d399; --align:#f59e0b; --use:#a78bfa; --eval:#fb7185; --shadow:0 10px 30px rgba(0,0,0,.35); }
+  *{ box-sizing:border-box; } html,body{ margin:0; padding:0; }
+  body{ background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+        radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a{ color:var(--pre); }
+  header.hero{ padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(52,211,153,.12) 40%, rgba(245,158,11,.14) 70%, rgba(251,113,133,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1{ margin:0; font-size:32px; letter-spacing:.4px;
+    background:linear-gradient(90deg,#22d3ee,#34d399 35%,#f59e0b 70%,#fb7185); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p{ color:var(--muted); margin:8px auto 0; max-width:820px; }
+  .badges{ margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge{ font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap{ max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title{ font-size:20px; margin:34px 0 6px; } .section-sub{ color:var(--muted); margin:0 0 18px; }
+  .card{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  code.k{ background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  /* taxonomy */
+  .tax{ display:flex; flex-direction:column; gap:10px; }
+  .branch{ border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .bhead{ display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; user-select:none; background:var(--panel-2); }
+  .bhead:hover{ filter:brightness(1.1); }
+  .bhead .tw{ font-size:12px; color:var(--muted); transition:transform .15s; }
+  .bhead.open .tw{ transform:rotate(90deg); }
+  .bhead .dot{ width:12px; height:12px; border-radius:50%; }
+  .bhead .name{ font-weight:700; } .bhead .cnt{ margin-left:auto; color:var(--muted); font-size:12px; }
+  .bbody{ display:none; padding:6px 14px 14px 34px; }
+  .bbody.open{ display:block; }
+  .leaf{ padding:8px 0; border-bottom:1px dashed var(--line); }
+  .leaf:last-child{ border-bottom:none; }
+  .leaf b{ font-size:14px; } .leaf span{ color:var(--muted); font-size:13px; }
+  /* lifecycle pipeline */
+  .pipe{ display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; }
+  .stage{ flex:1 1 200px; border:1px solid var(--line); border-radius:14px; padding:14px 16px; background:var(--panel-2); position:relative; }
+  .stage .n{ font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .stage .t{ font-weight:700; margin-top:4px; font-size:16px; }
+  .stage .m{ color:var(--muted); font-size:12.5px; margin-top:8px; }
+  .stage .v{ font-size:22px; font-weight:800; margin-top:6px; }
+  .arrow{ align-self:center; color:var(--line); font-size:26px; }
+  .s-pre{ box-shadow: inset 0 0 0 2px rgba(34,211,238,.4);} .s-adapt{ box-shadow: inset 0 0 0 2px rgba(52,211,153,.45);} .s-align{ box-shadow: inset 0 0 0 2px rgba(245,158,11,.5);}
+  canvas.chart{ width:100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:16px; } @media(max-width:860px){ .grid2{ grid-template-columns:1fr; } }
+  .legend-row{ display:flex; align-items:center; gap:14px; margin-top:10px; color:var(--muted); font-size:12.5px; flex-wrap:wrap; }
+  .sw{ display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:6px; }
+  .footer{ color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  .controls{ margin:0 0 12px; display:flex; gap:10px; }
+  .btn{ background:var(--panel-2); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .btn:hover{ filter:brightness(1.15); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>A Survey of Large Language Models</h1>
+  <p>A survey has no algorithm to reproduce — its value is a <b>map of the field</b>. This page delivers two things:
+  an interactive <b>taxonomy</b> of LLM techniques (pre-training → adaptation → utilization → alignment → evaluation),
+  and a tiny <b>runnable lifecycle</b> that actually touches each core stage on one small model.</p>
+  <div class="badges">
+    <span class="badge">Zhao et al., 2023</span>
+    <span class="badge">arXiv 2303.18223</span>
+    <span class="badge">taxonomy of techniques</span>
+    <span class="badge">runnable mini-lifecycle</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">LLM technique taxonomy</h2>
+  <p class="section-sub">Click a branch to expand the techniques the survey catalogs under it.</p>
+  <div class="controls">
+    <button class="btn" id="expandAll">Expand all</button>
+    <button class="btn" id="collapseAll">Collapse all</button>
+  </div>
+  <div class="card"><div class="tax" id="tax"></div></div>
+
+  <h2 class="section-title">The lifecycle, actually run</h2>
+  <p class="section-sub">One tiny GPT over a 13-token vocabulary is carried through the core stages. Numbers below are
+  captured from a real demo run (<code class="k">python demo/run_demo.py</code>).</p>
+  <div class="card">
+    <div class="pipe" id="pipe"></div>
+    <div class="grid2">
+      <div>
+        <h4 style="margin:0 0 6px">SORT skill across stages</h4>
+        <canvas class="chart" id="sortCanvas" width="560" height="300"></canvas>
+        <div class="legend-row"><span><span class="sw" style="background:#34d399"></span>SORT exact-match</span>
+          <span>SFT learns it; alignment retains it (SFT replay)</span></div>
+      </div>
+      <div>
+        <h4 style="margin:0 0 6px">Alignment: preference for the "chosen" answer</h4>
+        <canvas class="chart" id="prefCanvas" width="560" height="300"></canvas>
+        <div class="legend-row"><span><span class="sw" style="background:#f59e0b"></span>MAX preference accuracy</span>
+          <span>DPO teaches a new behavior from comparisons alone</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“A Survey of Large Language Models” (Zhao et al., 2023)</b> · arXiv 2303.18223.
+    Lifecycle numbers baked in from <code class="k">demo/run_demo.py</code> → <code class="k">data/lifecycle.json</code>.
+  </div>
+</div>
+
+<script>
+const TAXONOMY = [
+  {name:"Pre-training", color:"#22d3ee", items:[
+    ["Data collection & mixture","Web, books, code, dialogue; deduplication, quality & toxicity filtering, mixing ratios."],
+    ["Tokenization","BPE / WordPiece / Unigram subword vocabularies."],
+    ["Architecture","Decoder-only (GPT), encoder-decoder (T5), MoE; normalization & position encodings (RoPE, ALiBi)."],
+    ["Objectives","Autoregressive LM, denoising / span corruption, prefix LM."],
+    ["Scaling laws","Compute-optimal trade-offs of parameters vs. tokens (Chinchilla)."],
+    ["Training infrastructure","Data/tensor/pipeline parallelism, mixed precision, ZeRO, checkpointing."],
+  ]},
+  {name:"Adaptation (SFT)", color:"#34d399", items:[
+    ["Instruction tuning","Fine-tune on (instruction, response) pairs to follow tasks zero-shot."],
+    ["Parameter-efficient tuning","LoRA, adapters, prefix/prompt tuning — train few extra parameters."],
+    ["Data construction","Human-written, self-instruct, and distilled instruction datasets."],
+    ["Multi-task / task mixtures","FLAN-style mixtures to broaden generalization."],
+  ]},
+  {name:"Utilization (Prompting)", color:"#a78bfa", items:[
+    ["In-context learning","Few-shot demonstrations in the prompt, no weight updates."],
+    ["Chain-of-thought","Elicit intermediate reasoning steps before the answer."],
+    ["Planning & decomposition","Least-to-most, tree/graph of thoughts, self-consistency."],
+    ["Retrieval augmentation","Condition on retrieved documents (RAG) for knowledge & grounding."],
+    ["Tool use","Call calculators, code, search, and APIs from within generation."],
+  ]},
+  {name:"Alignment (RLHF / DPO)", color:"#f59e0b", items:[
+    ["Human feedback","Collect pairwise preference comparisons over model outputs."],
+    ["Reward modeling","Train a reward model to score responses (RLHF)."],
+    ["Policy optimization","PPO against the reward model; PPO-ptx replay to limit forgetting."],
+    ["Direct preference optimization","DPO: optimize the policy directly from preferences, no reward model."],
+    ["Constitutional / RLAIF","Use AI feedback and principles in place of some human labels."],
+    ["Goals","Helpful, honest, harmless behavior."],
+  ]},
+  {name:"Evaluation", color:"#fb7185", items:[
+    ["Knowledge & reasoning","MMLU, BBH, GSM8K, ARC and similar benchmarks."],
+    ["Alignment & safety","Truthfulness, toxicity, bias, refusal behavior."],
+    ["Human & model judging","Preference win-rates, LLM-as-a-judge, arenas."],
+    ["Emergent abilities & risks","Capability jumps with scale; hallucination, misuse."],
+  ]},
+];
+
+const BAKED = {"stages":[{"stage":"Pre-training","metric":"LM loss (final)","value":1.661,"detail":"2.670 -> 1.661","kind":"loss"},{"stage":"SFT","metric":"SORT exact-match","value":1.0,"detail":"0.0% -> 100.0%","kind":"acc"},{"stage":"DPO alignment","metric":"MAX preference accuracy","value":1.0,"detail":"83.0% -> 100.0%","kind":"acc"}],"sort_accuracy":{"pretrained":0.0,"sft":1.0,"dpo":1.0},"max_accuracy":{"dpo":0.077},"preference_accuracy":{"sft":0.83,"dpo":1.0},"reward_margin":32.89,"pretrain_loss":{"first":2.67,"last":1.661}};
+let DATA = BAKED;
+
+// --- taxonomy render
+function renderTax(){
+  const host=document.getElementById('tax'); host.innerHTML='';
+  TAXONOMY.forEach((br,bi)=>{
+    const branch=document.createElement('div'); branch.className='branch';
+    const head=document.createElement('div'); head.className='bhead'+(bi===0?' open':'');
+    head.innerHTML=`<span class="tw">▶</span><span class="dot" style="background:${br.color}"></span>`
+      +`<span class="name">${br.name}</span><span class="cnt">${br.items.length} techniques</span>`;
+    const body=document.createElement('div'); body.className='bbody'+(bi===0?' open':'');
+    body.innerHTML=br.items.map(([t,d])=>`<div class="leaf"><b style="color:${br.color}">${t}</b><br><span>${d}</span></div>`).join('');
+    head.addEventListener('click',()=>{ head.classList.toggle('open'); body.classList.toggle('open'); });
+    branch.appendChild(head); branch.appendChild(body); host.appendChild(branch);
+  });
+}
+document.getElementById('expandAll').onclick=()=>document.querySelectorAll('.bhead,.bbody').forEach(e=>e.classList.add('open'));
+document.getElementById('collapseAll').onclick=()=>document.querySelectorAll('.bhead,.bbody').forEach(e=>e.classList.remove('open'));
+
+// --- lifecycle pipeline cards
+function renderPipe(){
+  const s=DATA.stages;
+  const cls=['s-pre','s-adapt','s-align'];
+  const host=document.getElementById('pipe'); host.innerHTML='';
+  s.forEach((st,i)=>{
+    const div=document.createElement('div'); div.className='stage '+cls[i];
+    const val = st.kind==='loss'? st.value.toFixed(3) : (st.value*100).toFixed(0)+'%';
+    div.innerHTML=`<div class="n">Stage ${i+1}</div><div class="t">${st.stage}</div>`
+      +`<div class="m">${st.metric}</div><div class="v">${val}</div><div class="m">${st.detail}</div>`;
+    host.appendChild(div);
+    if(i<s.length-1){ const a=document.createElement('div'); a.className='arrow'; a.textContent='→'; host.appendChild(a); }
+  });
+}
+
+function barChart(canvasId, labels, vals, color, ymax){
+  const cv=document.getElementById(canvasId), ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height, ml=44,mr=14,mt=16,mb=42; ymax=ymax||1;
+  ctx.clearRect(0,0,W,H);
+  const Y=v=>mt+(1-v/ymax)*(H-mt-mb);
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#93a0c0'; ctx.font='11px monospace';
+  for(let g=0;g<=5;g++){ const v=ymax*g/5,y=Y(v); ctx.beginPath(); ctx.moveTo(ml,y); ctx.lineTo(W-mr,y); ctx.stroke(); ctx.fillText((v*100).toFixed(0)+'%',6,y+3); }
+  const n=vals.length, slot=(W-ml-mr)/n, bw=Math.min(90,slot*0.5);
+  vals.forEach((v,i)=>{ const cx=ml+slot*(i+0.5), y=Y(v);
+    const g=ctx.createLinearGradient(0,y,0,H-mb); g.addColorStop(0,color); g.addColorStop(1,color+'22');
+    ctx.fillStyle=g; ctx.fillRect(cx-bw/2,y,bw,H-mb-y);
+    ctx.fillStyle='#e8ecf7'; ctx.font='bold 13px monospace'; ctx.fillText((v*100).toFixed(0)+'%',cx-14,y-7);
+    ctx.fillStyle='#c9d3ec'; ctx.font='11px sans-serif'; ctx.fillText(labels[i],cx-ctx.measureText(labels[i]).width/2,H-mb+16);
+  });
+}
+
+function renderCharts(){
+  const sa=DATA.sort_accuracy;
+  barChart('sortCanvas',['pretrained','after SFT','after align'],[sa.pretrained,sa.sft,sa.dpo],'#34d399',1);
+  const pa=DATA.preference_accuracy;
+  barChart('prefCanvas',['pre-DPO','after DPO'],[pa.sft,pa.dpo],'#f59e0b',1);
+}
+
+function renderAll(){ renderTax(); renderPipe(); renderCharts(); }
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/lifecycle.json',{cache:'no-store'});
+      if(r.ok){ DATA=await r.json(); } }catch(e){}
+  }
+  renderAll();
+})();
+</script>
+</body>
+</html>
