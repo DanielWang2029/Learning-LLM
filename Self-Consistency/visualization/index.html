@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Self-Consistency — Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0;
+    --line:#2a3352; --good:#34d399; --bad:#fb7185; --accent:#22d3ee; --gold:#f59e0b; --path:#a78bfa;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #2a1b3d 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a { color:var(--accent); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 50%, rgba(52,211,153,.14));
+    border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#34d399); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:820px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  canvas { width:100%; height:280px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+
+  /* pipeline diagram */
+  .pipe { display:grid; grid-template-columns:200px 1fr 220px; gap:16px; align-items:center; }
+  @media(max-width:820px){ .pipe{grid-template-columns:1fr;} }
+  .qbox { background:linear-gradient(180deg, rgba(34,211,238,.14), var(--panel)); border:1px solid var(--line);
+    border-radius:14px; padding:14px; text-align:center; }
+  .qbox .q { font-family:ui-monospace,monospace; font-size:18px; margin-top:6px; }
+  .paths { display:flex; flex-direction:column; gap:8px; }
+  .pathrow { display:flex; align-items:center; gap:10px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:10px; padding:8px 12px; font-family:ui-monospace,monospace; font-size:13px; }
+  .pathrow .tag { font-size:11px; padding:2px 8px; border-radius:999px; }
+  .pathrow.correct { border-color: rgba(52,211,153,.5); } .pathrow.correct .tag { background:rgba(52,211,153,.2); color:var(--good); }
+  .pathrow.lure { border-color: rgba(251,113,133,.5); } .pathrow.lure .tag { background:rgba(251,113,133,.2); color:var(--bad); }
+  .pathrow .ans { margin-left:auto; font-weight:700; }
+  .votebox { background:linear-gradient(180deg, rgba(52,211,153,.12), var(--panel)); border:1px solid var(--line);
+    border-radius:14px; padding:14px; text-align:center; }
+  .votebox .big { font-size:34px; font-weight:800; color:var(--good); }
+  .arrowr { text-align:center; color:var(--muted); font-size:22px; }
+
+  /* vote tally bars */
+  .tally { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+  .tallyrow .lab { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:3px; }
+  .track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:24px; overflow:hidden; }
+  .fill { height:100%; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; font-weight:700; color:#04121e; transition:width .8s ease; }
+  .fill.win { background:linear-gradient(90deg,#34d399,#a7f3d0); }
+  .fill.lose { background:linear-gradient(90deg,#fb7185,#f9a8b6); }
+  .kpi { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+  .kpi .box { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px 18px; text-align:center; min-width:180px; }
+  .kpi .num { font-size:28px; font-weight:800; } .kpi .num.g{color:var(--bad);} .kpi .num.s{color:var(--good);}
+  .kpi .cap { font-size:12px; color:var(--muted); }
+  .trace { font-family:ui-monospace,monospace; font-size:12.5px; }
+  .trace .t { padding:8px 10px; margin:6px 0; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); }
+  .trace .t.correct { border-color:rgba(52,211,153,.45); } .trace .t.lure { border-color:rgba(251,113,133,.45); }
+  .trace .step { color:var(--muted); } .trace .head { font-weight:700; margin-bottom:4px; }
+  .badgeok { color:var(--good);} .badgeno{ color:var(--bad);}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Self-Consistency</h1>
+  <p>Don't trust one chain of thought — sample <b>many</b> reasoning paths and keep the answer they <b>most agree on</b>. Diverse correct paths reinforce each other; idiosyncratic mistakes get out-voted.</p>
+  <div class="badges">
+    <span class="badge">Wang et al., 2022</span>
+    <span class="badge">arXiv:2203.11171</span>
+    <span class="badge">Builds on Chain-of-Thought</span>
+    <span class="badge">Marginalize by majority vote</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Sample diverse paths → marginalize by majority vote</h2>
+  <p class="section-sub">A question can be reasoned about many ways. <b style="color:var(--good)">Greedy</b> decoding follows only the single most-probable path — which on "trap" problems is a tempting shortcut that's <b style="color:var(--bad)">wrong</b>. Sampling explores the many <b style="color:var(--path)">correct</b> paths, and their majority answer wins.</p>
+
+  <div class="card">
+    <div class="pipe">
+      <div class="qbox">
+        <div>Question</div>
+        <div class="q" id="q-text">19 + 78 + 22 = ?</div>
+        <div style="margin-top:8px; color:var(--muted); font-size:12px">true answer <b id="q-ans" style="color:var(--gold)">119</b></div>
+      </div>
+      <div>
+        <div class="paths" id="paths"></div>
+      </div>
+      <div>
+        <div class="arrowr">majority&nbsp;vote&nbsp;→</div>
+        <div class="votebox">
+          <div style="color:var(--muted); font-size:12px">most agreed answer</div>
+          <div class="big" id="vote-ans">119</div>
+          <div id="vote-verdict" class="badgeok">✓ correct</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The idea, formally</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Greedy chain of thought (baseline)</h4>
+      <p class="small">Decode the single most-probable reasoning path, take its answer.</p>
+      <div style="background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13.5px;color:#cfe8ff">answer = decode_greedy( reasoning | question )
+
+argmax over PATHS — one shot</div>
+      <ul><li>Commits to one path; if that path is a confident mistake, it's simply wrong.</li></ul>
+    </div>
+    <div class="card">
+      <h4>Self-consistency</h4>
+      <p class="small">Sample many paths, then take the answer most of them reach.</p>
+      <div style="background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13.5px;color:#cfe8ff">rᵢ, aᵢ ~ p(reasoning, answer | question)   i = 1..m
+answer* = mode( a₁, a₂, …, a_m )
+
+≈ argmax over ANSWERS (marginalizing paths)</div>
+      <ul>
+        <li>Temperature spreads probability across diverse correct paths.</li>
+        <li>The most-probable <i>answer</i> ≠ the most-probable single <i>path</i>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Accuracy rises with the number of sampled paths</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. <span id="cfg-note"></span></p>
+  <div class="kpi">
+    <div class="box"><div class="num g" id="kpi-greedy">57%</div><div class="cap">single greedy chain</div></div>
+    <div class="box"><div class="num s" id="kpi-sc">93%</div><div class="cap">self-consistency (max samples)</div></div>
+  </div>
+  <div style="height:16px"></div>
+  <div class="card">
+    <canvas id="curve" width="1000" height="280"></canvas>
+    <p class="small" style="margin-top:10px">Dashed line = greedy baseline. Green curve = majority-vote accuracy as the sample count grows.</p>
+  </div>
+
+  <h2 class="section-title">Inside one problem: the votes</h2>
+  <p class="section-sub">The sampled answers for the example above. The correct answer is reached by many diverse (re-ordered) additions; the shortcut lands on a single wrong value that can't out-vote them.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Vote tally over sampled paths</h4>
+      <div class="tally" id="tally"></div>
+    </div>
+    <div class="card">
+      <h4>A few real sampled reasoning paths</h4>
+      <div class="trace" id="traces"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Self-Consistency Improves Chain of Thought Reasoning in Language Models”</b>
+    (Wang et al., 2022). The stochastic reasoner is a transparent programmatic stand-in for a sampling LLM;
+    data generated by <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"n_problems":400,"k_addends":3,"temperature":1.0,"max_samples":41,"n_traps":171,"seconds":0.08},
+  "greedy_acc": 0.5725,
+  "curve": [{"k":1,"acc":0.7325},{"k":3,"acc":0.8},{"k":5,"acc":0.8525},{"k":9,"acc":0.8525},{"k":15,"acc":0.8725},{"k":25,"acc":0.895},{"k":41,"acc":0.93}],
+  "example": {
+    "nums":[19,78,22], "answer":119,
+    "greedy":{"answer":100,"kind":"lure","steps":["shortcut: skip the smallest addend (19)","add the rest → 100"],"correct":false},
+    "votes":[{"answer":119,"count":25},{"answer":100,"count":15},{"answer":129,"count":1}],
+    "majority":119,
+    "traces":[
+      {"answer":119,"kind":"correct","steps":["start 19 → running total 19","+ 78 → running total 97","+ 22 → running total 119"],"correct":true},
+      {"answer":100,"kind":"lure","steps":["shortcut: skip the smallest addend (19)","add the rest → 100"],"correct":false},
+      {"answer":121,"kind":"correct","steps":["start 19 → running total 19","+ 78 → running total 97","+ 22 → running total 121"],"correct":false},
+      {"answer":109,"kind":"correct","steps":["start 22 → running total 22","+ 19 → running total 41","+ 78 → running total 109"],"correct":false},
+      {"answer":120,"kind":"correct","steps":["start 19 → running total 19","+ 78 → running total 98","+ 22 → running total 120"],"correct":false}
+    ]
+  }
+};
+
+function render(D) {
+  const ex = D.example;
+  document.getElementById('q-text').textContent = ex.nums.join(' + ') + ' = ?';
+  document.getElementById('q-ans').textContent = ex.answer;
+  document.getElementById('vote-ans').textContent = ex.majority;
+  const ok = ex.majority === ex.answer;
+  const vv = document.getElementById('vote-verdict');
+  vv.textContent = ok ? '✓ correct' : '✗ wrong';
+  vv.className = ok ? 'badgeok' : 'badgeno';
+
+  // path chips (from example traces, distinct)
+  const paths = document.getElementById('paths'); paths.innerHTML = '';
+  ex.traces.slice(0,5).forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'pathrow ' + (t.kind === 'lure' ? 'lure' : 'correct');
+    const label = t.kind === 'lure' ? 'shortcut' : 'add in order';
+    const summary = t.steps[t.steps.length-1];
+    row.innerHTML = `<span class="tag">${label}</span><span>${summary}</span>`
+      + `<span class="ans" style="color:${t.correct?'var(--good)':'var(--bad)'}">${t.answer}</span>`;
+    paths.appendChild(row);
+  });
+
+  document.getElementById('kpi-greedy').textContent = Math.round(D.greedy_acc*100)+'%';
+  document.getElementById('kpi-sc').textContent = Math.round(D.curve[D.curve.length-1].acc*100)+'%';
+  document.getElementById('cfg-note').textContent =
+    `${D.config.n_problems} problems (sum of ${D.config.k_addends} numbers), ${D.config.n_traps} traps · temperature ${D.config.temperature} · ~${D.config.seconds}s on CPU.`;
+
+  // tally
+  const tally = document.getElementById('tally'); tally.innerHTML = '';
+  const total = ex.votes.reduce((s,v)=>s+v.count,0);
+  ex.votes.forEach(v => {
+    const win = v.answer === ex.answer;
+    const row = document.createElement('div'); row.className='tallyrow';
+    row.innerHTML = `<div class="lab"><span>answer ${v.answer} ${win?'(correct)':''}</span><span>${v.count} votes</span></div>
+      <div class="track"><div class="fill ${win?'win':'lose'}" style="width:0%">${v.count}</div></div>`;
+    tally.appendChild(row);
+    requestAnimationFrame(()=>{ row.querySelector('.fill').style.width = (v.count/total*100)+'%'; });
+  });
+
+  // traces
+  const tr = document.getElementById('traces'); tr.innerHTML = '';
+  ex.traces.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 't ' + (t.kind==='lure'?'lure':'correct');
+    const badge = t.correct ? '<span class="badgeok">✓</span>' : '<span class="badgeno">✗</span>';
+    div.innerHTML = `<div class="head">${badge} ${t.kind==='lure'?'shortcut path':'reasoning path'} → answer ${t.answer}</div>`
+      + t.steps.map(s=>`<div class="step">${s}</div>`).join('');
+    tr.appendChild(div);
+  });
+
+  drawCurve(D);
+}
+
+function drawCurve(D) {
+  const cv = document.getElementById('curve'), ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, pad=40;
+  ctx.clearRect(0,0,W,H);
+  const maxK = D.curve[D.curve.length-1].k;
+  const X = k => pad + (Math.log(k)/Math.log(maxK))*(W-2*pad);  // log x for readability
+  const Y = a => H-pad - a*(H-2*pad);
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#6b7aa0'; ctx.font='11px monospace'; ctx.lineWidth=1;
+  for (let g=0; g<=5; g++){ const y=Y(g/5); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke(); ctx.fillText((g*20)+'%',6,y+3); }
+  D.curve.forEach(c => ctx.fillText(c.k, X(c.k)-6, H-pad+16));
+  ctx.fillText('# sampled paths', W/2-40, H-8);
+  // greedy baseline (dashed)
+  ctx.setLineDash([6,5]); ctx.strokeStyle='#fb7185'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(pad, Y(D.greedy_acc)); ctx.lineTo(W-pad, Y(D.greedy_acc)); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle='#fb7185'; ctx.fillText('greedy '+Math.round(D.greedy_acc*100)+'%', pad+6, Y(D.greedy_acc)-6);
+  // sc curve
+  ctx.beginPath(); ctx.strokeStyle='#34d399'; ctx.lineWidth=3;
+  D.curve.forEach((c,i)=>{ const x=X(c.k),y=Y(c.acc); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+  D.curve.forEach(c=>{ ctx.beginPath(); ctx.arc(X(c.k),Y(c.acc),4,0,7); ctx.fillStyle='#34d399'; ctx.fill();
+    ctx.fillStyle='#cfeee0'; ctx.fillText(Math.round(c.acc*100)+'%', X(c.k)-8, Y(c.acc)-10); });
+  ctx.fillStyle='#34d399'; ctx.fillText('self-consistency', W-pad-120, Y(D.curve[D.curve.length-1].acc)+18);
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const r = await fetch('../data/self_consistency_results.json',{cache:'no-store'});
+      if (r.ok) { render(await r.json()); return; } } catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>
