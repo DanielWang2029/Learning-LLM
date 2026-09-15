@@ -16,7 +16,9 @@
     "Context & Retrieval",
     "Efficient Fine-tuning",
     "Reasoning",
-    "Multimodal"
+    "Multimodal",
+    "Evaluation & Analysis",
+    "Survey"
   ],
   "papers": [
     {
@@ -641,6 +643,688 @@
         "cross-attention"
       ],
       "summary": "Bridges a frozen vision encoder and frozen LLM via cross-attention for few-shot multimodal tasks."
+    },
+    {
+      "id": "gpt-4",
+      "title": "GPT-4 Technical Report",
+      "authors": [
+        "OpenAI"
+      ],
+      "year": 2023,
+      "venue": "OpenAI",
+      "arxiv": "2303.08774",
+      "category": "Model Milestones",
+      "folder": "GPT-4",
+      "status": "reproduced",
+      "tags": [
+        "multimodal",
+        "rlhf",
+        "scaling"
+      ],
+      "summary": "Large multimodal model with predictable scaling and strong exam performance; reproduced here as a predictable-scaling demo."
+    },
+    {
+      "id": "llava",
+      "title": "Visual Instruction Tuning (LLaVA)",
+      "authors": [
+        "Liu",
+        "Li",
+        "Wu",
+        "Lee"
+      ],
+      "year": 2023,
+      "venue": "NeurIPS",
+      "arxiv": "2304.08485",
+      "category": "Multimodal",
+      "folder": "LLaVA",
+      "status": "reproduced",
+      "tags": [
+        "vision-language",
+        "instruction-tuning",
+        "projection"
+      ],
+      "summary": "Connects a frozen vision encoder to an LLM via a projection and instruction-tunes for multimodal chat."
+    },
+    {
+      "id": "sparks-of-agi",
+      "title": "Sparks of Artificial General Intelligence: Early experiments with GPT-4",
+      "authors": [
+        "Bubeck",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "Microsoft",
+      "arxiv": "2303.12712",
+      "category": "Evaluation & Analysis",
+      "folder": "Sparks of AGI",
+      "status": "reproduced",
+      "tags": [
+        "evaluation",
+        "capabilities",
+        "gpt-4"
+      ],
+      "summary": "Qualitative probing of GPT-4 capabilities; reproduced as a capability-probe methodology across model scales."
+    },
+    {
+      "id": "survey-llms",
+      "title": "A Survey of Large Language Models",
+      "authors": [
+        "Zhao",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "arXiv",
+      "arxiv": "2303.18223",
+      "category": "Survey",
+      "folder": "A Survey of Large Language Models",
+      "status": "reproduced",
+      "tags": [
+        "survey",
+        "taxonomy",
+        "lifecycle"
+      ],
+      "summary": "Comprehensive survey of LLMs; reproduced as an interactive taxonomy plus a mini pretrain->SFT->align lifecycle."
+    },
+    {
+      "id": "mistral-7b",
+      "title": "Mistral 7B",
+      "authors": [
+        "Jiang",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "Mistral AI",
+      "arxiv": "2310.06825",
+      "category": "Architectural Innovations",
+      "folder": "Mistral 7B",
+      "status": "reproduced",
+      "tags": [
+        "sliding-window-attention",
+        "gqa",
+        "kv-cache"
+      ],
+      "summary": "Sliding-window attention + GQA + rolling KV cache for efficient inference."
+    },
+    {
+      "id": "llama-3",
+      "title": "The Llama 3 Herd of Models",
+      "authors": [
+        "Meta"
+      ],
+      "year": 2024,
+      "venue": "Meta",
+      "arxiv": "2407.21783",
+      "category": "Model Milestones",
+      "folder": "Llama 3",
+      "status": "reproduced",
+      "tags": [
+        "open-weights",
+        "gqa",
+        "tokenizer"
+      ],
+      "summary": "Scaled LLaMA recipe with larger tokenizer, GQA, and long context."
+    },
+    {
+      "id": "qwen2.5",
+      "title": "Qwen2.5 Technical Report",
+      "authors": [
+        "Qwen Team"
+      ],
+      "year": 2024,
+      "venue": "Alibaba",
+      "arxiv": "2412.15115",
+      "category": "Model Milestones",
+      "folder": "Qwen2.5",
+      "status": "reproduced",
+      "tags": [
+        "open-weights",
+        "qkv-bias",
+        "long-context"
+      ],
+      "summary": "Open Qwen2.5 family; distinctive QKV-bias, untied embeddings, RoPE, RMSNorm."
+    },
+    {
+      "id": "deepseekmath",
+      "title": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning",
+      "authors": [
+        "Shao",
+        "et al."
+      ],
+      "year": 2024,
+      "venue": "DeepSeek",
+      "arxiv": "2402.03300",
+      "category": "Reasoning",
+      "folder": "DeepSeekMath",
+      "status": "reproduced",
+      "tags": [
+        "grpo",
+        "rl",
+        "math-reasoning"
+      ],
+      "summary": "Introduces Group Relative Policy Optimization (GRPO) for RL without a value network."
+    },
+    {
+      "id": "gemini-1.5",
+      "title": "Gemini 1.5: Multimodal Understanding Across Millions of Tokens",
+      "authors": [
+        "Gemini Team"
+      ],
+      "year": 2024,
+      "venue": "Google",
+      "arxiv": "2403.05530",
+      "category": "Model Milestones",
+      "folder": "Gemini 1.5",
+      "status": "reproduced",
+      "tags": [
+        "moe",
+        "long-context",
+        "multimodal"
+      ],
+      "summary": "Sparse-MoE multimodal model with million-token context and near-perfect long-context recall."
+    },
+    {
+      "id": "deepseek-v3",
+      "title": "DeepSeek-V3 Technical Report",
+      "authors": [
+        "DeepSeek-AI"
+      ],
+      "year": 2024,
+      "venue": "DeepSeek",
+      "arxiv": "2412.19437",
+      "category": "Architectural Innovations",
+      "folder": "DeepSeek-V3",
+      "status": "reproduced",
+      "tags": [
+        "mla",
+        "moe",
+        "multi-token-prediction"
+      ],
+      "summary": "Multi-head Latent Attention + DeepSeekMoE + Multi-Token Prediction for efficient large-scale training."
+    },
+    {
+      "id": "gemma-2",
+      "title": "Gemma 2: Improving Open Language Models at a Practical Size",
+      "authors": [
+        "Gemma Team"
+      ],
+      "year": 2024,
+      "venue": "Google",
+      "arxiv": "2408.00118",
+      "category": "Model Milestones",
+      "folder": "Gemma 2",
+      "status": "reproduced",
+      "tags": [
+        "local-global-attention",
+        "logit-soft-capping",
+        "distillation"
+      ],
+      "summary": "Alternating local/global attention with logit soft-capping and knowledge distillation."
+    },
+    {
+      "id": "phi-3",
+      "title": "Phi-3 Technical Report",
+      "authors": [
+        "Abdin",
+        "et al."
+      ],
+      "year": 2024,
+      "venue": "Microsoft",
+      "arxiv": "2404.14219",
+      "category": "Model Milestones",
+      "folder": "Phi-3",
+      "status": "reproduced",
+      "tags": [
+        "data-quality",
+        "small-model"
+      ],
+      "summary": "Small but capable model showing curated 'textbook-quality' data beats raw scale."
+    },
+    {
+      "id": "mixtral",
+      "title": "Mixtral of Experts",
+      "authors": [
+        "Jiang",
+        "et al."
+      ],
+      "year": 2024,
+      "venue": "Mistral AI",
+      "arxiv": "2401.04088",
+      "category": "Architectural Innovations",
+      "folder": "Mixtral of Experts",
+      "status": "reproduced",
+      "tags": [
+        "mixture-of-experts",
+        "top-2-routing",
+        "sparse"
+      ],
+      "summary": "Sparse MoE decoder with top-2 routing over 8 experts."
+    },
+    {
+      "id": "dora",
+      "title": "DoRA: Weight-Decomposed Low-Rank Adaptation",
+      "authors": [
+        "Liu",
+        "et al."
+      ],
+      "year": 2024,
+      "venue": "NVIDIA",
+      "arxiv": "2402.09353",
+      "category": "Efficient Fine-tuning",
+      "folder": "DoRA",
+      "status": "reproduced",
+      "tags": [
+        "peft",
+        "magnitude-direction",
+        "lora"
+      ],
+      "summary": "Decomposes weights into magnitude and direction, applying LoRA to the direction for better PEFT."
+    },
+    {
+      "id": "graphrag",
+      "title": "From Local to Global: A Graph RAG Approach",
+      "authors": [
+        "Edge",
+        "et al."
+      ],
+      "year": 2024,
+      "venue": "Microsoft",
+      "arxiv": "2404.16130",
+      "category": "Context & Retrieval",
+      "folder": "GraphRAG",
+      "status": "reproduced",
+      "tags": [
+        "retrieval",
+        "knowledge-graph",
+        "sensemaking"
+      ],
+      "summary": "Builds an entity graph with community summaries to answer global sensemaking queries."
+    },
+    {
+      "id": "qwen3",
+      "title": "Qwen3 Technical Report",
+      "authors": [
+        "Qwen Team"
+      ],
+      "year": 2025,
+      "venue": "Alibaba",
+      "arxiv": "2505.09388",
+      "category": "Model Milestones",
+      "folder": "Qwen3",
+      "status": "reproduced",
+      "tags": [
+        "thinking-mode",
+        "thinking-budget",
+        "open-weights"
+      ],
+      "summary": "Hybrid thinking/non-thinking modes with a controllable thinking budget."
+    },
+    {
+      "id": "gemini-2.5",
+      "title": "Gemini 2.5",
+      "authors": [
+        "Gemini Team"
+      ],
+      "year": 2025,
+      "venue": "Google",
+      "arxiv": "2507.06261",
+      "category": "Model Milestones",
+      "folder": "Gemini 2.5",
+      "status": "reproduced",
+      "tags": [
+        "thinking",
+        "test-time-compute",
+        "multimodal"
+      ],
+      "summary": "Thinking model with test-time compute scaling, long context, and multimodality."
+    },
+    {
+      "id": "s1",
+      "title": "s1: Simple Test-time Scaling",
+      "authors": [
+        "Muennighoff",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "Stanford",
+      "arxiv": "2501.19393",
+      "category": "Reasoning",
+      "folder": "s1 - Simple Test-Time Scaling",
+      "status": "reproduced",
+      "tags": [
+        "test-time-scaling",
+        "budget-forcing"
+      ],
+      "summary": "Budget forcing ('Wait') to control test-time compute, with a tiny curated SFT set."
+    },
+    {
+      "id": "gemma-3",
+      "title": "Gemma 3 Technical Report",
+      "authors": [
+        "Gemma Team"
+      ],
+      "year": 2025,
+      "venue": "Google",
+      "arxiv": "2503.19786",
+      "category": "Model Milestones",
+      "folder": "Gemma 3",
+      "status": "reproduced",
+      "tags": [
+        "local-global-attention",
+        "long-context",
+        "multimodal"
+      ],
+      "summary": "5:1 local:global attention ratio for efficient long context; multimodal."
+    },
+    {
+      "id": "search-r1",
+      "title": "Search-R1: Training LLMs to Reason and Leverage Search Engines with RL",
+      "authors": [
+        "Jin",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "UIUC",
+      "arxiv": "2503.09516",
+      "category": "Reasoning",
+      "folder": "Search-R1",
+      "status": "reproduced",
+      "tags": [
+        "rl",
+        "tool-use",
+        "search",
+        "agents"
+      ],
+      "summary": "RL that teaches a model to interleave reasoning with search-engine calls."
+    },
+    {
+      "id": "llada",
+      "title": "Large Language Diffusion Models (LLaDA)",
+      "authors": [
+        "Nie",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "RUC",
+      "arxiv": "2502.09992",
+      "category": "Architectural Innovations",
+      "folder": "LLaDA",
+      "status": "reproduced",
+      "tags": [
+        "diffusion",
+        "non-autoregressive",
+        "masked"
+      ],
+      "summary": "Masked diffusion language model that generates text by iterative unmasking, not autoregression."
+    },
+    {
+      "id": "limo",
+      "title": "LIMO: Less Is More for Reasoning",
+      "authors": [
+        "Ye",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "SJTU",
+      "arxiv": "2502.03387",
+      "category": "Reasoning",
+      "folder": "LIMO",
+      "status": "reproduced",
+      "tags": [
+        "data-efficiency",
+        "reasoning",
+        "sft"
+      ],
+      "summary": "A few hundred high-quality reasoning demonstrations elicit strong reasoning."
+    },
+    {
+      "id": "kimi-k1.5",
+      "title": "Kimi K1.5: Scaling Reinforcement Learning with LLMs",
+      "authors": [
+        "Kimi Team"
+      ],
+      "year": 2025,
+      "venue": "Moonshot",
+      "arxiv": "2501.12599",
+      "category": "Reasoning",
+      "folder": "Kimi K1.5",
+      "status": "reproduced",
+      "tags": [
+        "rl",
+        "length-penalty",
+        "long-context"
+      ],
+      "summary": "RL scaling for reasoning with length control and long context."
+    },
+    {
+      "id": "nsa",
+      "title": "Native Sparse Attention",
+      "authors": [
+        "Yuan",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "DeepSeek",
+      "arxiv": "2502.11089",
+      "category": "Architectural Innovations",
+      "folder": "Native Sparse Attention",
+      "status": "reproduced",
+      "tags": [
+        "sparse-attention",
+        "trainable",
+        "hardware-aligned"
+      ],
+      "summary": "Natively trainable sparse attention combining compression, selection, and sliding-window branches."
+    },
+    {
+      "id": "chain-of-draft",
+      "title": "Chain of Draft: Thinking Faster by Writing Less",
+      "authors": [
+        "Xu",
+        "et al."
+      ],
+      "year": 2025,
+      "venue": "Zoom",
+      "arxiv": "2502.18600",
+      "category": "Reasoning",
+      "folder": "Chain of Draft",
+      "status": "reproduced",
+      "tags": [
+        "concise-reasoning",
+        "efficiency"
+      ],
+      "summary": "Terse per-step drafts match verbose chain-of-thought accuracy with far fewer tokens."
+    },
+    {
+      "id": "glm-5",
+      "title": "GLM-5: from Vibe Coding to Agentic Engineering",
+      "authors": [
+        "GLM-5 Team"
+      ],
+      "year": 2026,
+      "venue": "Zhipu AI",
+      "arxiv": "2602.15763",
+      "category": "Model Milestones",
+      "folder": "GLM-5",
+      "status": "reproduced",
+      "tags": [
+        "sparse-attention",
+        "agentic-rl",
+        "coding"
+      ],
+      "summary": "Agentic-engineering model using DeepSeek Sparse Attention (DSA) and asynchronous agent RL."
+    },
+    {
+      "id": "deepseek-v4",
+      "title": "DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence",
+      "authors": [
+        "DeepSeek-AI"
+      ],
+      "year": 2026,
+      "venue": "DeepSeek",
+      "arxiv": "2606.19348",
+      "category": "Architectural Innovations",
+      "folder": "DeepSeek-V4",
+      "status": "reproduced",
+      "tags": [
+        "muon",
+        "mhc",
+        "long-context"
+      ],
+      "summary": "Muon optimizer and manifold-constrained residuals for efficient million-token-context training."
+    },
+    {
+      "id": "kimi-k3",
+      "title": "Kimi K3: Open Frontier Intelligence",
+      "authors": [
+        "Kimi Team"
+      ],
+      "year": 2026,
+      "venue": "Moonshot",
+      "arxiv": "2607.24653",
+      "category": "Architectural Innovations",
+      "folder": "Kimi K3",
+      "status": "reproduced",
+      "tags": [
+        "linear-attention",
+        "delta-rule",
+        "dual-axis-scaling"
+      ],
+      "summary": "Kimi Delta Attention (gated delta-rule linear attention) with dual-axis scaling."
+    },
+    {
+      "id": "qwen-agentworld",
+      "title": "Qwen-AgentWorld: Language World Models for General Agents",
+      "authors": [
+        "Qwen Team"
+      ],
+      "year": 2026,
+      "venue": "Alibaba",
+      "arxiv": "2606.24597",
+      "category": "Reasoning",
+      "folder": "Qwen-AgentWorld",
+      "status": "reproduced",
+      "tags": [
+        "world-model",
+        "agents",
+        "planning"
+      ],
+      "summary": "Language world models that simulate environments for agent planning and RL."
+    },
+    {
+      "id": "nemotron-3-super",
+      "title": "Nemotron 3 Super: Hybrid Mamba-Transformer MoE",
+      "authors": [
+        "NVIDIA"
+      ],
+      "year": 2026,
+      "venue": "NVIDIA",
+      "arxiv": "2604.12374",
+      "category": "Architectural Innovations",
+      "folder": "Nemotron 3 Super",
+      "status": "reproduced",
+      "tags": [
+        "mamba",
+        "hybrid",
+        "moe",
+        "ssm"
+      ],
+      "summary": "Hybrid architecture alternating Mamba-2 state-space layers with attention, plus MoE."
+    },
+    {
+      "id": "gated-deltanet-2",
+      "title": "Gated DeltaNet-2: Decoupling Erase and Write in Linear Attention",
+      "authors": [
+        "Yang",
+        "et al."
+      ],
+      "year": 2026,
+      "venue": "arXiv",
+      "arxiv": "2605.22791",
+      "category": "Architectural Innovations",
+      "folder": "Gated DeltaNet-2",
+      "status": "reproduced",
+      "tags": [
+        "linear-attention",
+        "delta-rule",
+        "gating"
+      ],
+      "summary": "Linear-attention delta rule with decoupled erase and write gates."
+    },
+    {
+      "id": "step-3.5-flash",
+      "title": "Step 3.5 Flash: Open Frontier-Level Intelligence with 11B Active Parameters",
+      "authors": [
+        "StepFun"
+      ],
+      "year": 2026,
+      "venue": "StepFun",
+      "arxiv": "2602.10604",
+      "category": "Architectural Innovations",
+      "folder": "Step 3.5 Flash",
+      "status": "reproduced",
+      "tags": [
+        "moe",
+        "efficiency",
+        "sparse"
+      ],
+      "summary": "Efficient sparse MoE with high total capacity but few active parameters per token."
+    },
+    {
+      "id": "scaling-embeddings",
+      "title": "Scaling Embeddings Outperforms Scaling Experts in Language Models",
+      "authors": [
+        "Anon"
+      ],
+      "year": 2026,
+      "venue": "arXiv",
+      "arxiv": "2601.21204",
+      "category": "Scaling Laws",
+      "folder": "Scaling Embeddings vs Experts",
+      "status": "reproduced",
+      "tags": [
+        "scaling",
+        "embeddings",
+        "moe"
+      ],
+      "summary": "At fixed budget, allocating capacity to embeddings beats adding MoE experts."
+    },
+    {
+      "id": "deep-delta-learning",
+      "title": "Deep Delta Learning",
+      "authors": [
+        "Anon"
+      ],
+      "year": 2026,
+      "venue": "arXiv",
+      "arxiv": "2601.00417",
+      "category": "Architectural Innovations",
+      "folder": "Deep Delta Learning",
+      "status": "reproduced",
+      "tags": [
+        "delta-rule",
+        "associative-memory",
+        "fast-weights"
+      ],
+      "summary": "Delta-rule fast-weight associative memory layers that store and recall key-value bindings."
+    },
+    {
+      "id": "zaya1-8b",
+      "title": "ZAYA1-8B Technical Report",
+      "authors": [
+        "Zyphra"
+      ],
+      "year": 2026,
+      "venue": "Zyphra",
+      "arxiv": "2605.05365",
+      "category": "Architectural Innovations",
+      "folder": "ZAYA1-8B",
+      "status": "reproduced",
+      "tags": [
+        "compressed-attention",
+        "convolution",
+        "efficiency"
+      ],
+      "summary": "Compressed Convolutional Attention (CCA) compresses K/V to cut attention cost and KV-cache."
     }
   ],
   "citations": [
@@ -799,6 +1483,346 @@
     {
       "from": "flamingo",
       "to": "gpt-3"
+    },
+    {
+      "from": "gpt-4",
+      "to": "gpt-3"
+    },
+    {
+      "from": "gpt-4",
+      "to": "instructgpt"
+    },
+    {
+      "from": "gpt-4",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "llava",
+      "to": "clip"
+    },
+    {
+      "from": "llava",
+      "to": "gpt-3"
+    },
+    {
+      "from": "llava",
+      "to": "instructgpt"
+    },
+    {
+      "from": "sparks-of-agi",
+      "to": "gpt-4"
+    },
+    {
+      "from": "survey-llms",
+      "to": "gpt-3"
+    },
+    {
+      "from": "survey-llms",
+      "to": "llama"
+    },
+    {
+      "from": "survey-llms",
+      "to": "palm"
+    },
+    {
+      "from": "mistral-7b",
+      "to": "llama"
+    },
+    {
+      "from": "mistral-7b",
+      "to": "flashattention"
+    },
+    {
+      "from": "mistral-7b",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "llama-3",
+      "to": "llama-2"
+    },
+    {
+      "from": "llama-3",
+      "to": "chinchilla"
+    },
+    {
+      "from": "llama-3",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "qwen2.5",
+      "to": "llama"
+    },
+    {
+      "from": "qwen2.5",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "deepseekmath",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "deepseekmath",
+      "to": "instructgpt"
+    },
+    {
+      "from": "deepseekmath",
+      "to": "rlhf-preferences"
+    },
+    {
+      "from": "gemini-1.5",
+      "to": "switch-transformers"
+    },
+    {
+      "from": "gemini-1.5",
+      "to": "flashattention"
+    },
+    {
+      "from": "gemini-1.5",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "deepseek-v3",
+      "to": "deepseekmath"
+    },
+    {
+      "from": "deepseek-v3",
+      "to": "mixtral"
+    },
+    {
+      "from": "deepseek-v3",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "gemma-2",
+      "to": "mistral-7b"
+    },
+    {
+      "from": "gemma-2",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "phi-3",
+      "to": "gpt-3"
+    },
+    {
+      "from": "phi-3",
+      "to": "chinchilla"
+    },
+    {
+      "from": "mixtral",
+      "to": "switch-transformers"
+    },
+    {
+      "from": "mixtral",
+      "to": "mistral-7b"
+    },
+    {
+      "from": "dora",
+      "to": "lora"
+    },
+    {
+      "from": "graphrag",
+      "to": "rag"
+    },
+    {
+      "from": "qwen3",
+      "to": "qwen2.5"
+    },
+    {
+      "from": "qwen3",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "qwen3",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "gemini-2.5",
+      "to": "gemini-1.5"
+    },
+    {
+      "from": "gemini-2.5",
+      "to": "self-consistency"
+    },
+    {
+      "from": "gemini-2.5",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "s1",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "s1",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "s1",
+      "to": "self-consistency"
+    },
+    {
+      "from": "gemma-3",
+      "to": "gemma-2"
+    },
+    {
+      "from": "gemma-3",
+      "to": "mistral-7b"
+    },
+    {
+      "from": "search-r1",
+      "to": "react"
+    },
+    {
+      "from": "search-r1",
+      "to": "rag"
+    },
+    {
+      "from": "search-r1",
+      "to": "deepseekmath"
+    },
+    {
+      "from": "search-r1",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "llada",
+      "to": "bert"
+    },
+    {
+      "from": "llada",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "limo",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "limo",
+      "to": "s1"
+    },
+    {
+      "from": "kimi-k1.5",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "kimi-k1.5",
+      "to": "deepseekmath"
+    },
+    {
+      "from": "kimi-k1.5",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "nsa",
+      "to": "flashattention"
+    },
+    {
+      "from": "nsa",
+      "to": "mistral-7b"
+    },
+    {
+      "from": "nsa",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "chain-of-draft",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "chain-of-draft",
+      "to": "s1"
+    },
+    {
+      "from": "glm-5",
+      "to": "deepseek-v3"
+    },
+    {
+      "from": "glm-5",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "glm-5",
+      "to": "nsa"
+    },
+    {
+      "from": "deepseek-v4",
+      "to": "deepseek-v3"
+    },
+    {
+      "from": "deepseek-v4",
+      "to": "nsa"
+    },
+    {
+      "from": "kimi-k3",
+      "to": "kimi-k1.5"
+    },
+    {
+      "from": "kimi-k3",
+      "to": "deepseek-v3"
+    },
+    {
+      "from": "kimi-k3",
+      "to": "gated-deltanet-2"
+    },
+    {
+      "from": "qwen-agentworld",
+      "to": "qwen3"
+    },
+    {
+      "from": "qwen-agentworld",
+      "to": "react"
+    },
+    {
+      "from": "qwen-agentworld",
+      "to": "search-r1"
+    },
+    {
+      "from": "nemotron-3-super",
+      "to": "mixtral"
+    },
+    {
+      "from": "nemotron-3-super",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "gated-deltanet-2",
+      "to": "kimi-k3"
+    },
+    {
+      "from": "gated-deltanet-2",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "step-3.5-flash",
+      "to": "mixtral"
+    },
+    {
+      "from": "step-3.5-flash",
+      "to": "switch-transformers"
+    },
+    {
+      "from": "scaling-embeddings",
+      "to": "switch-transformers"
+    },
+    {
+      "from": "scaling-embeddings",
+      "to": "scaling-laws-kaplan"
+    },
+    {
+      "from": "deep-delta-learning",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "zaya1-8b",
+      "to": "flashattention"
+    },
+    {
+      "from": "zaya1-8b",
+      "to": "deepseek-v3"
+    },
+    {
+      "from": "zaya1-8b",
+      "to": "nsa"
     }
   ]
 }
