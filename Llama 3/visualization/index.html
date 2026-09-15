@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Llama 3 — Recipe &amp; Tokenizer Visualization</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340;
+    --ink: #e8ecf7; --muted: #93a0c0; --line: #2a3352;
+    --emb: #22d3ee; --norm: #64748b; --attn: #fb7185; --rope: #a78bfa;
+    --ffn: #34d399; --head: #f472b6; --tok: #f59e0b;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--emb); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 34px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 40%, #fb7185 70%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .arch { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
+  @media (max-width: 820px) { .arch { grid-template-columns: 1fr; } }
+  .stack { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow); position: relative; }
+  .stack h3 { margin: 2px 0 12px; text-align: center; font-size: 15px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); }
+  .nx { border: 1px dashed var(--line); border-radius: 12px; padding: 10px 10px 14px;
+    position: relative; margin: 6px 0; background: rgba(255,255,255,.015); }
+  .nx::before { content: "N ×"; position: absolute; top: -11px; left: 14px;
+    background: var(--panel); padding: 0 8px; font-size: 12px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 6px; }
+  .block { display: flex; align-items: center; gap: 10px; padding: 11px 13px; margin: 9px 0;
+    border-radius: 11px; cursor: pointer; border: 1px solid transparent;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    background: var(--panel-2); user-select: none; }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color: #fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+  .block .label { font-weight: 600; }
+  .block .sec { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .arrow { text-align: center; color: var(--line); font-size: 18px; line-height: 1; margin: -3px 0; }
+  .io { text-align: center; color: var(--muted); font-size: 13px; border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px; margin: 8px 0; background: rgba(255,255,255,.02); }
+  .detail { position: sticky; top: 16px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); min-height: 260px; }
+  .detail h3 { margin: 0 0 4px; font-size: 18px; }
+  .detail .tag { font-size: 12px; color: var(--muted); }
+  .detail .formula { margin: 14px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a;
+    border: 1px solid var(--line); font-family: "SFMono-Regular", ui-monospace, Consolas, monospace;
+    font-size: 14px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+  .detail ul { margin: 10px 0 0; padding-left: 18px; } .detail li { margin: 5px 0; }
+  .hint { color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; } .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; }
+  canvas { width: 100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 40px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  /* GQA diagram */
+  .gqa { display:flex; flex-direction:column; gap:14px; align-items:center; }
+  .gqa-row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .qh { width:54px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:600; border:1px solid var(--line); }
+  .kvh { width:88px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:600; border:1px solid var(--line); }
+  .g0 { background: linear-gradient(135deg, rgba(251,113,133,.35), rgba(251,113,133,.12)); }
+  .g1 { background: linear-gradient(135deg, rgba(34,211,238,.35), rgba(34,211,238,.12)); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>The Llama 3 Herd of Models</h1>
+  <p>An interactive map of the Llama 3 recipe — a dense decoder-only Transformer built from RMSNorm, RoPE (base 500k), Grouped-Query Attention and SwiGLU — plus the tokenizer story: a bigger vocabulary encodes the same text in fewer tokens.</p>
+  <div class="badges">
+    <span class="badge">Meta, 2024</span>
+    <span class="badge">arXiv:2407.21783</span>
+    <span class="badge">Grouped-Query Attention</span>
+    <span class="badge">RoPE base 500k</span>
+    <span class="badge">128K BPE vocab</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">The Llama 3 recipe, end to end</h2>
+  <p class="section-sub">A stack of <b>N</b> identical pre-norm blocks. Click any block to see its role, equations and implementation file.</p>
+
+  <div class="arch">
+    <div class="stack">
+      <h3>Decoder-only stack</h3>
+      <div class="io">Token ids</div>
+      <div class="arrow">↓</div>
+      <div class="block" data-key="emb"><span class="dot" style="background:var(--emb)"></span><span class="label">Token Embedding</span><span class="sec">§3.1</span></div>
+      <div class="arrow">↓</div>
+      <div class="nx">
+        <div class="block" data-key="norm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm</span><span class="sec">§3.1</span></div>
+        <div class="block" data-key="rope"><span class="dot" style="background:var(--rope)"></span><span class="label">RoPE (base 500k)</span><span class="sec">§3.1</span></div>
+        <div class="block" data-key="gqa"><span class="dot" style="background:var(--attn)"></span><span class="label">Grouped-Query Attention</span><span class="sec">§3.1</span></div>
+        <div class="block" data-key="norm"><span class="dot" style="background:var(--norm)"></span><span class="label">RMSNorm</span><span class="sec">§3.1</span></div>
+        <div class="block" data-key="ffn"><span class="dot" style="background:var(--ffn)"></span><span class="label">SwiGLU Feed-Forward</span><span class="sec">§3.1</span></div>
+      </div>
+      <div class="arrow">↓</div>
+      <div class="block" data-key="norm"><span class="dot" style="background:var(--norm)"></span><span class="label">Final RMSNorm</span><span class="sec">§3.1</span></div>
+      <div class="arrow">↓</div>
+      <div class="block" data-key="head"><span class="dot" style="background:var(--head)"></span><span class="label">LM Head → logits</span><span class="sec">§3.1</span></div>
+      <div class="arrow">↓</div>
+      <div class="io">Next-token distribution</div>
+    </div>
+
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a block</h3>
+      <div class="tag" id="d-tag">Every colored block is interactive.</div>
+      <div class="formula" id="d-formula">Select any component to reveal its role, equations, and the file that implements it.</div>
+      <ul id="d-points"></ul>
+      <p class="hint" id="d-file"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Grouped-Query Attention</h2>
+  <p class="section-sub">Llama 3 keeps all query heads but shares a smaller set of key/value heads across groups, shrinking the KV cache by <code class="k">n_heads / n_kv_heads</code>. This demo config: <b id="gqa-caption">4 query heads → 2 K/V heads (×2 smaller cache)</b>.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Head sharing</h4>
+      <p class="small">Query heads of the same color read from one shared K/V head.</p>
+      <div class="gqa" id="gqa-diagram"></div>
+    </div>
+    <div class="card">
+      <h4>Why it matters <span class="sec" style="color:var(--muted);font-size:12px">§3.1</span></h4>
+      <div class="formula">MHA:  each of h query heads has its own K,V   → cache ∝ h
+GQA:  h query heads share g < h K/V heads     → cache ∝ g
+MQA:  g = 1 (one shared K/V head)
+
+Llama 3: h query heads, g = 8 K/V heads</div>
+      <ul>
+        <li>The KV cache dominates memory during long-context generation — GQA cuts it directly.</li>
+        <li>Quality stays close to full multi-head attention while inference gets cheaper.</li>
+        <li><code class="k">repeat_kv</code> expands each K/V head to its group before the attention product.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Tokenizer efficiency (from the demo run)</h2>
+  <p class="section-sub">The same held-out sentence, encoded by from-scratch byte-level BPE tokenizers of growing size. A bigger vocabulary merges more subwords, so the text needs <b>fewer tokens</b> — the lever behind Llama 3's move from a 32K to a 128K vocabulary.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Tokens per encoding</h4>
+      <p class="small" id="tok-caption"></p>
+      <canvas id="tok-canvas" height="240"></canvas>
+    </div>
+    <div class="card">
+      <h4>Compression table</h4>
+      <p class="small">Held-out text: <span id="tok-bytes"></span> bytes. Higher bytes/token = better compression.</p>
+      <table id="tok-table"><thead><tr><th>vocab size</th><th>tokens</th><th>bytes/token</th><th>fewer vs bytes</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <h2 class="section-title">Training the recipe</h2>
+  <p class="section-sub">A tiny Llama 3 model trained on a toy sequence-copy task. Loss (left axis) collapses while exact-copy accuracy (right axis) hits 100% — proof the whole stack is wired up correctly.</p>
+  <div class="card">
+    <canvas id="loss-canvas" height="240"></canvas>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>"The Llama 3 Herd of Models"</b> (Meta, 2024).
+    Diagram and data generated by <code class="k">demo/run_demo.py</code> in this folder.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "architecture": {"num_parameters":152000,"dim":64,"n_layers":3,"n_heads":4,"n_kv_heads":2,"kv_cache_reduction":2,"rope_base":500000.0,
+    "loss_curve":[{"step":1,"loss":3.4918,"acc":0.0},{"step":100,"loss":0.0103,"acc":1.0},{"step":200,"loss":0.003,"acc":1.0},{"step":300,"loss":0.0016,"acc":1.0},{"step":400,"loss":0.001,"acc":1.0},{"step":500,"loss":0.0007,"acc":1.0},{"step":600,"loss":0.0005,"acc":1.0}],
+    "final_accuracy":1.0},
+  "tokenizer": {"heldout_text":"A larger vocabulary lets the tokenizer represent common words as single tokens, so the same sentence about language modeling costs fewer tokens.","heldout_bytes":144,
+    "rows":[{"vocab_size":256,"tokens":144,"bytes_per_token":1.0,"reduction_vs_bytes_pct":0.0},{"vocab_size":384,"tokens":51,"bytes_per_token":2.824,"reduction_vs_bytes_pct":64.6},{"vocab_size":512,"tokens":41,"bytes_per_token":3.512,"reduction_vs_bytes_pct":71.5},{"vocab_size":640,"tokens":33,"bytes_per_token":4.364,"reduction_vs_bytes_pct":77.1}]}
+};
+
+const DETAILS = {
+  emb: { title:"Token Embedding", tag:"§3.1", formula:"x = Embedding(token_id)\n(batch, seq) → (batch, seq, dim)",
+    points:["A learned lookup table maps each of the 128K vocabulary ids to a dense vector.","The vocabulary is produced by the byte-level BPE tokenizer in src/tokenizer.py."], file:"src/model.py → self.tok_emb" },
+  norm: { title:"RMSNorm (pre-normalization)", tag:"§3.1", formula:"RMSNorm(x) = x / sqrt(mean(x²)+ε) · weight",
+    points:["Normalizes the INPUT of every sub-layer; the residual carries the un-normalized signal.","Drops LayerNorm's mean-subtraction and bias — cheaper, equally effective."], file:"src/normalization.py → RMSNorm" },
+  rope: { title:"Rotary Position Embeddings", tag:"§3.1 — base raised to 500,000", formula:"q, k ← rotate(q, k, angle ∝ position)\nbase = 500000  (Llama 2 used 10000)",
+    points:["Rotates queries/keys by a position-dependent angle; attention then depends on relative position.","The larger base resolves positions cleanly across the 128K-token context window."], file:"src/rope.py → RotaryEmbedding, apply_rotary" },
+  gqa: { title:"Grouped-Query Attention", tag:"§3.1", formula:"Q: n_heads heads     K,V: n_kv_heads heads (shared)\nrepeat_kv expands each K/V head to its group\ncache ∝ n_kv_heads  (not n_heads)",
+    points:["Keeps all query heads but only a few K/V heads, cutting the KV cache by n_heads/n_kv_heads.","This is what makes long-context inference affordable at negligible quality cost."], file:"src/attention.py → GroupedQueryAttention" },
+  ffn: { title:"SwiGLU Feed-Forward", tag:"§3.1", formula:"SwiGLU(x) = (SiLU(x·W_gate) ⊙ (x·W_up)) · W_down\nhidden ≈ (2/3)·4·dim",
+    points:["A gated MLP: the SiLU-activated gate multiplies the up-projection element-wise.","Three matrices, sized so the parameter budget matches a 4·dim ReLU MLP."], file:"src/feedforward.py → SwiGLU" },
+  head: { title:"LM Head", tag:"§3.1", formula:"logits = x · Wᵀ\ndim → vocab_size",
+    points:["Projects each position back to a score over the whole vocabulary.","Softmax over these logits gives the next-token distribution."], file:"src/model.py → self.lm_head" },
+};
+
+const blocks = document.querySelectorAll('.block');
+const el = id => document.getElementById(id);
+function show(key, node){ const d=DETAILS[key]; if(!d) return;
+  blocks.forEach(b=>b.classList.remove('active')); if(node) node.classList.add('active');
+  el('d-title').textContent=d.title; el('d-tag').textContent=d.tag; el('d-formula').textContent=d.formula;
+  el('d-points').innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); el('d-file').textContent=d.file; }
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function drawGQA(arch){
+  const g = el('gqa-diagram'); g.innerHTML='';
+  const nH = arch.n_heads, nKV = arch.n_kv_heads, rep = nH/nKV;
+  el('gqa-caption').textContent = `${nH} query heads → ${nKV} K/V heads (×${rep} smaller cache)`;
+  const qrow=document.createElement('div'); qrow.className='gqa-row';
+  for(let h=0;h<nH;h++){ const d=document.createElement('div'); d.className='qh '+(Math.floor(h/rep)===0?'g0':'g1');
+    d.textContent='Q'+h; qrow.appendChild(d); }
+  const arrow=document.createElement('div'); arrow.textContent='↓ shares ↓'; arrow.style.color='var(--muted)'; arrow.style.fontSize='12px';
+  const kvrow=document.createElement('div'); kvrow.className='gqa-row';
+  for(let k=0;k<nKV;k++){ const d=document.createElement('div'); d.className='kvh '+(k===0?'g0':'g1');
+    d.textContent='K/V '+k; kvrow.appendChild(d); }
+  g.appendChild(qrow); g.appendChild(arrow); g.appendChild(kvrow);
+}
+
+function drawTokChart(tok){
+  el('tok-bytes').textContent = tok.heldout_bytes;
+  const rows = tok.rows;
+  el('tok-caption').textContent = `"${tok.heldout_text.slice(0,54)}…" — ${rows[0].tokens} → ${rows[rows.length-1].tokens} tokens.`;
+  const tbody = el('tok-table').querySelector('tbody'); tbody.innerHTML='';
+  rows.forEach(r=>{ const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.vocab_size}</td><td>${r.tokens}</td><td>${r.bytes_per_token.toFixed(2)}</td><td>${r.reduction_vs_bytes_pct.toFixed(1)}%</td>`;
+    tbody.appendChild(tr); });
+  const c = el('tok-canvas'); const ctx=c.getContext('2d');
+  const W=c.width=c.clientWidth*2, H=c.height=c.clientHeight*2; ctx.scale(1,1);
+  ctx.clearRect(0,0,W,H);
+  const maxT = Math.max(...rows.map(r=>r.tokens)); const pad=60*2, bw=(W-pad-30)/rows.length;
+  const cols=['#22d3ee','#a78bfa','#fb7185','#f59e0b'];
+  ctx.strokeStyle='#1e2946'; ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){ const y=H-40 - g/4*(H-90); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-10,y); ctx.stroke();
+    ctx.fillStyle='#93a0c0'; ctx.font='20px monospace'; ctx.fillText(Math.round(g/4*maxT), 6, y+6); }
+  rows.forEach((r,i)=>{ const h=(r.tokens/maxT)*(H-90); const x=pad+i*bw+bw*0.18; const w=bw*0.64; const y=H-40-h;
+    ctx.fillStyle=cols[i%cols.length]; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#e8ecf7'; ctx.font='bold 22px monospace'; ctx.textAlign='center';
+    ctx.fillText(r.tokens, x+w/2, y-8);
+    ctx.fillStyle='#93a0c0'; ctx.font='18px monospace'; ctx.fillText('V='+r.vocab_size, x+w/2, H-14); ctx.textAlign='left'; });
+}
+
+function drawLoss(arch){
+  const c = el('loss-canvas'); const ctx=c.getContext('2d');
+  const W=c.width=c.clientWidth*2, H=c.height=c.clientHeight*2; ctx.clearRect(0,0,W,H);
+  const cur=arch.loss_curve; const pad=64*2;
+  const maxL=Math.max(...cur.map(p=>p.loss)), maxS=cur[cur.length-1].step;
+  ctx.strokeStyle='#1e2946'; for(let g=0;g<=4;g++){ const y=H-40-g/4*(H-90); ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke(); }
+  // loss curve
+  ctx.strokeStyle='#fb7185'; ctx.lineWidth=3; ctx.beginPath();
+  cur.forEach((p,i)=>{ const x=pad+p.step/maxS*(W-2*pad); const y=H-40-(1-p.loss/maxL)*(H-90); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  // accuracy curve
+  ctx.strokeStyle='#34d399'; ctx.lineWidth=3; ctx.beginPath();
+  cur.forEach((p,i)=>{ const x=pad+p.step/maxS*(W-2*pad); const y=H-40-p.acc*(H-90); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  ctx.fillStyle='#fb7185'; ctx.font='20px monospace'; ctx.fillText('loss', pad, 30);
+  ctx.fillStyle='#34d399'; ctx.fillText('exact-copy accuracy', pad+90, 30);
+  ctx.fillStyle='#93a0c0'; ctx.font='18px monospace'; ctx.fillText('step →', W-pad-60, H-12);
+}
+
+function render(data){ drawGQA(data.architecture); drawTokChart(data.tokenizer); drawLoss(data.architecture);
+  show('gqa', document.querySelector('.block[data-key="gqa"]')); }
+
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/llama3_demo.json',{cache:'no-store'}); if(r.ok){ render(await r.json()); return; } }catch(e){}
+  }
+  render(BAKED);
+})();
+window.addEventListener('resize', ()=>render(BAKED));
+</script>
+</body>
+</html>
