@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Direct Preference Optimization — Visualization</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0;
+    --line:#2a3352; --ref:#22d3ee; --pol:#fb7185; --chosen:#34d399; --rejected:#f59e0b; --dpo:#a78bfa;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--ref); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(251,113,133,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:32px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#fb7185 80%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:820px){ .grid2 { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .formula { margin:14px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,"SFMono-Regular",Consolas,monospace; font-size:13.5px; color:#cfe8ff; overflow-x:auto; white-space:pre-wrap; }
+
+  /* Compare RLHF vs DPO */
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:820px){ .compare { grid-template-columns:1fr; } }
+  .lane { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px; box-shadow:var(--shadow); }
+  .lane h4 { margin:0 0 12px; text-align:center; }
+  .chain { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px; }
+  .pill { padding:8px 12px; border-radius:10px; font-size:13px; border:1px solid var(--line); background:var(--panel-2); }
+  .pill.rm { border-color:var(--rejected); color:#ffe6bf; } .pill.rl { border-color:var(--pol); color:#ffd6dd; }
+  .pill.dpo { border-color:var(--dpo); color:#e0d7ff; } .pill.sft { border-color:var(--ref); color:#bdf1fb; }
+  .arrow { color:var(--muted); font-size:18px; }
+  .lane .note { color:var(--muted); font-size:12.5px; margin-top:12px; text-align:center; }
+  .strike { position:relative; opacity:.6; } .strike::after { content:""; position:absolute; left:-2px; right:-2px; top:50%; height:2px; background:var(--pol); transform:rotate(-6deg); }
+
+  .metric { margin:12px 0; } .metric .lab { display:flex; justify-content:space-between; font-size:13px; margin-bottom:5px; }
+  .metric .lab b { color:var(--ink); } .metric .lab span { color:var(--muted); }
+  .bar { height:16px; border-radius:8px; background:#0d132a; border:1px solid var(--line); overflow:hidden; }
+  .bar > div { height:100%; border-radius:8px; }
+  canvas { width:100%; height:260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .legend2 { display:flex; gap:16px; margin-top:10px; color:var(--muted); font-size:12px; flex-wrap:wrap; }
+  .legend2 i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+  .example { font-family:ui-monospace,monospace; font-size:13px; }
+  .example .row { display:flex; gap:10px; margin:6px 0; align-items:center; }
+  .example .row .who { width:110px; color:var(--muted); }
+  .tok { display:inline-block; min-width:22px; text-align:center; padding:3px 7px; margin:0 2px; border-radius:7px; background:var(--panel-2); border:1px solid var(--line); }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Direct Preference Optimization</h1>
+  <p>Your Language Model is Secretly a Reward Model. DPO optimizes a policy on preference pairs with a single classification-style loss — <b>no reward model and no reinforcement learning</b>. Reproduced on a tiny LM aligned to a known "sort the tokens" preference.</p>
+  <div class="badges">
+    <span class="badge">Rafailov et al., 2023</span>
+    <span class="badge">arXiv:2305.18290</span>
+    <span class="badge">DPO loss</span>
+    <span class="badge">Implicit reward</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">Two roads to the same objective</h2>
+  <p class="section-sub">RLHF fits a reward model, then does RL against it. DPO shows the RLHF optimum has a closed form — so you can skip both and train the policy directly.</p>
+  <div class="compare">
+    <div class="lane">
+      <h4>RLHF (InstructGPT-style)</h4>
+      <div class="chain">
+        <span class="pill sft">SFT π_ref</span><span class="arrow">→</span>
+        <span class="pill rm">Reward Model</span><span class="arrow">→</span>
+        <span class="pill rl">RL (PPO)</span><span class="arrow">→</span>
+        <span class="pill">π</span>
+      </div>
+      <div class="note">Two extra models + an unstable sampling loop.</div>
+    </div>
+    <div class="lane">
+      <h4>DPO (this paper)</h4>
+      <div class="chain">
+        <span class="pill sft">SFT π_ref</span><span class="arrow">→</span>
+        <span class="pill rm strike">Reward Model</span>
+        <span class="pill rl strike">RL</span><span class="arrow">→</span>
+        <span class="pill dpo">DPO loss</span><span class="arrow">→</span>
+        <span class="pill">π</span>
+      </div>
+      <div class="note">One model, one supervised loss on preference pairs.</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">The insight &amp; the loss</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>The LM is secretly a reward model</h4>
+      <p class="small">The RLHF objective (maximize reward with a KL leash to π_ref) has a closed-form optimum. Inverting it expresses the reward in terms of the optimal policy:</p>
+      <div class="formula">π*(y|x) ∝ π_ref(y|x) · exp( r(x,y) / β )
+
+⇒  r(x,y) = β · log( π*(y|x) / π_ref(y|x) )  + β·log Z(x)
+
+The policy IS the reward (up to a per-prompt constant that
+cancels in any preference comparison).</div>
+    </div>
+    <div class="card">
+      <h4>DPO loss <span style="color:var(--muted);font-size:12px">Eq. 7</span></h4>
+      <p class="small">Substitute that implicit reward into the Bradley-Terry preference likelihood. The partition function cancels, leaving a simple loss:</p>
+      <div class="formula">L_DPO = − log σ( β · [ (logπ_θ(y_w|x) − logπ_ref(y_w|x))
+                     − (logπ_θ(y_l|x) − logπ_ref(y_l|x)) ] )
+
+y_w = chosen (preferred),  y_l = rejected
+implicit reward:  r̂(x,y) = β · (logπ_θ − logπ_ref)
+margin = r̂(x,y_w) − r̂(x,y_l)   ← pushed up by training</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Training dynamics (live from the demo)</h2>
+  <p class="section-sub">As DPO trains, the loss falls, and the implicit reward of the <b>chosen</b> response is driven above the <b>rejected</b> one — the margin grows steadily positive.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Implicit reward margin &amp; loss</h4>
+      <canvas id="curve" width="1100" height="260"></canvas>
+      <div class="legend2">
+        <span><i style="background:var(--dpo)"></i>reward margin (chosen − rejected)</span>
+        <span><i style="background:var(--ref)"></i>DPO loss</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Implicit reward of chosen vs rejected</h4>
+      <canvas id="rewards" width="1100" height="260"></canvas>
+      <div class="legend2">
+        <span><i style="background:var(--chosen)"></i>r̂(chosen)</span>
+        <span><i style="background:var(--rejected)"></i>r̂(rejected)</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Generations shift toward the preferred behavior</h2>
+  <p class="section-sub">No reward model was ever trained — yet the policy's sampled rule-compliance rises well above the SFT reference.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Sampled reward &amp; compliance</h4>
+      <div id="metrics"></div>
+    </div>
+    <div class="card">
+      <h4>One prompt, before &amp; after DPO</h4>
+      <div class="example" id="example"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Direct Preference Optimization: Your Language Model is Secretly a Reward Model”</b> (Rafailov et al., 2023).
+    Numbers from <code class="k">python demo/run_demo.py</code>; implementation in <code class="k">src/</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "beta":0.1,
+  "ref":{"avg_reward":0.7526,"compliance":0.3086},
+  "dpo":{"avg_reward":0.9740,"compliance":0.7461},
+  "curve":[
+    {"step":0,"loss":null,"margin":0.0,"r_chosen":0.0,"r_rejected":0.0,"reward":0.7526,"compliance":0.3086},
+    {"step":1,"loss":0.6931,"margin":0.0,"r_chosen":0.0,"r_rejected":0.0,"reward":0.8151,"compliance":0.359},
+    {"step":25,"loss":0.2351,"margin":1.522,"r_chosen":0.016,"r_rejected":-1.506,"reward":0.9479,"compliance":0.5},
+    {"step":50,"loss":0.1074,"margin":2.517,"r_chosen":0.046,"r_rejected":-2.471,"reward":0.9766,"compliance":0.766},
+    {"step":75,"loss":0.0495,"margin":3.778,"r_chosen":-0.018,"r_rejected":-3.797,"reward":0.9948,"compliance":0.820},
+    {"step":100,"loss":0.0192,"margin":4.885,"r_chosen":-0.107,"r_rejected":-4.992,"reward":0.9974,"compliance":0.656},
+    {"step":125,"loss":0.0116,"margin":5.561,"r_chosen":-0.119,"r_rejected":-5.680,"reward":0.9896,"compliance":0.766},
+    {"step":150,"loss":0.0130,"margin":5.978,"r_chosen":-0.118,"r_rejected":-6.097,"reward":0.9922,"compliance":0.758},
+    {"step":175,"loss":0.0091,"margin":6.512,"r_chosen":-0.104,"r_rejected":-6.616,"reward":0.9844,"compliance":0.758},
+    {"step":200,"loss":0.0077,"margin":6.811,"r_chosen":-0.165,"r_rejected":-6.976,"reward":0.9766,"compliance":0.781},
+    {"step":225,"loss":0.0020,"margin":7.151,"r_chosen":-0.039,"r_rejected":-7.190,"reward":0.9688,"compliance":0.797},
+    {"step":250,"loss":0.0018,"margin":7.357,"r_chosen":-0.116,"r_rejected":-7.472,"reward":0.9766,"compliance":0.75},
+    {"step":275,"loss":0.0020,"margin":7.273,"r_chosen":-0.059,"r_rejected":-7.333,"reward":0.9609,"compliance":0.648},
+    {"step":300,"loss":0.0068,"margin":7.547,"r_chosen":-0.081,"r_rejected":-7.628,"reward":0.9740,"compliance":0.742}],
+  "example":{"prompt":[5,6,9,4],"preferred":[4,5,6,9],"ref_output":[4,5,6,9],"dpo_output":[4,5,6,9]}
+};
+
+function axes(ctx,W,H,padL,padR,padT,padB,ymin,ymax,ylabel,maxX){
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#6b7aa0'; ctx.font='11px ui-monospace';
+  for(let g=0;g<=4;g++){ const v=ymin+(ymax-ymin)*g/4; const y=H-padB-((v-ymin)/(ymax-ymin))*(H-padT-padB);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke(); ctx.fillText(v.toFixed(1),6,y+3); }
+  ctx.fillText(ylabel, padL, 11); ctx.fillText('DPO step →', W-padR-70, H-8);
+}
+function drawMargin(d){
+  const c=document.getElementById('curve'), ctx=c.getContext('2d');
+  const W=c.width,H=c.height,padL=42,padR=44,padT=16,padB=30; ctx.clearRect(0,0,W,H);
+  const pts=d.curve.filter(p=>p.loss!==null); const maxX=Math.max(...pts.map(p=>p.step));
+  const mMax=Math.max(...pts.map(p=>p.margin))*1.1;
+  axes(ctx,W,H,padL,padR,padT,padB,0,mMax,'margin (β·Δlogπ)',maxX);
+  const X=s=>padL+(s/maxX)*(W-padL-padR);
+  const Ym=v=>H-padB-(v/mMax)*(H-padT-padB);
+  // margin
+  ctx.beginPath(); pts.forEach((p,i)=>{const x=X(p.step),y=Ym(p.margin); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#a78bfa'; ctx.lineWidth=2.8; ctx.stroke();
+  pts.forEach(p=>{ctx.beginPath(); ctx.arc(X(p.step),Ym(p.margin),3,0,7); ctx.fillStyle='#a78bfa'; ctx.fill();});
+  // loss on right axis [0, lossMax]
+  const lMax=Math.max(...pts.map(p=>p.loss));
+  const Yl=v=>H-padB-(v/lMax)*(H-padT-padB);
+  ctx.beginPath(); pts.forEach((p,i)=>{const x=X(p.step),y=Yl(p.loss); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=2.4; ctx.stroke();
+  ctx.fillStyle='#22d3ee'; ctx.font='11px ui-monospace';
+  for(let g=0;g<=4;g++){ const v=lMax*g/4; ctx.fillText(v.toFixed(2), W-padR+6, Yl(v)+3); }
+}
+function drawRewards(d){
+  const c=document.getElementById('rewards'), ctx=c.getContext('2d');
+  const W=c.width,H=c.height,padL=46,padR=16,padT=16,padB=30; ctx.clearRect(0,0,W,H);
+  const pts=d.curve.filter(p=>p.loss!==null); const maxX=Math.max(...pts.map(p=>p.step));
+  const lo=Math.min(...pts.map(p=>p.r_rejected))*1.1, hi=1;
+  ctx.strokeStyle='#1e2946'; ctx.fillStyle='#6b7aa0'; ctx.font='11px ui-monospace';
+  for(let g=0;g<=4;g++){ const v=lo+(hi-lo)*g/4; const y=H-padB-((v-lo)/(hi-lo))*(H-padT-padB);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke(); ctx.fillText(v.toFixed(1),6,y+3); }
+  ctx.fillText('implicit reward r̂', padL, 11); ctx.fillText('DPO step →', W-padR-70, H-8);
+  const X=s=>padL+(s/maxX)*(W-padL-padR);
+  const Y=v=>H-padB-((v-lo)/(hi-lo))*(H-padT-padB);
+  // zero line
+  ctx.setLineDash([5,4]); ctx.strokeStyle='#33406a'; ctx.beginPath(); ctx.moveTo(padL,Y(0)); ctx.lineTo(W-padR,Y(0)); ctx.stroke(); ctx.setLineDash([]);
+  function line(key,color){ ctx.beginPath(); pts.forEach((p,i)=>{const x=X(p.step),y=Y(p[key]); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=color; ctx.lineWidth=2.6; ctx.stroke(); pts.forEach(p=>{ctx.beginPath(); ctx.arc(X(p.step),Y(p[key]),3,0,7); ctx.fillStyle=color; ctx.fill();}); }
+  line('r_chosen','#34d399'); line('r_rejected','#f59e0b');
+}
+function metricBar(label, sub, val, color){
+  const pct=Math.round(val*100);
+  return `<div class="metric"><div class="lab"><b>${label}</b><span>${sub}</span></div>`+
+    `<div class="bar"><div style="width:${Math.max(2,pct)}%;background:${color}"></div></div></div>`;
+}
+function tokens(arr, ideal){ return arr.map((t,i)=>{ const ok=ideal?(t===ideal[i]):true; const col=ok?'var(--chosen)':'var(--rejected)';
+  return `<span class="tok" style="border-color:${col};color:${col}">${t}</span>`; }).join(''); }
+function render(d){
+  drawMargin(d); drawRewards(d);
+  document.getElementById('metrics').innerHTML =
+    metricBar('SFT reference π_ref', d.ref.avg_reward.toFixed(3)+' reward · '+Math.round(d.ref.compliance*100)+'% compliant',
+      d.ref.avg_reward, 'linear-gradient(90deg,#155e6b,var(--ref))')+
+    metricBar('DPO policy π_θ', d.dpo.avg_reward.toFixed(3)+' reward · '+Math.round(d.dpo.compliance*100)+'% compliant',
+      d.dpo.avg_reward, 'linear-gradient(90deg,#4b3a7a,var(--dpo))');
+  const ex=d.example;
+  document.getElementById('example').innerHTML =
+    `<div class="row"><span class="who">prompt</span> ${tokens(ex.prompt)}</div>`+
+    `<div class="row"><span class="who">preferred</span> ${tokens(ex.preferred)}</div>`+
+    `<div class="row"><span class="who">π_ref greedy</span> ${tokens(ex.ref_output, ex.preferred)}</div>`+
+    `<div class="row"><span class="who">π_DPO greedy</span> ${tokens(ex.dpo_output, ex.preferred)}</div>`;
+}
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/dpo_results.json',{cache:'no-store'}); if(r.ok){ render(await r.json()); return; } }catch(e){}
+  }
+  render(BAKED);
+})();
+</script>
+</body>
+</html>
