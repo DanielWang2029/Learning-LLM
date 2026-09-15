@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kimi K3 — Kimi Delta Attention (KDA)</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#131a2e;--panel-2:#1a2340;--ink:#e8ecf7;--muted:#93a0c0;
+    --line:#2a3352;--state:#22d3ee;--decay:#a78bfa;--delta:#fb7185;--out:#34d399;--gold:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}html,body{margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0%,transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%,#2a1236 0%,transparent 60%),var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--state)}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(251,113,133,.14));
+    border-bottom:1px solid var(--line)}
+  header.hero h1{margin:0;font-size:34px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#34d399);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:840px}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--muted)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px}
+  .section-title{font-size:20px;margin:34px 0 6px}
+  .section-sub{color:var(--muted);margin:0 0 18px;max-width:880px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media (max-width:860px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px}.card p.small{color:var(--muted);font-size:13px;margin:0 0 12px}
+  .formula{margin:12px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff}
+  .statline{display:flex;gap:18px;flex-wrap:wrap;margin:6px 0}
+  .stat{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:150px}
+  .stat .v{font-size:26px;font-weight:800}.stat .l{color:var(--muted);font-size:12px;margin-top:2px}
+  canvas{width:100%;height:240px;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line)}
+  ul{margin:10px 0 0;padding-left:18px}li{margin:5px 0}
+  .legend{display:flex;gap:16px;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap}
+  .sw{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+  /* recurrence diagram */
+  .steps{display:flex;flex-direction:column;gap:8px}
+  .rstep{display:flex;align-items:center;gap:12px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:12px;padding:10px 14px}
+  .rstep .tag{font-weight:800;min-width:96px}
+  .rstep .eq{font-family:ui-monospace,monospace;font-size:13px;color:#cfe8ff}
+  .rstep.decay{border-color:var(--decay)}.rstep.read{border-color:var(--state)}
+  .rstep.delta{border-color:var(--delta)}.rstep.out{border-color:var(--out)}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Kimi K3 · Kimi Delta Attention</h1>
+  <p>KDA is a <b>gated delta-rule linear attention</b>: a fixed-size recurrent state is decayed by a
+  channel-wise forget gate, then corrected with the delta rule. Constant memory, linear time — long context
+  without an L×L matrix.</p>
+  <div class="badges">
+    <span class="badge">Kimi Team, 2026</span>
+    <span class="badge">arXiv:2607.24653</span>
+    <span class="badge">Delta Rule</span>
+    <span class="badge">Linear Attention</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The recurrent state update (Eq. 1, §2.1.1)</h2>
+  <p class="section-sub">One fixed-size state Sₜ ∈ R^{dk×dv} carries all memory. Each token decays it, reads what
+  it currently predicts for the key, and writes only the <b>correction</b> (the delta rule).</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="formula">Sₜ = (I − βₜ kₜ kₜᵀ)·Diag(αₜ)·Sₜ₋₁ + βₜ kₜ vₜᵀ
+õₜ = Sₜᵀ qₜ
+
+αₜ ∈ (0,1)^dk : channel-wise forget gate
+βₜ ∈ (0,1)    : delta-rule write strength</div>
+      <ul>
+        <li><b>Fixed-size state</b> ⇒ O(L) time, O(1) memory per step.</li>
+        <li>q, k are L2-normalized; q/k/v pass a ShortConv so a token can see its neighbor.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Delta rule, step by step</h4>
+      <div class="steps">
+        <div class="rstep decay"><span class="tag" style="color:var(--decay)">decay</span><span class="eq">S̃ = Diag(αₜ)·Sₜ₋₁</span></div>
+        <div class="rstep read"><span class="tag" style="color:var(--state)">read</span><span class="eq">read = kₜᵀ S̃</span></div>
+        <div class="rstep delta"><span class="tag" style="color:var(--delta)">write Δ</span><span class="eq">Sₜ = S̃ + βₜ·kₜ (vₜ − read)ᵀ</span></div>
+        <div class="rstep out"><span class="tag" style="color:var(--out)">output</span><span class="eq">õₜ = Sₜᵀ qₜ</span></div>
+      </div>
+      <p class="small" style="margin-top:12px">Only the prediction error <code class="k">vₜ − read</code> is
+      written, so old bindings are updated instead of overwritten — the key to reliable recall.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">It learns long-range recall</h2>
+  <p class="section-sub">Measured by <code class="k">demo/run_demo.py</code> on an associative-recall task:
+  store many key→value pairs, then retrieve one by its key.</p>
+  <div class="statline" id="stats"></div>
+  <div class="card">
+    <canvas id="acc" width="1100" height="240"></canvas>
+    <div class="legend"><span><span class="sw" style="background:var(--out)"></span>recall accuracy</span>
+      <span><span class="sw" style="background:var(--gold)"></span>chance</span></div>
+  </div>
+
+  <h2 class="section-title">Linear vs. quadratic cost</h2>
+  <p class="section-sub">Left: measured forward time — roughly flat <i>per token</i>, so total time grows
+  linearly with length. Right: the asymptotic gap vs softmax attention (∝ L²).</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Measured KDA forward time</h4>
+      <canvas id="timing" width="700" height="240"></canvas>
+      <p class="small" style="margin-top:8px">Doubling L roughly doubles the time — linear scaling.</p>
+    </div>
+    <div class="card">
+      <h4>Op count vs. sequence length</h4>
+      <canvas id="cost" width="700" height="240"></canvas>
+      <div class="legend"><span><span class="sw" style="background:var(--delta)"></span>softmax attn ∝ L²</span>
+        <span><span class="sw" style="background:var(--out)"></span>KDA ∝ L</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“Kimi K3: Open Frontier Intelligence”</b> (Kimi Team, 2026).
+    Data from <code class="k">demo/run_demo.py</code> → <code class="k">data/kda_result.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"n_pairs": 8, "final_acc": 0.9950000047683716, "chance": 0.0625, "acc_curve": [{"step": 1, "acc": 0.012500000186264515}, {"step": 100, "acc": 0.8100000023841858}, {"step": 200, "acc": 0.9975000023841858}, {"step": 300, "acc": 1.0}, {"step": 400, "acc": 1.0}], "timing": {"lengths": [32, 64, 128, 256], "ms": [7.164, 13.775, 27.053, 56.582]}, "cost_curve": {"lengths": [64, 128, 256, 512, 1024, 2048, 4096], "quadratic": [4096, 16384, 65536, 262144, 1048576, 4194304, 16777216], "linear": [2048, 4096, 8192, 16384, 32768, 65536, 131072]}, "vocab": 33, "n_keys": 16, "n_vals": 16};
+
+function render(D){
+  const stats=[
+    ["recall accuracy", (D.final_acc*100).toFixed(1)+"%", `${D.n_pairs} pairs, chance ${(D.chance*100).toFixed(1)}%`],
+    ["state", "fixed size", "no L×L matrix"],
+    ["time / token", "≈ flat", "linear scaling"],
+    ["vocab", D.vocab, `${D.n_keys} keys · ${D.n_vals} values`],
+  ];
+  document.getElementById('stats').innerHTML=stats.map(s=>
+    `<div class="stat"><div class="v">${s[1]}</div><div class="l">${s[0]} — ${s[2]}</div></div>`).join('');
+  drawAcc(D.acc_curve, D.chance);
+  drawTiming(D.timing);
+  drawCost(D.cost_curve);
+}
+
+function grid(ctx,W,H,pad){ctx.strokeStyle='#1e2946';ctx.lineWidth=1;
+  for(let g=0;g<=5;g++){const y=pad+g/5*(H-2*pad);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();}}
+
+function drawAcc(curve,chance){
+  const cv=document.getElementById('acc'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);grid(ctx,W,H,pad);
+  const xs=curve.map(c=>c.step),ys=curve.map(c=>c.acc);
+  const X=i=>pad+i/(xs.length-1)*(W-2*pad),Y=v=>H-pad-v*(H-2*pad);
+  ctx.strokeStyle='#f59e0b';ctx.setLineDash([6,5]);ctx.beginPath();ctx.moveTo(pad,Y(chance));ctx.lineTo(W-pad,Y(chance));ctx.stroke();ctx.setLineDash([]);
+  ctx.beginPath();ys.forEach((v,i)=>{const x=X(i),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#34d399';ctx.lineWidth=2.8;ctx.stroke();
+  ys.forEach((v,i)=>{ctx.fillStyle='#34d399';ctx.beginPath();ctx.arc(X(i),Y(v),3.5,0,7);ctx.fill();});
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach((s,i)=>ctx.fillText('step '+s,X(i)-18,H-pad+16));
+  ctx.fillText('accuracy',6,pad-6);
+}
+
+function drawTiming(t){
+  const cv=document.getElementById('timing'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);grid(ctx,W,H,pad);
+  const xs=t.lengths,ys=t.ms,mx=Math.max(...ys)*1.1;
+  const X=i=>pad+i/(xs.length-1)*(W-2*pad),Y=v=>H-pad-v/mx*(H-2*pad);
+  ctx.beginPath();ys.forEach((v,i)=>{const x=X(i),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.strokeStyle='#22d3ee';ctx.lineWidth=2.8;ctx.stroke();
+  ys.forEach((v,i)=>{ctx.fillStyle='#22d3ee';ctx.beginPath();ctx.arc(X(i),Y(v),4,0,7);ctx.fill();
+    ctx.fillStyle='#cfe8ff';ctx.font='11px monospace';ctx.fillText(v.toFixed(0)+'ms',X(i)-12,Y(v)-8);});
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach((L,i)=>ctx.fillText('L='+L,X(i)-12,H-pad+16));
+  ctx.fillText('ms',6,pad-6);
+}
+
+function drawCost(cc){
+  const cv=document.getElementById('cost'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44;ctx.clearRect(0,0,W,H);
+  const xs=cc.lengths,q=cc.quadratic,l=cc.linear,all=q.concat(l);
+  const ymin=Math.log10(Math.min(...all)),ymax=Math.log10(Math.max(...all));
+  const xmin=Math.log10(xs[0]),xmax=Math.log10(xs[xs.length-1]);
+  const X=v=>pad+(Math.log10(v)-xmin)/(xmax-xmin)*(W-2*pad);
+  const Y=v=>H-pad-(Math.log10(v)-ymin)/(ymax-ymin)*(H-2*pad);
+  grid(ctx,W,H,pad);
+  function line(d,c,dash){ctx.beginPath();ctx.setLineDash(dash||[]);
+    d.forEach((v,i)=>{const x=X(xs[i]),y=Y(v);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+    ctx.strokeStyle=c;ctx.lineWidth=2.6;ctx.stroke();ctx.setLineDash([]);}
+  line(q,'#fb7185');line(l,'#34d399',[7,5]);
+  ctx.fillStyle='#93a0c0';ctx.font='12px monospace';
+  xs.forEach(v=>ctx.fillText(v>=1024?(v/1024)+'K':v,X(v)-8,H-pad+16));
+  ctx.fillText('ops (log)',6,pad-6);ctx.fillText('length →',W-pad-70,H-8);
+}
+
+(async function init(){
+  let D=BAKED;
+  if(location.protocol.startsWith('http')){
+    try{const r=await fetch('../data/kda_result.json',{cache:'no-store'});if(r.ok)D=await r.json();}catch(e){}
+  }
+  render(D);
+})();
+</script>
+</body>
+</html>
