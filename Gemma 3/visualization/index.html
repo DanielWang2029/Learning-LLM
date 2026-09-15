@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gemma 3 — 5:1 Local:Global Attention</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --local:#34d399; --global:#f472b6; --acc:#22d3ee; --mem:#f59e0b; --bad:#fb7185;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 15% -10%, #10332a 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #331030 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--acc); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background:linear-gradient(135deg, rgba(52,211,153,.16), rgba(34,211,238,.12) 50%, rgba(244,114,182,.16)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:34px; letter-spacing:.5px;
+    background:linear-gradient(90deg,#34d399,#22d3ee 50%,#f472b6); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:840px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1160px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media(max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; font-size:16px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 10px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+  ul { margin:8px 0 0; padding-left:18px; } li { margin:5px 0; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  /* layer stack */
+  .stack { display:flex; flex-direction:column-reverse; gap:8px; }
+  .layer { display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:11px; padding:11px 14px; background:var(--panel-2); }
+  .layer .badge2 { font-family:ui-monospace,monospace; font-size:12px; padding:3px 8px; border-radius:6px; }
+  .layer.local .badge2 { background:rgba(52,211,153,.18); color:var(--local); border:1px solid var(--local); }
+  .layer.global .badge2 { background:rgba(244,114,182,.18); color:var(--global); border:1px solid var(--global); }
+  .layer .foot { margin-left:auto; color:var(--muted); font-size:12px; font-family:ui-monospace,monospace; }
+  .miniband { display:flex; gap:1px; }
+  .miniband i { width:5px; height:14px; border-radius:1px; display:inline-block; }
+  /* bars */
+  .bars { display:flex; flex-direction:column; gap:16px; margin-top:6px; }
+  .barrow .toplab { display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; }
+  .track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; position:relative; overflow:hidden; }
+  .fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; padding-left:10px; font-size:12px; font-weight:700; color:#04120c; }
+  .accdot { font-size:12px; color:var(--muted); }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; }
+  .kpi .box { background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:10px 16px; text-align:center; min-width:120px; }
+  .kpi .num { font-size:23px; font-weight:800; } .kpi .cap { font-size:12px; color:var(--muted); }
+  .legend-row { display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:10px; align-items:center; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Gemma 3 · 5:1 Local:Global</h1>
+  <p>Make most attention layers <b style="color:var(--local)">local</b> (a cheap sliding window) and only a few
+  <b style="color:var(--global)">global</b> (full attention) — a <b>5:1</b> ratio. The rare global layers still relay
+  long-range information, so accuracy holds while attention memory plummets. Plus <b>QK-norm</b>.</p>
+  <div class="badges">
+    <span class="badge">Google, 2025</span>
+    <span class="badge">arXiv:2503.19786</span>
+    <span class="badge">5:1 local:global</span>
+    <span class="badge">Sliding-window attention</span>
+    <span class="badge">QK-norm</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The 5:1 layer stack</h2>
+  <p class="section-sub">Six layers, bottom to top. Five are local (attend within a small window); the top one is global (attends everywhere) to route long-range info. <span id="pat-note"></span></p>
+  <div class="grid2">
+    <div class="card">
+      <div class="stack" id="stack"></div>
+      <div class="legend-row">
+        <span><span style="color:var(--local)">■</span> local (sliding window)</span>
+        <span><span style="color:var(--global)">■</span> global (full attention)</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>The retrieval task</h4>
+      <p class="small">A long sequence hides a <code class="k">MARK</code> followed by a value; a <code class="k">QUERY</code> at the end must recover it. Information has to travel the full length of the sequence.</p>
+      <div style="font-family:ui-monospace,monospace;font-size:13px;background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;color:#cfe8ff" id="ex-line"></div>
+      <div class="kpi" style="margin-top:12px">
+        <div class="box"><div class="num" style="color:var(--acc)" id="k-far53">—</div><div class="cap">5:1 accuracy on FAR payloads</div></div>
+        <div class="box"><div class="num" style="color:var(--bad)" id="k-farloc">—</div><div class="cap">all-local accuracy on FAR payloads</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Accuracy vs attention memory</h2>
+  <p class="section-sub">Straight from <code class="k">demo/run_demo.py</code>. Bar length = attention-score entries used (memory). The label on each bar is its accuracy. <span id="cfg-note"></span></p>
+  <div class="card">
+    <div class="bars" id="bars"></div>
+    <div class="legend-row"><span>Bar width = attention memory (lower is better) · number in bar = accuracy</span></div>
+  </div>
+
+  <h2 class="section-title">Why it works</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Local is cheap, global is powerful</h4>
+      <ul><li>A local layer computes only <code class="k">T·(2w+1)</code> attention scores instead of <code class="k">T·T</code>.</li>
+          <li>Stacking local layers grows the receptive field slowly — not enough to span a long sequence.</li>
+          <li>One global layer connects any two positions directly, so long-range retrieval just works.</li></ul>
+    </div>
+    <div class="card">
+      <h4>QK-norm</h4>
+      <div style="background:#0d132a;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:ui-monospace,monospace;font-size:13px;color:#cfe8ff;white-space:pre-wrap">q̂ = q / ‖q‖    k̂ = k / ‖k‖
+scores = q̂ · k̂ᵀ     # bounded logits</div>
+      <ul><li>Normalizing queries and keys bounds the attention logits and stabilizes training.</li>
+          <li>Used throughout the stack in this demo (toggle in code via <code class="k">qk_norm</code>).</li></ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Gemma 3</b> (Google, 2025, arXiv:2503.19786).
+    The transformer is tiny; the mechanism — a 5:1 local:global attention ratio with QK-norm — is the paper's.
+    Data from <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "config": {"seq_len":64,"n_layers":6,"window":4,"n_test":500,"seconds":46.1},
+  "results": {
+    "5:1 local:global": {"pattern":["local","local","local","local","local","global"],
+      "accuracy":1.0,"acc_near":1.0,"acc_far":1.0,"attn_entries":6876,"memory_vs_global":0.28},
+    "all-global": {"pattern":["global","global","global","global","global","global"],
+      "accuracy":1.0,"acc_near":1.0,"acc_far":1.0,"attn_entries":24576,"memory_vs_global":1.0},
+    "all-local": {"pattern":["local","local","local","local","local","local"],
+      "accuracy":0.258,"acc_near":0.3855,"acc_far":0.1315,"attn_entries":3336,"memory_vs_global":0.136}
+  },
+  "example": {"payload_pos":30,"distance":33,"true":0,"pred":0}
+};
+let D = BAKED;
+
+function miniband(mode, seqLen, window) {
+  // a tiny illustrative row of which keys a middle query attends to
+  const N = 21, mid = 10;
+  let html = '<span class="miniband">';
+  for (let j=0;j<N;j++){
+    let on;
+    if (mode === 'global') on = true;
+    else on = Math.abs(j-mid) <= window;
+    const col = mode==='global' ? 'var(--global)' : 'var(--local)';
+    html += `<i style="background:${on?col:'#20294a'}"></i>`;
+  }
+  html += '</span>';
+  return html;
+}
+
+function renderStack() {
+  const r = D.results["5:1 local:global"], pat = r.pattern;
+  const seqLen = D.config.seq_len, w = D.config.window;
+  const localEntries = seqLen*(2*w+1) > seqLen*seqLen ? seqLen*seqLen : null;
+  const el = document.getElementById('stack'); el.innerHTML='';
+  pat.forEach((mode, i) => {
+    const div = document.createElement('div');
+    div.className = 'layer ' + mode;
+    const entries = mode==='global' ? seqLen*seqLen : (() => {
+      // exact banded count matches src: sum over positions of window overlap
+      let c=0; for(let a=0;a<seqLen;a++){for(let b=0;b<seqLen;b++){ if(Math.abs(a-b)<=w)c++; }} return c;
+    })();
+    div.innerHTML = `<span class="badge2">layer ${i} · ${mode}</span>` +
+      miniband(mode, seqLen, w) +
+      `<span class="foot">${entries.toLocaleString()} scores</span>`;
+    el.appendChild(div);
+  });
+  document.getElementById('pat-note').textContent =
+    `Sequence length ${seqLen}, local window radius ${w}.`;
+}
+
+function renderBars() {
+  const order = ["all-global","5:1 local:global","all-local"];
+  const maxEntries = D.results["all-global"].attn_entries;
+  const colors = {"all-global":"var(--global)","5:1 local:global":"linear-gradient(90deg,var(--local),var(--acc))","all-local":"var(--bad)"};
+  const el = document.getElementById('bars'); el.innerHTML='';
+  order.forEach(name=>{
+    const r = D.results[name];
+    const row = document.createElement('div'); row.className='barrow';
+    row.innerHTML = `<div class="toplab"><b>${name}</b>
+        <span class="accdot">${r.attn_entries.toLocaleString()} attn entries · ${Math.round(r.memory_vs_global*100)}% of global</span></div>
+      <div class="track"><div class="fill" style="width:${r.attn_entries/maxEntries*100}%;background:${colors[name]}">${Math.round(r.accuracy*100)}% acc</div></div>`;
+    el.appendChild(row);
+  });
+}
+
+function init(){
+  renderStack(); renderBars();
+  const r = D.results;
+  document.getElementById('k-far53').textContent = Math.round(r["5:1 local:global"].acc_far*100)+'%';
+  document.getElementById('k-farloc').textContent = Math.round(r["all-local"].acc_far*100)+'%';
+  const ex = D.example;
+  document.getElementById('ex-line').innerHTML =
+    `[ … f? <span style="color:var(--global)">MARK</span> <span style="color:var(--acc)">VAL=${ex.true}</span> … <span style="color:var(--local)">QUERY</span> ]<br>` +
+    `payload ${ex.distance} tokens from the query · 5:1 model predicted <b style="color:var(--acc)">${ex.pred}</b> ${ex.pred===ex.true?'✓':'✗'}`;
+  document.getElementById('cfg-note').textContent =
+    `${D.config.n_test} test sequences · ~${D.config.seconds}s on CPU.`;
+}
+
+(async function(){
+  if (location.protocol.startsWith('http')) {
+    try{ const r=await fetch('../data/gemma3_results.json',{cache:'no-store'});
+      if(r.ok){ D=await r.json(); } }catch(e){}
+  }
+  init();
+})();
+</script>
+</body>
+</html>
