@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VibeVoice-ASR-Streaming — streaming speaker-attributed ASR</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --audio:#22d3ee; --look:#f59e0b; --text:#a78bfa; --spk0:#34d399; --spk1:#fb7185; --end:#64748b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body {
+    background: radial-gradient(1200px 600px at 15% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #2a1436 0%, transparent 60%), var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--audio); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14));
+    border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:31px; letter-spacing:.5px;
+    background: linear-gradient(90deg,#22d3ee,#a78bfa 40%,#34d399 75%,#f59e0b);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:840px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:40px 0 6px; }
+  .section-sub { color:var(--muted); margin:0 0 18px; max-width:880px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:900px){ .grid2{grid-template-columns:1fr;} }
+  h4 { margin:0 0 4px; } p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; font-family:ui-monospace,monospace; }
+
+  /* interleaved sequence diagram */
+  .seq { display:flex; gap:6px; align-items:stretch; overflow-x:auto; padding:8px 2px 14px; }
+  .cell { border-radius:9px; padding:8px 6px; min-width:34px; text-align:center; font-family:ui-monospace,monospace; font-size:12px;
+          border:1px solid var(--line); display:flex; flex-direction:column; justify-content:center; gap:3px; }
+  .cell small { color:var(--muted); font-size:9px; }
+  .c-aud { background:linear-gradient(180deg,rgba(34,211,238,.28),rgba(34,211,238,.08)); border-color:#22d3ee66; }
+  .c-look { background:linear-gradient(180deg,rgba(245,158,11,.30),rgba(245,158,11,.10)); border-color:#f59e0b88; }
+  .c-txt { background:linear-gradient(180deg,rgba(167,139,250,.28),rgba(167,139,250,.08)); border-color:#a78bfa66; }
+  .c-end { background:rgba(100,116,139,.25); border-color:#64748b88; color:var(--muted); }
+  .chunkband { border:1px dashed var(--line); border-radius:12px; padding:6px 6px 2px; position:relative; margin-right:2px; }
+  .chunkband::before { content:attr(data-k); position:absolute; top:-10px; left:10px; background:var(--panel); padding:0 8px; font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:6px; }
+
+  .legend { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin:8px 0; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin:6px 0 16px; flex-wrap:wrap; }
+  button { background:var(--panel-2); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 14px; cursor:pointer; font-size:14px; }
+  button:hover { border-color:#fff4; }
+  button.primary { background:linear-gradient(90deg,#a78bfa,#22d3ee); color:#0a0620; border:none; font-weight:600; }
+  .tline { color:var(--muted); font-family:ui-monospace,monospace; font-size:13px; }
+
+  .transcript { background:#0d132a; border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-height:150px; font-size:15px; }
+  .utt { margin:4px 0; }
+  .who { font-weight:700; font-family:ui-monospace,monospace; padding:1px 7px; border-radius:6px; margin-right:8px; }
+  .who0 { color:#04231b; background:var(--spk0); } .who1 { color:#2a0710; background:var(--spk1); }
+  .words { font-family:ui-monospace,monospace; letter-spacing:1px; }
+  .fresh { animation:pop .5s; } @keyframes pop { from{opacity:0; transform:translateY(4px);} to{opacity:1;} }
+
+  .stat { display:flex; gap:22px; flex-wrap:wrap; margin-top:10px; }
+  .box { background:#0d132a; border:1px solid var(--line); border-radius:12px; padding:12px 16px; min-width:120px; }
+  .num { font-size:26px; font-weight:700; } .lbl { color:var(--muted); font-size:12px; }
+  canvas { width:100%; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:44px; }
+  .bar { height:22px; border-radius:6px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>VibeVoice-ASR-Streaming</h1>
+  <p>One of the first LLM-based approaches to <b>streaming speaker-attributed ASR</b>. It interleaves fixed-size audio chunks, a small lookahead, and previously generated text in a single autoregressive context — emitting <b>“who said what”</b> as speech arrives, with <b>no separate diarization stage</b>.</p>
+  <div class="badges">
+    <span class="badge">Tu et al., Microsoft, 2026</span>
+    <span class="badge">arXiv:2609.02812</span>
+    <span class="badge">Interleaved speech-text</span>
+    <span class="badge">Lookahead + chunk-end token</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="small" style="margin-top:6px">This page reproduces the paper's <i>mechanism</i> at small scale on CPU. Data below is baked in from a real run of <code class="k">demo/run_demo.py</code> (a tiny interleaved speech-text Transformer trained on two-speaker synthetic audio). Serve over http to load live data.</p>
+
+  <h2 class="section-title">The interleaved streaming sequence</h2>
+  <p class="section-sub">§3.1: the model consumes one shared autoregressive stream <code class="k">[X₁, Y₁, X₂, Y₂, …]</code>. Each speech chunk Xₖ is its audio frames plus a fixed <b>lookahead</b> (future evidence near the boundary); each Yₖ is the speaker-attributed text, terminated by a <b>&lt;chunk_end&gt;</b> token that hands control back to the audio stream.</p>
+  <div class="card">
+    <div class="legend">
+      <span><span class="sw" style="background:var(--audio)"></span> audio frame (onset/peak)</span>
+      <span><span class="sw" style="background:var(--look)"></span> lookahead frame (future)</span>
+      <span><span class="sw" style="background:var(--text)"></span> generated text</span>
+      <span><span class="sw" style="background:var(--end)"></span> &lt;chunk_end&gt;</span>
+    </div>
+    <div class="seq" id="seq"></div>
+    <p class="small">Speaker labels are assigned by <b>order of first appearance</b> and reused via the retained history — a label introduced in an early chunk conditions every later chunk. That history is what fixes speaker identity with no diarization module.</p>
+  </div>
+
+  <h2 class="section-title">Streaming “who said what”, live</h2>
+  <p class="section-sub">Play the held-out conversation. Each step: a new audio chunk (+lookahead) arrives, and the model emits speaker-attributed text that is appended to the transcript.</p>
+  <div class="controls">
+    <button class="primary" id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">⟲ Reset</button>
+    <span class="tline" id="clock">t = 0 ms</span>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h4>Incoming audio (log-mel) + chunk window</h4>
+      <p class="small">Speaker = pitch comb &amp; colour (all frames); phone = formant (peak frames). The moving box is the current chunk; the amber sliver is the lookahead.</p>
+      <canvas id="mel" height="260"></canvas>
+    </div>
+    <div class="card">
+      <h4>Emitted transcript (append-only)</h4>
+      <div class="transcript" id="transcript"></div>
+      <div class="stat">
+        <div class="box"><div class="num" id="ex-tr">—</div><div class="lbl">transcription acc (this example)</div></div>
+        <div class="box"><div class="num" id="ex-sp">—</div><div class="lbl">speaker-attribution acc</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Why the lookahead matters</h2>
+  <p class="section-sub">The last phone of each chunk reveals its identity only in its <i>peak</i> frame, which lands in the lookahead. Removing the lookahead cripples transcription at chunk boundaries — exactly the “limited future acoustic evidence near chunk boundaries” the paper adds (Eq. 2, L=4 frames ≈ 0.5 s).</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Accuracy: with vs without lookahead (40 test conversations)</h4>
+      <canvas id="chart" height="230"></canvas>
+    </div>
+    <div class="card">
+      <h4>The factorization</h4>
+      <div class="formula" style="background:#0d132a; border:1px solid var(--line); border-radius:10px; padding:14px; font-family:ui-monospace,monospace; color:#cfe8ff; font-size:13px; white-space:pre-wrap;">p(Yₖ | X&lt;ₖ, X̃ₖ, Y&lt;ₖ) = Π_j p(y_{k,j} | X&lt;ₖ, X̃ₖ, Y&lt;ₖ, y_{k,&lt;j})
+
+X̃ₖ = chunk Xₖ + L lookahead frames
+Yₖ ends with &lt;chunk_end&gt;   (model decides when)
+lookahead:  T = L · 3200 / 24000 ≈ 0.5 s  (L=4)</div>
+      <ul style="color:var(--ink); font-size:14px;">
+        <li>WHO is speaking is audible from a chunk's onset frames.</li>
+        <li>WHAT was said at the boundary needs the lookahead's peak frame.</li>
+        <li>History Y&lt;ₖ keeps speaker labels consistent across the whole call.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>VibeVoice-ASR-Streaming</b> (Tu et al., Microsoft Research, 2026 — arXiv:2609.02812).
+    Mechanism and data generated by <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config":{"n_chunks":6,"chunk_phones":3,"lookahead":1,"frame_ms":32,"frames_per_chunk":5},"example":{"phones":[0,4,3,0,5,1,1,1,2,1,2,4,2,5,2,1,4,4],"ords":[0,0,1,1,0,0,0,0,1,1,1,0,1,1,1,0,1,1],"ref_chunks":[["Speaker0","aa","ih","Speaker1","uw"],["aa","Speaker0","ao","iy"],["iy","iy","Speaker1","eh"],["iy","eh","Speaker0","ih"],["Speaker1","eh","ao","eh"],["Speaker0","iy","Speaker1","ih","ih"]],"trace":[{"chunk":0,"audio_ms":[0,192],"emitted":["Speaker0","aa","ih","Speaker1","uw"],"text":"Speaker0: aa ih \nSpeaker1: uw"},{"chunk":1,"audio_ms":[192,384],"emitted":["aa","Speaker0","ao","iy"],"text":"aa \nSpeaker0: ao iy"},{"chunk":2,"audio_ms":[384,576],"emitted":["iy","iy","Speaker1","eh"],"text":"iy iy \nSpeaker1: eh"},{"chunk":3,"audio_ms":[576,768],"emitted":["iy","eh","Speaker0","ih"],"text":"iy eh \nSpeaker0: ih"},{"chunk":4,"audio_ms":[768,960],"emitted":["Speaker1","eh","ao","eh"],"text":"Speaker1: eh ao eh"},{"chunk":5,"audio_ms":[960,1152],"emitted":["Speaker0","iy","Speaker1","ih","ih"],"text":"Speaker0: iy \nSpeaker1: ih ih"}],"transcription_acc":1.0,"speaker_acc":1.0},"metrics":{"with_lookahead":{"transcription":0.9847,"speaker":0.9931},"without_lookahead":{"transcription":0.4389,"speaker":0.7125}}};
+// mel spectrogram baked separately to keep it compact
+let MEL = [[-1.5,2.87,3.0,0.62,2.83,1.36,2.31,2.02,2.45,1.48,2.34,2.13,2.17,2.13,2.13,2.35,2.29,2.28,2.34,2.38,2.52,2.43,2.6,2.62,2.67,2.72,2.81,2.88,2.91,2.99,3.03,3.12],[-3.16,1.57,1.71,0.17,2.49,1.03,2.55,2.26,2.71,1.65,2.39,1.9,1.62,1.1,0.65,0.53,0.38,0.41,0.52,0.69,0.64,0.68,0.71,0.86,0.91,0.8,0.98,1.11,1.25,1.24,1.26,1.33],[-1.27,2.87,3.0,0.53,2.82,1.36,2.3,2.02,2.46,1.48,2.34,2.12,2.16,2.14,2.12,2.35,2.3,2.3,2.34,2.36,2.52,2.43,2.58,2.63,2.67,2.72,2.82,2.87,2.91,2.99,3.05,3.13],[-2.77,1.82,1.95,0.36,2.66,1.2,2.44,2.13,2.14,0.81,1.07,0.31,0.4,0.36,0.37,0.57,0.53,1.01,1.8,2.16,1.92,1.07,0.75,0.73,0.87,0.96,1.06,1.11,1.07,1.28,1.3,1.41],[4.47,3.58,3.57,3.29,3.07,2.78,2.77,2.68,2.4,2.19,2.15,2.06,1.9,1.75,1.5,1.48,1.39,1.1,0.99,0.84,0.69,0.45,0.39,0.03,-0.5,-0.28,0.01,-0.04,-0.0,-0.14,-0.16,0.05],[3.46,2.87,3.12,3.19,3.1,2.89,2.84,2.48,1.75,1.04,0.62,0.4,0.43,0.66,1.0,1.2,1.09,0.27,-0.65,-0.61,-0.66,-0.66,-0.46,-0.36,-0.44,-0.32,-0.55,-0.24,-0.09,0.02,0.23,0.23],[4.47,3.63,3.57,3.28,3.06,2.78,2.77,2.67,2.37,2.19,2.16,2.1,1.9,1.77,1.49,1.44,1.27,1.03,0.98,0.85,0.58,0.32,0.32,0.06,-0.4,-0.24,-0.02,-0.15,0.14,0.09,-0.13,-0.07],[2.83,2.18,2.33,2.56,2.68,2.67,2.92,2.97,2.67,2.36,2.17,1.85,1.29,0.72,0.05,0.01,-0.27,-0.53,-0.39,-0.36,-0.5,-0.74,-0.4,-0.46,-0.51,-0.33,-0.21,-0.02,-0.17,-0.13,-0.08,0.01],[-1.59,2.87,2.98,0.6,2.82,1.38,2.31,2.03,2.45,1.47,2.33,2.14,2.18,2.12,2.12,2.34,2.29,2.31,2.37,2.4,2.53,2.43,2.6,2.63,2.67,2.69,2.8,2.89,2.92,2.98,3.03,3.12],[-2.29,1.05,1.14,-0.77,1.48,0.07,1.94,1.73,2.72,1.78,2.67,2.21,2.03,1.6,1.06,0.82,0.5,0.51,0.57,0.65,0.66,0.68,0.78,0.78,0.81,0.96,1.09,1.18,1.25,1.2,1.32,1.34],[-1.54,2.87,2.99,0.59,2.83,1.38,2.3,2.01,2.47,1.49,2.33,2.12,2.16,2.1,2.12,2.33,2.27,2.31,2.36,2.39,2.51,2.43,2.61,2.65,2.68,2.71,2.81,2.89,2.93,3.0,3.03,3.12],[-1.59,2.74,2.86,0.7,2.96,1.49,1.94,1.61,1.18,0.06,0.48,0.24,0.42,0.38,0.32,0.59,0.93,1.69,2.14,1.95,1.36,0.81,0.8,0.73,0.92,0.93,1.04,1.12,1.14,1.18,1.35,1.44],[-1.68,2.88,2.99,0.62,2.82,1.35,2.32,2.03,2.47,1.49,2.34,2.14,2.18,2.13,2.14,2.34,2.28,2.29,2.35,2.38,2.52,2.42,2.59,2.64,2.68,2.69,2.8,2.88,2.92,3.01,3.04,3.12],[-1.5,2.74,2.86,0.7,2.95,1.46,1.95,1.62,1.18,0.08,0.66,0.26,0.27,0.3,0.3,0.55,1.01,1.74,2.15,1.97,1.3,0.65,0.89,0.9,0.94,0.86,1.11,1.08,1.17,1.26,1.23,1.22],[-1.45,2.87,3.0,0.63,2.83,1.33,2.31,2.03,2.46,1.49,2.33,2.13,2.15,2.1,2.12,2.34,2.27,2.3,2.38,2.39,2.51,2.44,2.61,2.63,2.67,2.7,2.78,2.87,2.94,2.97,3.03,3.11],[-1.84,2.74,2.86,0.68,2.96,1.49,1.94,1.64,1.2,0.09,0.55,0.38,0.37,0.38,0.3,0.5,0.98,1.68,2.12,1.94,1.39,0.69,0.81,0.94,0.87,0.92,1.04,1.12,1.06,1.32,1.38,1.28],[4.47,3.62,3.59,3.3,3.06,2.79,2.78,2.68,2.38,2.21,2.14,2.07,1.82,1.73,1.44,1.45,1.29,1.09,1.03,0.96,0.66,0.46,0.29,0.22,-0.11,0.11,-0.01,0.19,-0.08,0.0,0.03,-0.03],[2.61,1.86,1.83,1.85,1.92,2.0,2.4,2.65,2.52,2.3,2.08,1.88,1.66,1.57,1.02,0.51,-0.16,-0.36,-0.56,-0.32,-0.17,-0.52,-0.63,-0.7,-0.51,-0.0,-0.24,0.04,-0.05,-0.17,0.22,0.3],[4.47,3.66,3.56,3.28,3.07,2.77,2.77,2.68,2.41,2.22,2.18,2.09,1.84,1.72,1.5,1.46,1.33,1.09,0.99,0.83,0.61,0.63,0.2,0.18,0.01,0.06,-0.16,-0.14,0.04,-0.15,0.04,0.12],[3.96,3.39,3.5,3.41,3.17,2.82,2.59,2.04,1.27,0.63,0.35,0.08,-0.22,-0.12,-0.4,-0.14,0.08,0.48,0.77,0.53,-0.26,-0.64,-0.17,-0.16,-0.15,-0.23,-0.13,0.02,-0.06,0.09,-0.04,0.17],[4.46,3.68,3.58,3.3,3.06,2.78,2.78,2.66,2.38,2.19,2.16,2.06,1.87,1.73,1.48,1.44,1.26,1.1,1.01,0.89,0.48,0.35,0.29,0.28,-0.14,-0.2,-0.13,-0.07,0.11,-0.01,-0.15,-0.01],[2.61,1.77,1.82,1.81,1.92,1.98,2.4,2.67,2.52,2.31,2.07,1.85,1.71,1.55,1.04,0.41,-0.19,-0.54,-0.69,-0.78,-0.4,-0.74,-0.99,-0.38,-0.3,-0.41,-0.4,-0.21,0.03,0.22,0.12,0.05],[-1.53,2.87,3.0,0.57,2.82,1.35,2.29,2.02,2.46,1.51,2.34,2.13,2.16,2.13,2.13,2.34,2.29,2.29,2.35,2.37,2.54,2.45,2.6,2.65,2.68,2.71,2.8,2.87,2.92,2.98,3.03,3.12],[-2.06,1.8,1.93,0.38,2.66,1.22,2.44,2.12,2.13,0.83,1.1,0.43,0.43,0.25,0.38,0.62,0.65,1.13,1.78,2.17,1.95,1.12,0.76,0.7,0.87,1.03,1.06,1.12,1.06,1.15,1.26,1.31],[4.47,3.57,3.59,3.3,3.07,2.79,2.77,2.7,2.37,2.24,2.14,2.06,1.86,1.77,1.52,1.48,1.29,1.05,1.01,0.73,0.47,0.43,0.23,-0.18,-0.26,-0.28,-0.13,0.03,-0.2,0.23,0.07,0.09],[2.6,1.77,1.85,1.84,1.92,2.0,2.39,2.66,2.51,2.33,2.08,1.85,1.63,1.53,1.03,0.39,-0.23,-0.4,-0.55,-0.57,-0.65,-0.42,-0.39,-0.58,-0.68,-0.32,-0.18,-0.15,-0.11,-0.24,0.08,0.06],[4.46,3.66,3.56,3.27,3.06,2.79,2.77,2.67,2.42,2.21,2.16,2.09,1.88,1.73,1.44,1.44,1.24,0.98,1.02,0.88,0.54,0.35,0.04,0.3,0.02,-0.18,-0.16,0.23,-0.11,-0.2,0.05,0.11],[2.58,1.72,1.74,1.65,1.71,1.78,2.21,2.58,2.62,2.58,2.47,2.26,1.78,1.23,0.46,-0.03,-0.41,-0.38,-0.54,-0.55,-0.12,-0.43,-0.44,-0.19,-0.29,-0.56,-0.26,-0.31,-0.2,-0.03,0.14,0.2],[4.47,3.6,3.58,3.3,3.07,2.77,2.77,2.68,2.41,2.19,2.14,2.06,1.84,1.7,1.48,1.5,1.34,1.07,1.07,0.84,0.69,0.53,0.29,0.06,-0.37,-0.17,0.13,-0.31,-0.11,0.09,-0.04,0.07],[2.59,1.86,1.86,1.83,1.93,2.02,2.39,2.65,2.55,2.31,2.06,1.86,1.71,1.59,1.0,0.4,-0.33,-0.44,-0.36,-0.31,-0.19,-0.64,-0.56,-0.55,-0.23,-0.19,-0.32,-0.17,0.05,-0.11,0.18,0.03],[-1.45,2.88,2.99,0.57,2.82,1.37,2.31,2.02,2.45,1.51,2.34,2.12,2.16,2.11,2.12,2.34,2.28,2.29,2.34,2.38,2.55,2.45,2.59,2.64,2.68,2.7,2.79,2.88,2.91,3.0,3.04,3.12],[-1.52,2.74,2.86,0.71,2.96,1.48,1.96,1.63,1.16,0.04,0.57,0.37,0.35,0.23,0.24,0.68,1.04,1.69,2.14,1.96,1.38,0.7,0.66,0.92,0.99,0.92,0.94,1.09,1.12,1.21,1.18,1.39],[4.47,3.58,3.59,3.3,3.07,2.79,2.77,2.67,2.4,2.23,2.16,2.06,1.88,1.75,1.48,1.49,1.35,1.02,1.01,0.88,0.75,0.43,0.11,-0.26,-0.07,-0.42,-0.23,-0.37,0.16,0.07,-0.34,-0.08],[3.0,2.43,2.58,2.78,2.84,2.78,2.89,2.73,2.15,1.53,0.88,0.37,0.07,-0.12,-0.4,-0.4,-0.27,-0.24,0.38,0.48,0.23,-0.23,-0.4,-0.33,-0.35,0.11,0.13,-0.07,-0.06,-0.13,-0.15,0.09],[4.46,3.68,3.58,3.3,3.06,2.76,2.76,2.68,2.34,2.22,2.17,2.08,1.86,1.75,1.46,1.45,1.33,1.06,1.0,0.67,0.46,0.27,0.2,-0.09,-0.29,-0.09,-0.08,-0.03,-0.28,0.01,0.04,0.21],[3.0,2.39,2.6,2.78,2.84,2.77,2.88,2.73,2.13,1.55,0.93,0.35,0.14,-0.16,-0.31,-0.51,-0.36,0.07,0.23,0.64,0.07,-0.43,-0.32,-0.13,-0.46,-0.41,-0.07,-0.1,-0.2,-0.21,0.12,0.03]];
+
+let DATA = BAKED;
+
+// ---- interleaved sequence diagram (chunk 0..2 for readability)
+function renderSeq() {
+  const cfg = DATA.config;
+  const el = document.getElementById('seq');
+  el.innerHTML = '';
+  const show = Math.min(3, DATA.example.trace.length);
+  for (let k=0;k<show;k++){
+    const band = document.createElement('div'); band.className='chunkband'; band.setAttribute('data-k','chunk '+k);
+    const inner = document.createElement('div'); inner.style.display='flex'; inner.style.gap='6px';
+    // audio frames: (2*C-1) chunk frames + lookahead
+    const nAud = cfg.frames_per_chunk, nLook = cfg.lookahead;
+    for (let f=0; f<nAud; f++){
+      const c=document.createElement('div'); c.className='cell c-aud';
+      const isOnset = f%2===0;
+      c.innerHTML = (isOnset?'onset':'peak')+'<small>X'+k+'</small>'; inner.appendChild(c);
+    }
+    for (let f=0; f<nLook; f++){
+      const c=document.createElement('div'); c.className='cell c-look'; c.innerHTML='look<small>peak</small>'; inner.appendChild(c);
+    }
+    DATA.example.trace[k].emitted.forEach(tok=>{
+      const c=document.createElement('div');
+      const isSpk = tok.startsWith('Speaker');
+      c.className='cell '+(isSpk?'c-txt':'c-txt'); if(isSpk){ c.style.fontWeight='700'; }
+      c.innerHTML = tok.replace('Speaker','S')+'<small>Y'+k+'</small>'; inner.appendChild(c);
+    });
+    const ce=document.createElement('div'); ce.className='cell c-end'; ce.innerHTML='&lt;end&gt;<small>Y'+k+'</small>'; inner.appendChild(ce);
+    band.appendChild(inner); el.appendChild(band);
+  }
+}
+
+// ---- mel heatmap
+function melColor(t){ const s=[[11,16,32],[20,60,110],[24,140,170],[120,200,120],[245,200,60],[253,240,180]];
+  const x=Math.max(0,Math.min(1,t))*(s.length-1), i=Math.floor(x), f=x-i, a=s[i], b=s[Math.min(i+1,s.length-1)];
+  const c=a.map((v,k)=>Math.round(v+(b[k]-v)*f)); return `rgb(${c[0]},${c[1]},${c[2]})`; }
+function drawMel(highlightChunk){
+  const cv=document.getElementById('mel'); cv.width=cv.clientWidth; const ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height; const F=MEL.length, B=MEL[0].length;
+  let lo=1e9,hi=-1e9; MEL.forEach(r=>r.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+  const cw=W/F, ch=H/B;
+  for(let f=0;f<F;f++)for(let b=0;b<B;b++){ const t=(MEL[f][b]-lo)/(hi-lo+1e-6);
+    ctx.fillStyle=melColor(t); ctx.fillRect(f*cw,(B-1-b)*ch,cw+1,ch+1); }
+  // chunk / lookahead overlay
+  if (highlightChunk>=0){
+    const C=DATA.config.chunk_phones, look=DATA.config.lookahead;
+    const start=2*(highlightChunk*C); const audioEnd=2*((highlightChunk+1)*C-1)+1;
+    ctx.strokeStyle='#22d3ee'; ctx.lineWidth=3; ctx.strokeRect(start*cw,1,(audioEnd-start)*cw,H-2);
+    ctx.strokeStyle='#f59e0b'; ctx.strokeRect(audioEnd*cw,1,look*cw,H-2);
+    ctx.fillStyle='rgba(245,158,11,.15)'; ctx.fillRect(audioEnd*cw,1,look*cw,H-2);
+  }
+}
+
+// ---- transcript playback
+let idx=-1, timer=null;
+function buildTranscript(upto){
+  const el=document.getElementById('transcript'); el.innerHTML='';
+  // Merge emitted tokens into speaker-grouped utterances.
+  let curWho=null, curDiv=null, lastSpeaker=null;
+  for(let k=0;k<=upto;k++){
+    DATA.example.trace[k].emitted.forEach(tok=>{
+      if(tok.startsWith('Speaker')){ lastSpeaker=tok; startUtt(el, tok, k===upto); }
+      else { appendWord(el, tok, lastSpeaker, k===upto); }
+    });
+  }
+}
+function startUtt(el, who, fresh){
+  const d=document.createElement('div'); d.className='utt'+(fresh?' fresh':'');
+  const s=who==='Speaker0'?'0':'1';
+  d.innerHTML=`<span class="who who${s}">${who}</span><span class="words"></span>`;
+  el.appendChild(d);
+}
+function appendWord(el, w, who, fresh){
+  let last=el.lastElementChild;
+  if(!last){ startUtt(el, who||'Speaker0', fresh); last=el.lastElementChild; }
+  last.querySelector('.words').textContent += (w+' ');
+}
+function frame(i){
+  idx=i;
+  const tr=DATA.example.trace[i];
+  document.getElementById('clock').textContent=`t = [${tr.audio_ms[0]}, ${tr.audio_ms[1]}] ms   (chunk ${i})`;
+  drawMel(i); buildTranscript(i);
+}
+function reset(){ clearInterval(timer); timer=null; idx=-1; document.getElementById('transcript').innerHTML=''; drawMel(-1); document.getElementById('clock').textContent='t = 0 ms'; document.getElementById('play').textContent='▶ Play'; }
+function step(){ if(idx<DATA.example.trace.length-1){ frame(idx+1); } else { clearInterval(timer); timer=null; document.getElementById('play').textContent='▶ Play'; } }
+document.getElementById('step').onclick=step;
+document.getElementById('reset').onclick=reset;
+document.getElementById('play').onclick=function(){
+  if(timer){ clearInterval(timer); timer=null; this.textContent='▶ Play'; return; }
+  if(idx>=DATA.example.trace.length-1) reset();
+  this.textContent='⏸ Pause';
+  timer=setInterval(()=>{ step(); if(idx>=DATA.example.trace.length-1){ clearInterval(timer); timer=null; document.getElementById('play').textContent='▶ Play'; } }, 900);
+};
+
+// ---- accuracy chart
+function drawChart(){
+  const cv=document.getElementById('chart'); cv.width=cv.clientWidth; const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height,pad=44; ctx.clearRect(0,0,W,H);
+  const m=DATA.metrics;
+  const groups=[['transcription', m.with_lookahead.transcription, m.without_lookahead.transcription],
+                ['speaker', m.with_lookahead.speaker, m.without_lookahead.speaker]];
+  ctx.strokeStyle='#1e2946'; for(let g=0;g<=4;g++){const y=pad+(H-2*pad)*g/4; ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();}
+  const gw=(W-2*pad)/groups.length;
+  groups.forEach((grp,gi)=>{
+    const x0=pad+gi*gw;
+    [grp[1],grp[2]].forEach((val,vi)=>{
+      const bw=gw*0.28, x=x0+gw*0.15+vi*(bw+10); const h=(H-2*pad)*val;
+      ctx.fillStyle=vi===0?'#34d399':'#fb7185'; ctx.fillRect(x,H-pad-h,bw,h);
+      ctx.fillStyle='#e8ecf7'; ctx.font='12px monospace'; ctx.textAlign='center';
+      ctx.fillText((val*100).toFixed(0)+'%', x+bw/2, H-pad-h-6);
+    });
+    ctx.fillStyle='#93a0c0'; ctx.font='13px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(grp[0], x0+gw/2, H-pad+18);
+  });
+  ctx.textAlign='left'; ctx.fillStyle='#34d399'; ctx.fillText('■ with lookahead', pad, 18);
+  ctx.fillStyle='#fb7185'; ctx.fillText('■ without lookahead', pad+150, 18);
+}
+
+(async function init(){
+  if (location.protocol.startsWith('http')){
+    try{ const r=await fetch('../data/streaming_run.json',{cache:'no-store'}); if(r.ok){ const j=await r.json(); DATA=j; MEL=j.example.mel; } }catch(e){}
+  }
+  document.getElementById('ex-tr').textContent=(DATA.example.transcription_acc*100).toFixed(0)+'%';
+  document.getElementById('ex-sp').textContent=(DATA.example.speaker_acc*100).toFixed(0)+'%';
+  renderSeq(); drawMel(-1); drawChart();
+  window.addEventListener('resize', ()=>{ drawMel(idx); drawChart(); });
+})();
+</script>
+</body>
+</html>
