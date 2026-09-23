@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cache-Aware Streaming Conformer — KV + Conv Caches</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340;
+    --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --chunk:#22d3ee; --kv:#fb7185; --conv:#34d399; --gold:#f59e0b; --purple:#a78bfa; --gen:#f472b6;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--chunk); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(251,113,133,.14) 45%, rgba(52,211,153,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:30px; letter-spacing:.5px;
+    background: linear-gradient(90deg,#22d3ee,#fb7185 45%,#34d399 80%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .formula { margin:12px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:13px; color:#cfe8ff; overflow-x:auto; white-space:pre-wrap; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .big { font-size:26px; font-weight:800; }
+  .win { color:#7be3a3; font-weight:700; }
+
+  /* streaming strip */
+  .stripwrap { overflow-x:auto; padding-bottom:6px; }
+  .strip { display:flex; gap:4px; align-items:flex-end; min-height:60px; }
+  .frame { width:20px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:9px; color:#00121f; font-weight:700; height:34px; }
+  .chunklab { font-size:10px; color:var(--muted); text-align:center; margin-top:3px; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; color:var(--muted); font-size:12px; }
+  .legend span b { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+
+  /* diagram blocks */
+  .blk { display:flex; align-items:center; gap:10px; padding:11px 13px; margin:7px 0; border-radius:11px; border:1px solid transparent; background:var(--panel-2); cursor:pointer; transition:transform .12s,box-shadow .12s,border-color .12s; }
+  .blk:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  .blk.active { border-color:#fff3; box-shadow:0 0 0 2px #ffffff22, var(--shadow); }
+  .blk .dot { width:11px; height:11px; border-radius:50%; } .blk .label { font-weight:600; } .blk .sec { margin-left:auto; font-size:11px; color:var(--muted); }
+  .b-kv { background:linear-gradient(90deg, rgba(251,113,133,.16), transparent); }
+  .b-conv { background:linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .b-ff { background:linear-gradient(90deg, rgba(167,139,250,.16), transparent); }
+  .detail { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px; box-shadow:var(--shadow); min-height:220px; }
+  .detail h3 { margin:0 0 4px; font-size:18px; } .detail .tag { font-size:12px; color:var(--muted); }
+  .detail ul { margin:10px 0 0; padding-left:18px; } .detail li { margin:5px 0; }
+
+  /* sweep chart */
+  .chart { position:relative; height:230px; margin-top:10px; }
+  svg { width:100%; height:100%; }
+  .axis { stroke:var(--line); stroke-width:1; } .gridln { stroke:#1e2946; stroke-width:1; }
+  .dot2 { fill:var(--chunk); } .lbl { fill:var(--muted); font-size:11px; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+  table.cmp { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  table.cmp th, table.cmp td { border:1px solid var(--line); padding:7px 9px; text-align:center; }
+  table.cmp th { color:var(--muted); } table.cmp td.metric { text-align:left; color:var(--muted); }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Cache-Aware Streaming Conformer</h1>
+  <p>Stream audio chunk-by-chunk while caching self-attention <b>keys/values</b> and <b>convolution state</b> across chunks. No past frame is recomputed, the streaming output is <b>identical</b> to a full forward pass, and one model runs at many latencies.</p>
+  <div class="badges">
+    <span class="badge">Noroozi et al., 2023</span>
+    <span class="badge">arXiv:2312.17279</span>
+    <span class="badge">KV cache + conv cache</span>
+    <span class="badge">streaming == offline</span>
+    <span class="badge">CPU demo</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">Streaming with caches</h2>
+  <p class="section-sub">Each new chunk (cyan) is processed against cached history: the KV cache (pink) feeds self-attention; the conv cache (green) feeds the causal depthwise convolution. With a bounded left context the cache size — and per-chunk compute — stops growing.</p>
+  <div class="card">
+    <div class="stripwrap"><div class="strip" id="strip"></div></div>
+    <div class="legend">
+      <span><b style="background:var(--chunk)"></b>current chunk</span>
+      <span><b style="background:var(--kv)"></b>KV cache (attention history)</span>
+      <span><b style="background:var(--conv)"></b>conv cache (K−1 frames)</span>
+      <span><b style="background:#33406a"></b>not yet arrived</span>
+    </div>
+    <p class="small" id="strip-note" style="margin-top:12px"></p>
+  </div>
+
+  <h2 class="section-title">What gets cached (and what doesn't)</h2>
+  <p class="section-sub">Only modules with temporal context need a cache. Click to inspect.</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="blk b-kv" data-key="kv"><span class="dot" style="background:var(--kv)"></span><span class="label">Self-attention — KV cache</span><span class="sec">§3.3</span></div>
+      <div class="blk b-conv" data-key="conv"><span class="dot" style="background:var(--conv)"></span><span class="label">Depthwise conv — conv-state cache</span><span class="sec">§3.3</span></div>
+      <div class="blk b-ff" data-key="ff"><span class="dot" style="background:var(--purple)"></span><span class="label">FFN / LayerNorm / 1×1 conv — no cache</span><span class="sec">§3.1</span></div>
+    </div>
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a module</h3>
+      <div class="tag" id="d-tag"></div>
+      <div class="formula" id="d-formula">Select a module to see how it streams.</div>
+      <ul id="d-points"></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Two guarantees (this folder's demo)</h2>
+  <div class="grid2">
+    <div class="card">
+      <h4>Streaming == full-context</h4>
+      <p class="small">Chunk-by-chunk cached inference vs one full forward pass.</p>
+      <div class="big" id="eq-diff" style="color:var(--win, #7be3a3)"></div>
+      <p class="small" id="eq-note"></p>
+    </div>
+    <div class="card">
+      <h4>Constant per-chunk compute</h4>
+      <p class="small">Attended key frames per streaming step (bounded left context).</p>
+      <div class="formula" id="keys-note" style="font-size:14px"></div>
+      <p class="small">Once the cache is full, every chunk attends over the same number of keys — no recomputation of the past.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">One model, many latencies</h2>
+  <p class="section-sub">The same trained weights, streamed at different chunk sizes. Bigger chunk → more within-chunk look-ahead → higher accuracy, at higher latency. Baked in from <code class="k">data/demo_results.json</code>.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Latency vs accuracy</h4>
+      <div class="chart"><svg id="sweep" viewBox="0 0 520 230" preserveAspectRatio="none"></svg></div>
+    </div>
+    <div class="card">
+      <h4>Sweep table</h4>
+      <table class="cmp" id="sweep-table"></table>
+      <p class="small" id="sweep-note" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>"Stateful Conformer with Cache-based Inference for Streaming Automatic Speech Recognition"</b> (Noroozi et al., 2023).
+    Data generated by <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "frames":68, "frame_ms":10.0,
+  "equality":{"chunk":8,"max_abs_diff":2.7418136596679688e-06},
+  "constant_compute":{"left_context":32,"key_counts":[8,16,24,32,32,32,32,32,32],"steady_state_keys":32},
+  "latency_accuracy_sweep":[
+    {"chunk":2,"latency_ms":20.0,"accuracy":0.7549818754196167,"label":"chunk=2"},
+    {"chunk":4,"latency_ms":40.0,"accuracy":0.8066123127937317,"label":"chunk=4"},
+    {"chunk":8,"latency_ms":80.0,"accuracy":0.8480525612831116,"label":"chunk=8"},
+    {"chunk":16,"latency_ms":160.0,"accuracy":0.8697916865348816,"label":"chunk=16"},
+    {"chunk":68,"latency_ms":680.0,"accuracy":0.864130437374115,"label":"full/offline"}
+  ]
+};
+
+const DETAILS = {
+  kv:{title:"Self-attention — KV cache", tag:"Cache-aware streaming §3.3",
+    formula:"cache = past keys/values (bounded to left context Lc)\nnew chunk: attend queries over [cache ∥ current K,V]\nupdate: keep last Lc frames",
+    points:["Past keys/values are computed once and reused, never re-projected.","Chunk-aware: queries may attend to the whole current chunk (look-ahead) plus history.","A bounded left context Lc caps the cache size and per-step compute."]},
+  conv:{title:"Causal depthwise conv — conv-state cache", tag:"§3.3",
+    formula:"cache = last (K−1) inputs to the depthwise conv\nnew chunk: prepend cache, run valid conv → length C\nupdate: keep last (K−1) frames",
+    points:["A kernel-K causal conv needs the previous K−1 frames at the chunk boundary.","The cache supplies exactly those frames, so the conv output is identical to offline.","Fixed size K−1 per layer, independent of how long you have been streaming."]},
+  ff:{title:"FFN / LayerNorm / pointwise conv — no cache", tag:"§3.1",
+    formula:"output at frame t depends only on frame t",
+    points:["These modules are point-wise, so streaming needs no state for them.","BatchNorm is replaced by LayerNorm so statistics don't depend on the full sequence.","This is what makes exact streaming possible."]}
+};
+const blks=document.querySelectorAll('.blk');
+const dTitle=document.getElementById('d-title'),dTag=document.getElementById('d-tag'),
+      dFormula=document.getElementById('d-formula'),dPoints=document.getElementById('d-points');
+function show(key,el){ const d=DETAILS[key]; if(!d) return;
+  blks.forEach(b=>b.classList.remove('active')); if(el) el.classList.add('active');
+  dTitle.textContent=d.title; dTag.textContent=d.tag; dFormula.textContent=d.formula;
+  dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); }
+blks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function render(data){
+  // streaming strip: show T frames, highlight current chunk (index 2) with KV+conv cache
+  const T=data.frames, C=data.equality.chunk, Lc=data.constant_compute.left_context, Kc=8;
+  const strip=document.getElementById('strip'); strip.innerHTML='';
+  const curStart=2*C, curEnd=3*C-1;               // 3rd chunk is "current"
+  const kvStart=Math.max(0, curStart-Lc);
+  const convStart=Math.max(0, curStart-(Kc-1));
+  for(let i=0;i<T;i++){
+    const f=document.createElement('div'); f.className='frame';
+    if(i>=curStart && i<=curEnd){ f.style.background='var(--chunk)'; f.textContent='●'; }
+    else if(i<curStart && i>=convStart){ f.style.background='var(--conv)'; }
+    else if(i<curStart && i>=kvStart){ f.style.background='var(--kv)'; }
+    else if(i<curStart){ f.style.background='#243056'; }
+    else { f.style.background='#33406a'; }
+    strip.appendChild(f);
+  }
+  document.getElementById('strip-note').innerHTML =
+    `Processing chunk 3 (frames ${curStart}–${curEnd}). The KV cache holds up to <b>${Lc}</b> past frames; `+
+    `the conv cache holds <b>${Kc-1}</b> frames (kernel ${Kc}). Nothing to the right has arrived yet.`;
+
+  // equality
+  document.getElementById('eq-diff').textContent = 'max |diff| = '+data.equality.max_abs_diff.toExponential(2);
+  document.getElementById('eq-note').innerHTML =
+    `At chunk size ${data.equality.chunk}, streaming output matches the full forward pass to floating-point precision `+
+    `(<span class="win">&lt; 1e-5</span>). The caching changes nothing but the compute.`;
+
+  // constant compute
+  document.getElementById('keys-note').textContent =
+    'keys/chunk: ['+data.constant_compute.key_counts.join(', ')+']  → steady state '+data.constant_compute.steady_state_keys;
+
+  // sweep chart
+  const sw=data.latency_accuracy_sweep;
+  const svg=document.getElementById('sweep'); svg.innerHTML='';
+  const W=520,H=230,padL=44,padB=34,padT=14,padR=14;
+  const xs=sw.map(s=>s.latency_ms), ys=sw.map(s=>s.accuracy*100);
+  const xmin=0, xmax=Math.max(...xs)*1.05, ymin=Math.min(...ys)-4, ymax=Math.max(...ys)+3;
+  const X=v=>padL+(v-xmin)/(xmax-xmin)*(W-padL-padR);
+  const Y=v=>H-padB-(v-ymin)/(ymax-ymin)*(H-padB-padT);
+  const ns='http://www.w3.org/2000/svg';
+  function line(x1,y1,x2,y2,cls){ const l=document.createElementNS(ns,'line'); l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2); l.setAttribute('class',cls); svg.appendChild(l); }
+  function txt(x,y,s,anchor){ const t=document.createElementNS(ns,'text'); t.setAttribute('x',x);t.setAttribute('y',y);t.setAttribute('class','lbl'); if(anchor)t.setAttribute('text-anchor',anchor); t.textContent=s; svg.appendChild(t); }
+  for(let g=0;g<=4;g++){ const yy=padT+g/4*(H-padB-padT); line(padL,yy,W-padR,yy,'gridln'); txt(padL-6, yy+3, (ymax-(ymax-ymin)*g/4).toFixed(0)+'%','end'); }
+  line(padL,padT,padL,H-padB,'axis'); line(padL,H-padB,W-padR,H-padB,'axis');
+  txt((padL+W-padR)/2, H-6, 'latency (ms)','middle');
+  // poly line
+  const poly=document.createElementNS(ns,'polyline'); poly.setAttribute('fill','none'); poly.setAttribute('stroke','var(--chunk)'); poly.setAttribute('stroke-width','2.5');
+  poly.setAttribute('points', sw.map(s=>`${X(s.latency_ms)},${Y(s.accuracy*100)}`).join(' ')); svg.appendChild(poly);
+  sw.forEach(s=>{ const c=document.createElementNS(ns,'circle'); c.setAttribute('cx',X(s.latency_ms));c.setAttribute('cy',Y(s.accuracy*100));c.setAttribute('r',5);c.setAttribute('class','dot2'); svg.appendChild(c);
+    txt(X(s.latency_ms), Y(s.accuracy*100)-10, s.chunk>=data.frames?'offline':('C='+s.chunk),'middle');
+    txt(X(s.latency_ms), H-padB+15, s.latency_ms.toFixed(0),'middle'); });
+
+  // table
+  const t=document.getElementById('sweep-table');
+  t.innerHTML='<tr><th>mode</th><th>chunk</th><th>latency</th><th>frame acc</th></tr>'+
+    sw.map(s=>`<tr><td class="metric">${s.label}</td><td>${s.chunk}</td><td>${s.latency_ms.toFixed(0)} ms</td><td>${(s.accuracy*100).toFixed(1)}%</td></tr>`).join('');
+  const lo=sw[0].accuracy*100, hi=Math.max(...sw.map(s=>s.accuracy*100));
+  document.getElementById('sweep-note').innerHTML =
+    `Accuracy climbs from <span class="win">${lo.toFixed(1)}%</span> at ${sw[0].latency_ms.toFixed(0)} ms latency to `+
+    `<span class="win">${hi.toFixed(1)}%</span> as look-ahead grows — all from <b>one</b> set of weights.`;
+}
+
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const res=await fetch('../data/demo_results.json',{cache:'no-store'});
+      if(res.ok){ render(await res.json()); show('kv', document.querySelector('.blk[data-key="kv"]')); return; } }catch(e){}
+  }
+  render(BAKED); show('kv', document.querySelector('.blk[data-key="kv"]'));
+})();
+</script>
+</body>
+</html>
