@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WeNet U2++ — Two-pass CTC + Attention Rescoring</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340;
+    --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --enc:#22d3ee; --ctc:#fb7185; --l2r:#a78bfa; --r2l:#f59e0b; --ok:#34d399; --gen:#f472b6;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--enc); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(245,158,11,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:30px; letter-spacing:.5px;
+    background: linear-gradient(90deg,#22d3ee,#a78bfa 40%,#fb7185 75%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:800px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .formula { margin:12px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:13px; color:#cfe8ff; overflow-x:auto; white-space:pre-wrap; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  .win { color:#7be3a3; font-weight:700; }
+
+  /* architecture */
+  .arch { display:flex; flex-direction:column; gap:0; align-items:center; }
+  .enc { background: linear-gradient(90deg, rgba(34,211,238,.16), rgba(34,211,238,.04)); border:1px solid var(--line); border-radius:12px; padding:12px 16px; text-align:center; width:100%; max-width:480px; font-weight:600; }
+  .branchrow { display:flex; gap:12px; width:100%; max-width:480px; margin-top:12px; }
+  .branch { flex:1; border-radius:11px; padding:11px 12px; border:1px solid transparent; cursor:pointer; transition:transform .12s,box-shadow .12s,border-color .12s; }
+  .branch:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  .branch.active { border-color:#fff3; box-shadow:0 0 0 2px #ffffff22, var(--shadow); }
+  .branch .t { font-weight:700; } .branch .s { font-size:11px; color:var(--muted); }
+  .b-ctc { background: linear-gradient(180deg, rgba(251,113,133,.18), transparent); }
+  .b-l2r { background: linear-gradient(180deg, rgba(167,139,250,.18), transparent); }
+  .b-r2l { background: linear-gradient(180deg, rgba(245,158,11,.18), transparent); }
+  .arrow { color:var(--line); font-size:18px; margin:2px 0; }
+  .detail { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px; box-shadow:var(--shadow); min-height:220px; }
+  .detail h3 { margin:0 0 4px; font-size:18px; } .detail .tag { font-size:12px; color:var(--muted); }
+  .detail ul { margin:10px 0 0; padding-left:18px; } .detail li { margin:5px 0; }
+
+  /* dynamic chunk grid */
+  .maskgrid { display:grid; gap:2px; margin-top:8px; }
+  .mcell { width:100%; aspect-ratio:1/1; border-radius:2px; }
+  .mfull { background:var(--enc); } .mmask { background:#243056; }
+  .mlabel { color:var(--muted); font-size:12px; margin-top:8px; }
+
+  table.cmp { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  table.cmp th, table.cmp td { border:1px solid var(--line); padding:8px 10px; text-align:center; }
+  table.cmp th { color:var(--muted); } table.cmp td.metric { text-align:left; color:var(--muted); }
+  .bars { display:grid; grid-template-columns:120px 1fr; gap:10px 14px; align-items:center; margin-top:6px; }
+  .bars .lab { color:var(--muted); font-size:13px; text-align:right; }
+  .bar-track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:28px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; color:#00121f; font-weight:700; }
+  .toks { font-family:ui-monospace,monospace; letter-spacing:2px; }
+  .tok-bad { color:#fb7185; font-weight:700; } .tok-good { color:#7be3a3; font-weight:700; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>WeNet U2++</h1>
+  <p>One shared encoder, trained with <b>dynamic chunk masking</b>, runs full-context or streaming. A streaming <b>CTC</b> first pass proposes hypotheses; bidirectional <b>attention decoders</b> rescore them in a second pass — improving accuracy using label context CTC cannot model.</p>
+  <div class="badges">
+    <span class="badge">Wu et al., 2021</span>
+    <span class="badge">arXiv:2106.05642</span>
+    <span class="badge">dynamic chunk training</span>
+    <span class="badge">CTC + attention rescoring</span>
+    <span class="badge">CPU demo</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The two-pass architecture</h2>
+  <p class="section-sub">The encoder is shared by all three heads. CTC runs frame-synchronously in the first pass (streaming); the L2R and R2L attention decoders rescore the CTC n-best in the second pass. Click a branch.</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="arch">
+        <div class="enc">Shared Conformer encoder<br><span style="font-weight:400;color:var(--muted);font-size:12px">dynamic chunk masking · causal conv</span></div>
+        <div class="arrow">↓</div>
+        <div class="branchrow">
+          <div class="branch b-ctc" data-key="ctc"><div class="t" style="color:var(--ctc)">CTC head</div><div class="s">1st pass · streaming</div></div>
+          <div class="branch b-l2r" data-key="l2r"><div class="t" style="color:var(--l2r)">L2R decoder</div><div class="s">2nd pass · rescore</div></div>
+          <div class="branch b-r2l" data-key="r2l"><div class="t" style="color:var(--r2l)">R2L decoder</div><div class="s">2nd pass · rescore</div></div>
+        </div>
+      </div>
+      <div class="formula" style="margin-top:16px">L = λ·CTC + (1−λ)·(L2R + R2L)/2        (joint training)
+S_final = λ·S_CTC + (1−α)·S_L2R + α·S_R2L   (rescoring)</div>
+    </div>
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a branch</h3>
+      <div class="tag" id="d-tag"></div>
+      <div class="formula" id="d-formula">Select a head to see its role.</div>
+      <ul id="d-points"></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Dynamic chunk masking — one model, any latency</h2>
+  <p class="section-sub">Each training batch picks a random chunk size. A frame may attend to all left history but only up to the end of its own chunk. A big chunk = offline; a small chunk = low-latency streaming. The same weights serve both.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Attention mask (chunk size 4)</h4>
+      <div class="maskgrid" id="mask-small"></div>
+      <div class="mlabel">rows = query frame, cols = key frame · cyan = allowed</div>
+    </div>
+    <div class="card">
+      <h4>Attention mask (full context)</h4>
+      <div class="maskgrid" id="mask-full"></div>
+      <div class="mlabel">full context = every frame attends everywhere</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Second pass fixes the first (this folder's demo)</h2>
+  <p class="section-sub">Streaming CTC greedy vs the same hypotheses after attention rescoring. Baked in from <code class="k">data/demo_results.json</code>.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Token error rate</h4>
+      <div class="bars" id="ter-bars"></div>
+      <p class="small" id="ter-note" style="margin-top:12px"></p>
+      <h4 style="margin-top:16px">A hypothesis rescoring fixed</h4>
+      <div class="formula" id="example" style="font-size:13.5px"></div>
+    </div>
+    <div class="card">
+      <h4>One model across chunk sizes (CTC greedy)</h4>
+      <table class="cmp" id="sweep-table"></table>
+      <p class="small" id="sweep-note" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>"U2++: Unified Two-pass Bidirectional End-to-end Model for Speech Recognition"</b> (Wu et al., 2021).
+    Data generated by <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "frames":78, "tokens_per_utt":8, "tokens":["A","B","C","D"],
+  "chunk_sweep_ctc":[
+    {"chunk":4,"ter":0.0517578125,"seq_acc":0.8359375,"label":"chunk=4"},
+    {"chunk":8,"ter":0.0458984375,"seq_acc":0.84375,"label":"chunk=8"},
+    {"chunk":16,"ter":0.0361328125,"seq_acc":0.890625,"label":"chunk=16"},
+    {"chunk":78,"ter":0.083984375,"seq_acc":0.7109375,"label":"full/offline"}
+  ],
+  "rescoring":{"stream_chunk":8,"ctc_greedy":{"ter":0.0458984375,"seq_acc":0.84375},
+    "rescored":{"ter":0.0283203125,"seq_acc":0.8984375},"relative_ter_reduction":38.29787},
+  "example_fixed":{"ref_tokens":["C","A","C","A","D","B","D","B"],
+    "greedy_tokens":["C","A","C","A","D","A","D","B","D","B"],
+    "rescored_tokens":["C","A","C","A","D","B","D","B"]}
+};
+
+const DETAILS = {
+  ctc:{title:"CTC head — first pass", tag:"streaming, frame-synchronous",
+    formula:"P(y) via CTC over encoder frames\ndecoded greedily (or prefix beam) as audio arrives",
+    points:["Emits tokens frame-by-frame with low latency — the streaming output.","Conditionally independent across output positions, so it cannot model label grammar.","Provides the n-best hypotheses that the second pass rescores."]},
+  l2r:{title:"Left-to-right attention decoder", tag:"U2++ §3.1 — second pass",
+    formula:"scores a hypothesis using left label context\n+ cross-attention over the whole encoder output",
+    points:["Autoregressive over labels, so it models P(y_t | y_<t).","Used only to rescore (not to search), so it is fast.","Fixes CTC errors that violate the learned label grammar."]},
+  r2l:{title:"Right-to-left attention decoder", tag:"U2++ §3.1 — the '++'",
+    formula:"same, but over the reversed sequence\n-> uses RIGHT label context",
+    points:["The addition over the original U2: a backward decoder.","Brings right-context information into rescoring.","Its score is combined with the L2R and CTC scores."]}
+};
+const branches=document.querySelectorAll('.branch');
+const dTitle=document.getElementById('d-title'),dTag=document.getElementById('d-tag'),
+      dFormula=document.getElementById('d-formula'),dPoints=document.getElementById('d-points');
+function show(key,el){ const d=DETAILS[key]; if(!d) return;
+  branches.forEach(b=>b.classList.remove('active')); if(el) el.classList.add('active');
+  dTitle.textContent=d.title; dTag.textContent=d.tag; dFormula.textContent=d.formula;
+  dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); }
+branches.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function drawMask(id, N, chunk){
+  const el=document.getElementById(id); el.innerHTML='';
+  el.style.gridTemplateColumns=`repeat(${N},1fr)`;
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+    const c=document.createElement('div');
+    const end=Math.floor(i/chunk)*chunk+chunk-1;
+    c.className='mcell '+(j<=end?'mfull':'mmask');
+    el.appendChild(c);
+  }
+}
+
+function render(data){
+  const N=16;
+  drawMask('mask-small', N, 4);
+  drawMask('mask-full', N, N);
+
+  const rg=data.rescoring;
+  const el=document.getElementById('ter-bars'); el.innerHTML='';
+  const max=Math.max(rg.ctc_greedy.ter, rg.rescored.ter);
+  [["CTC greedy", rg.ctc_greedy.ter, "var(--ctc)"],["+ rescoring", rg.rescored.ter, "var(--ok)"]].forEach(([lab,val,c])=>{
+    const l=document.createElement('div'); l.className='lab'; l.textContent=lab;
+    const track=document.createElement('div'); track.className='bar-track';
+    const fill=document.createElement('div'); fill.className='bar-fill';
+    fill.style.width=(100*val/max)+'%'; fill.style.background=c; fill.textContent=(val*100).toFixed(1)+'%';
+    track.appendChild(fill); el.appendChild(l); el.appendChild(track);
+  });
+  document.getElementById('ter-note').innerHTML =
+    `Attention rescoring cuts streaming token error by <span class="win">${rg.relative_ter_reduction.toFixed(0)}%</span> relative `+
+    `(${(rg.ctc_greedy.ter*100).toFixed(1)}% → ${(rg.rescored.ter*100).toFixed(1)}%), and lifts exact-sequence accuracy to `+
+    `<span class="win">${(rg.rescored.seq_acc*100).toFixed(1)}%</span>.`;
+
+  const ex=data.example_fixed;
+  if(ex){
+    document.getElementById('example').innerHTML =
+      `reference : <span class="toks">${ex.ref_tokens.join(' ')}</span>\n`+
+      `CTC greedy: <span class="toks tok-bad">${ex.greedy_tokens.join(' ')}</span>\n`+
+      `rescored  : <span class="toks tok-good">${ex.rescored_tokens.join(' ')}</span>`;
+  }
+
+  const sw=data.chunk_sweep_ctc;
+  const t=document.getElementById('sweep-table');
+  t.innerHTML='<tr><th>mode</th><th>chunk</th><th>token err</th><th>seq acc</th></tr>'+
+    sw.map(s=>`<tr><td class="metric">${s.label}</td><td>${s.chunk}</td><td>${(s.ter*100).toFixed(1)}%</td><td>${(s.seq_acc*100).toFixed(1)}%</td></tr>`).join('');
+  document.getElementById('sweep-note').textContent =
+    'The same weights decode at every chunk size — from low-latency streaming to full-context offline.';
+}
+
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const res=await fetch('../data/demo_results.json',{cache:'no-store'});
+      if(res.ok){ render(await res.json()); show('ctc', document.querySelector('.branch[data-key="ctc"]')); return; } }catch(e){}
+  }
+  render(BAKED); show('ctc', document.querySelector('.branch[data-key="ctc"]'));
+})();
+</script>
+</body>
+</html>
