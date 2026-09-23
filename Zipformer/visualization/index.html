@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zipformer — U-Net Multi-Rate Encoder + BiasNorm</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340;
+    --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --full:#22d3ee; --low:#a78bfa; --norm:#fb7185; --bypass:#34d399; --gold:#f59e0b; --gen:#f472b6;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; } html,body { margin:0; padding:0; }
+  body { background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%), var(--bg);
+    color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:var(--full); }
+  header.hero { padding:40px 24px 28px; text-align:center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(52,211,153,.14)); border-bottom:1px solid var(--line); }
+  header.hero h1 { margin:0; font-size:32px; letter-spacing:.5px;
+    background: linear-gradient(90deg,#22d3ee,#a78bfa 40%,#34d399 75%,#f59e0b); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  header.hero p { color:var(--muted); margin:8px auto 0; max-width:780px; }
+  .badges { margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .badge { font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:var(--panel-2); color:var(--muted); }
+  .wrap { max-width:1180px; margin:0 auto; padding:24px 20px 64px; }
+  .section-title { font-size:20px; margin:34px 0 6px; } .section-sub { color:var(--muted); margin:0 0 18px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; } @media (max-width:860px){ .grid2{grid-template-columns:1fr;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); }
+  .card h4 { margin:0 0 4px; } .card p.small { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .formula { margin:12px 0; padding:12px 14px; border-radius:10px; background:#0d132a; border:1px solid var(--line);
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace; font-size:13.5px; color:#cfe8ff; overflow-x:auto; white-space:pre-wrap; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+
+  /* U-Net diagram */
+  .unet { display:flex; flex-direction:column; align-items:center; gap:0; }
+  .stage { display:flex; align-items:center; gap:12px; padding:11px 14px; margin:5px 0; border-radius:12px; border:1px solid transparent; cursor:pointer; transition:transform .12s, box-shadow .12s, border-color .12s; width:100%; max-width:520px; }
+  .stage:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  .stage.active { border-color:#fff3; box-shadow:0 0 0 2px #ffffff22, var(--shadow); }
+  .stage .dot { width:11px; height:11px; border-radius:50%; }
+  .stage .label { font-weight:600; } .stage .sec { margin-left:auto; font-size:11px; color:var(--muted); }
+  .s-full { background: linear-gradient(90deg, rgba(34,211,238,.16), transparent); }
+  .s-down { background: linear-gradient(90deg, rgba(245,158,11,.16), transparent); }
+  .s-low  { background: linear-gradient(90deg, rgba(167,139,250,.20), transparent); }
+  .s-up   { background: linear-gradient(90deg, rgba(245,158,11,.16), transparent); }
+  .s-by   { background: linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .arrow { color:var(--line); font-size:18px; margin:-1px 0; }
+  .ratebar { display:flex; gap:3px; justify-content:center; margin:2px 0; }
+  .fr { height:12px; border-radius:3px; }
+  .fr.full { background:var(--full); width:9px; } .fr.low { background:var(--low); width:9px; }
+  .detail { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px; box-shadow:var(--shadow); min-height:220px; }
+  .detail h3 { margin:0 0 4px; font-size:18px; } .detail .tag { font-size:12px; color:var(--muted); }
+  .detail ul { margin:10px 0 0; padding-left:18px; } .detail li { margin:5px 0; }
+
+  .bars { display:grid; grid-template-columns:150px 1fr; gap:10px 14px; align-items:center; margin-top:6px; }
+  .bars .lab { color:var(--muted); font-size:13px; text-align:right; }
+  .bar-track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:28px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; color:#00121f; font-weight:700; white-space:nowrap; }
+  table.cmp { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  table.cmp th, table.cmp td { border:1px solid var(--line); padding:8px 10px; text-align:center; }
+  table.cmp th { color:var(--muted); } table.cmp td.metric { text-align:left; color:var(--muted); }
+  .win { color:#7be3a3; font-weight:700; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Zipformer</h1>
+  <p>A U-Net-like encoder whose <b>middle stacks run at a lower frame rate</b>, plus <b>BiasNorm</b> (a LayerNorm that keeps length information) and learned <b>Bypass</b> connections — faster <i>and</i> better than Conformer.</p>
+  <div class="badges">
+    <span class="badge">Yao et al., 2023</span>
+    <span class="badge">arXiv:2310.11230</span>
+    <span class="badge">U-Net multi-rate</span>
+    <span class="badge">BiasNorm</span>
+    <span class="badge">CPU demo</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The U-Net encoder</h2>
+  <p class="section-sub">A full-rate stem, a cheap low-rate middle, and a full-rate head. Because attention is O(T²), running the middle at half the frame rate makes it ~4x cheaper there. Click any stage.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="unet">
+        <div class="ratebar" title="full frame rate"><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span></div>
+        <div class="stage s-full" data-key="stem"><span class="dot" style="background:var(--full)"></span><span class="label">Stem block — full rate (T)</span><span class="sec">§3.1</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage s-down" data-key="down"><span class="dot" style="background:var(--gold)"></span><span class="label">Downsample ×2 (average pairs)</span><span class="sec">§3.1</span></div>
+        <div class="ratebar" title="half frame rate"><span class="fr low"></span><span class="fr low"></span><span class="fr low"></span><span class="fr low"></span></div>
+        <div class="stage s-low" data-key="middle"><span class="dot" style="background:var(--low)"></span><span class="label">Middle blocks — half rate (T/2)</span><span class="sec">cheap</span></div>
+        <div class="arrow">↑</div>
+        <div class="stage s-up" data-key="up"><span class="dot" style="background:var(--gold)"></span><span class="label">Upsample ×2 (repeat frames)</span><span class="sec">§3.1</span></div>
+        <div class="ratebar" title="full frame rate"><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span><span class="fr full"></span></div>
+        <div class="stage s-by" data-key="bypass"><span class="dot" style="background:var(--bypass)"></span><span class="label">Bypass merge (skip + low-rate)</span><span class="sec">§3.2</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage s-full" data-key="head"><span class="dot" style="background:var(--full)"></span><span class="label">Head block — full rate (T)</span><span class="sec">§3.1</span></div>
+      </div>
+    </div>
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a stage</h3>
+      <div class="tag" id="d-tag">Each stage of the U-Net is interactive.</div>
+      <div class="formula" id="d-formula">Select a component to see what it does and where it lives in the paper.</div>
+      <ul id="d-points"></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">BiasNorm — a LayerNorm that remembers length</h2>
+  <p class="section-sub">LayerNorm removes the vector length entirely, so trained Conformers sometimes stash a huge constant in one channel to defeat it. BiasNorm keeps length via a learnable bias and uses a strictly-positive scale (Zipformer §3.3).</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>LayerNorm (baseline)</h4>
+      <div class="formula">LayerNorm(x) = (x − E[x]) / √(Var[x]+ε) ⊙ γ + β
+· subtracts the mean
+· scale γ can oscillate around 0 (gradient sign flips)
+· length information is fully removed</div>
+    </div>
+    <div class="card">
+      <h4>BiasNorm (Zipformer §3.3)</h4>
+      <div class="formula">BiasNorm(x) = x / RMS[x − b] · exp(γ)
+· no mean subtraction (cheaper)
+· learnable bias b retains length information
+· exp(γ) > 0 avoids gradient-sign oscillation</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Measured result (this folder's demo)</h2>
+  <p class="section-sub">Two encoders with the same number of blocks, trained on the synthetic frame task. Baked in from <code class="k">data/demo_results.json</code>; serve over http for live results.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Self-attention FLOPs (proxy)</h4>
+      <p class="small">Lower is better — the low-rate middle is where the savings come from.</p>
+      <div class="bars" id="flop-bars"></div>
+      <p class="small" id="flop-note" style="margin-top:12px"></p>
+    </div>
+    <div class="card">
+      <h4>FLOPs vs accuracy</h4>
+      <table class="cmp" id="cmp-table"></table>
+      <p class="small" id="verdict" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>"Zipformer: A faster and better encoder for automatic speech recognition"</b> (Yao et al., 2023).
+    Data generated by <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "input_frames":78, "total_blocks":4, "downsample_factor":2,
+  "constant_rate":{"attention_flops":3115008,"accuracy":1.0,"middle_rate":"full"},
+  "zipformer":{"attention_flops":1946880,"accuracy":1.0,"middle_rate":"half"},
+  "flop_saving_percent":37.5, "flop_speedup":1.6
+};
+const DETAILS = {
+  stem:{title:"Stem block (full rate)", tag:"Zipformer §3.1",
+    formula:"ZipformerBlock at frame rate T\nattention + conv + feed-forward, all with BiasNorm",
+    points:["Processes the full-resolution sequence once up front.","Its output is kept as a skip connection for the Bypass merge.","Same block type used everywhere — only the rate changes."]},
+  down:{title:"Downsample ×2", tag:"Zipformer §3.1",
+    formula:"average every 2 frames:  T → T/2",
+    points:["The simplest downsampler: mean-pool adjacent frame pairs.","Halves the sequence length feeding the middle stacks.","Cheap and parameter-free."]},
+  middle:{title:"Middle blocks (half rate)", tag:"the efficiency win",
+    formula:"ZipformerBlocks at frame rate T/2\nattention cost ∝ (T/2)² = ¼ of full-rate",
+    points:["Most of the depth runs here — but on half as many tokens.","Attention is O(T²), so each middle block is ~4x cheaper.","This is where Zipformer's FLOP savings come from."]},
+  up:{title:"Upsample ×2", tag:"Zipformer §3.1",
+    formula:"repeat each frame twice:  T/2 → T",
+    points:["Restores the full frame rate before the head.","Pairs with the Downsample as a U-Net rate changer.","Parameter-free."]},
+  bypass:{title:"Bypass merge", tag:"Zipformer §3.2",
+    formula:"(1 − c) ⊙ x + c ⊙ y      (c channel-wise, learned)",
+    points:["Blends the full-rate skip x with the upsampled low-rate result y.","c starts near 1.0 (almost straight-through) to aid early convergence.","Learned per channel, so the model chooses what to keep."]},
+  head:{title:"Head block (full rate)", tag:"Zipformer §3.1",
+    formula:"ZipformerBlock at frame rate T → BiasNorm → classifier",
+    points:["Final full-resolution refinement.","Produces one label per full-rate frame in this demo.","Stands in for the ASR head of the real model."]}
+};
+
+const stages=document.querySelectorAll('.stage');
+const dTitle=document.getElementById('d-title'), dTag=document.getElementById('d-tag'),
+      dFormula=document.getElementById('d-formula'), dPoints=document.getElementById('d-points');
+function show(key,el){ const d=DETAILS[key]; if(!d) return;
+  stages.forEach(s=>s.classList.remove('active')); if(el) el.classList.add('active');
+  dTitle.textContent=d.title; dTag.textContent=d.tag; dFormula.textContent=d.formula;
+  dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); }
+stages.forEach(s=>s.addEventListener('click',()=>show(s.dataset.key,s)));
+
+function render(data){
+  const cr=data.constant_rate, zp=data.zipformer;
+  const el=document.getElementById('flop-bars'); el.innerHTML='';
+  const max=Math.max(cr.attention_flops, zp.attention_flops);
+  [["constant-rate", cr.attention_flops, "var(--full)"],["Zipformer", zp.attention_flops, "var(--low)"]].forEach(([lab,val,c])=>{
+    const l=document.createElement('div'); l.className='lab'; l.textContent=lab;
+    const track=document.createElement('div'); track.className='bar-track';
+    const fill=document.createElement('div'); fill.className='bar-fill';
+    fill.style.width=(100*val/max)+'%'; fill.style.background=c; fill.textContent=val.toLocaleString();
+    track.appendChild(fill); el.appendChild(l); el.appendChild(track);
+  });
+  document.getElementById('flop-note').innerHTML =
+    `Zipformer uses <span class="win">${data.flop_speedup.toFixed(2)}×</span> fewer attention FLOPs `+
+    `(<span class="win">${data.flop_saving_percent.toFixed(1)}%</span> saved).`;
+
+  const rows=[
+    ["total blocks", data.total_blocks, data.total_blocks, false],
+    ["middle frame rate", "full (T)", "half (T/2)", false],
+    ["attention FLOPs", cr.attention_flops.toLocaleString(), zp.attention_flops.toLocaleString(), true],
+    ["frame accuracy", (cr.accuracy*100).toFixed(1)+'%', (zp.accuracy*100).toFixed(1)+'%', false],
+  ];
+  const t=document.getElementById('cmp-table');
+  t.innerHTML='<tr><th>metric</th><th>constant-rate</th><th>Zipformer</th></tr>'+
+    rows.map(([m,a,b,win])=>`<tr><td class="metric">${m}</td><td>${a}</td><td class="${win?'win':''}">${b}</td></tr>`).join('');
+  document.getElementById('verdict').innerHTML =
+    `Same block count, same accuracy — but the low-rate middle makes Zipformer `+
+    `<span class="win">${data.flop_speedup.toFixed(2)}×</span> cheaper in attention.`;
+}
+
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const res=await fetch('../data/demo_results.json',{cache:'no-store'});
+      if(res.ok){ render(await res.json()); show('middle', document.querySelector('.stage[data-key="middle"]')); return; } }catch(e){}
+  }
+  render(BAKED); show('middle', document.querySelector('.stage[data-key="middle"]'));
+})();
+</script>
+</body>
+</html>
