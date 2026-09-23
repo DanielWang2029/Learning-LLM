@@ -1,0 +1,16 @@
+# Development environment
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Generated demo artifacts (regenerate with the demo script)
+data/demo_results.json
+data/audio_preview.json
+
+# OS
+.DS_Store
