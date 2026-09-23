@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wav2vec 2.0 — Self-Supervised Speech Representations</title>
+<style>
+  :root {
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --cnn:#22d3ee; --mask:#fb7185; --ctx:#a78bfa; --quant:#34d399; --loss:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--cnn);}
+  header.hero{padding:40px 24px 28px;text-align:center;background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(52,211,153,.14));border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#34d399 75%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:790px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;} .section-sub{color:var(--muted);margin:0 0 18px;}
+  .pipe{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;}
+  @media (max-width:860px){.pipe{grid-template-columns:1fr;}}
+  .stack{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);}
+  .stack h3{margin:2px 0 12px;text-align:center;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+  .block{display:flex;align-items:center;gap:10px;padding:11px 13px;margin:9px 0;border-radius:11px;cursor:pointer;border:1px solid transparent;transition:transform .12s,box-shadow .12s,border-color .12s;background:var(--panel-2);user-select:none;}
+  .block:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.35);} .block.active{border-color:#fff3;box-shadow:0 0 0 2px #ffffff22,var(--shadow);}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;} .block .label{font-weight:600;} .block .sec{margin-left:auto;font-size:11px;color:var(--muted);}
+  .arrow{text-align:center;color:var(--line);font-size:18px;line-height:1;margin:-3px 0;}
+  .io{text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:10px;padding:8px;margin:8px 0;background:rgba(255,255,255,.02);}
+  .c-cnn{background:linear-gradient(90deg,rgba(34,211,238,.16),transparent);}
+  .c-mask{background:linear-gradient(90deg,rgba(251,113,133,.16),transparent);}
+  .c-ctx{background:linear-gradient(90deg,rgba(167,139,250,.16),transparent);}
+  .c-quant{background:linear-gradient(90deg,rgba(52,211,153,.16),transparent);}
+  .c-loss{background:linear-gradient(90deg,rgba(245,158,11,.16),transparent);}
+  .detail{position:sticky;top:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);min-height:260px;}
+  .detail h3{margin:0 0 4px;font-size:18px;} .detail .tag{font-size:12px;color:var(--muted);}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);font-family:"SFMono-Regular",ui-monospace,Consolas,monospace;font-size:13.5px;color:#cfe8ff;overflow-x:auto;white-space:pre-wrap;}
+  .detail ul{margin:10px 0 0;padding-left:18px;} .detail li{margin:5px 0;} .hint{color:var(--muted);font-size:13px;}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media (max-width:860px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  .stat{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0 2px;}
+  .stat .big{font-size:26px;font-weight:700;} .stat .lab{font-size:12px;color:var(--muted);}
+  .stat .box{background:#0d132a;border:1px solid var(--line);border-radius:12px;padding:10px 16px;min-width:120px;}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>wav2vec 2.0</h1>
+  <p>Self-supervised speech representation learning. A CNN encodes the raw waveform into latent frames; some are <b>masked</b>; a Transformer fills them in; and a <b>contrastive</b> loss forces each masked step to identify its own <b>product-quantized</b> code among distractors. Click a stage to see what it does.</p>
+  <div class="badges">
+    <span class="badge">Baevski et al., 2020</span>
+    <span class="badge">arXiv:2006.11477</span>
+    <span class="badge">Masked contrastive</span>
+    <span class="badge">Gumbel codebook</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">The pretraining pipeline</h2>
+  <p class="section-sub">Targets are the <b>quantized</b> latents (right); the context network only sees the <b>masked</b> latents (left). Their agreement at masked steps is the training signal.</p>
+
+  <div class="pipe">
+    <div class="stack">
+      <h3>Model</h3>
+      <div class="io">Raw waveform &nbsp;(B, samples)</div>
+      <div class="arrow">↓</div>
+      <div class="block c-cnn"  data-key="cnn"><span class="dot" style="background:var(--cnn)"></span><span class="label">CNN Feature Encoder</span><span class="sec">§2.1</span></div>
+      <div class="arrow">↓ &nbsp;latents z (B, T, D)</div>
+      <div class="block c-quant" data-key="quant"><span class="dot" style="background:var(--quant)"></span><span class="label">Product Quantizer → targets q</span><span class="sec">§2.2</span></div>
+      <div class="block c-mask" data-key="mask"><span class="dot" style="background:var(--mask)"></span><span class="label">Mask latent time-steps</span><span class="sec">§3.1</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-ctx"  data-key="ctx"><span class="dot" style="background:var(--ctx)"></span><span class="label">Transformer Context Network → c</span><span class="sec">§2.1</span></div>
+      <div class="arrow">↓</div>
+      <div class="block c-loss" data-key="loss"><span class="dot" style="background:var(--loss)"></span><span class="label">Contrastive InfoNCE loss</span><span class="sec">§3.2</span></div>
+      <div class="arrow">↓</div>
+      <div class="io">learned speech representations</div>
+    </div>
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a stage</h3>
+      <div class="tag" id="d-tag">Every colored block is interactive.</div>
+      <div class="formula" id="d-formula">Select a stage of the pipeline to reveal its role, equations, and the file that implements it.</div>
+      <ul id="d-points"></ul>
+      <p class="hint" id="d-file"></p>
+    </div>
+  </div>
+
+  <h2 class="section-title">Pretraining actually works</h2>
+  <p class="section-sub">Live numbers from the trained model in <code class="k">src/</code>.</p>
+  <div class="card">
+    <div class="stat" id="stat-row"></div>
+  </div>
+
+  <div class="grid2" style="margin-top:22px">
+    <div class="card">
+      <h4>Masked contrastive accuracy</h4>
+      <p class="small">Fraction of masked frames where the true quantized latent beats all distractors. Dashed = chance (1 / (K+1)).</p>
+      <canvas id="acc-canvas" height="280"></canvas>
+    </div>
+    <div class="card">
+      <h4>Codebook perplexity</h4>
+      <p class="small">Effective number of codewords in use. Higher = a more diverse, informative codebook (the diversity loss encourages this).</p>
+      <canvas id="ppl-canvas" height="280"></canvas>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:22px">
+    <div class="card">
+      <h4>Learned codebook usage</h4>
+      <p class="small">How often each codeword is selected across a held-out batch, per quantization group. A used, non-collapsed codebook.</p>
+      <canvas id="hist-canvas" height="260"></canvas>
+    </div>
+    <div class="card">
+      <h4>A masked example</h4>
+      <p class="small">One synthetic utterance (waveform, thinned). Red bands mark the latent time-steps that were masked — the Transformer must reconstruct their codes from context.</p>
+      <canvas id="wave-canvas" height="180"></canvas>
+      <p class="hint" id="wave-note" style="margin-top:10px"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>“wav2vec 2.0”</b> (Baevski et al., 2020).
+    Diagram and all data generated from the reference implementation in <code class="k">src/</code>.
+    Run <code class="k">python demo/run_demo.py</code> to regenerate.
+  </div>
+</div>
+
+<script>
+const BAKED = {"num_negatives": 20, "chance": 0.047619047619047616, "num_codewords": 64, "num_groups": 2, "num_vars": 32, "final_acc": 0.9163090128755365, "final_perplexity": 53.54167938232422, "accuracy_curve": [{"step": 1, "acc": 0.041193181818181816, "perplexity": 59.065147399902344, "temp": 1.999}, {"step": 20, "acc": 0.06056338028169014, "perplexity": 63.31938934326172, "temp": 1.9800947156046593}, {"step": 40, "acc": 0.1072961373390558, "perplexity": 60.786285400390625, "temp": 1.9603875413827485}, {"step": 60, "acc": 0.14613180515759314, "perplexity": 56.27801513671875, "temp": 1.9408765056145953}, {"step": 80, "acc": 0.25991792065663477, "perplexity": 53.54243469238281, "temp": 1.9215596562043487}, {"step": 100, "acc": 0.34545454545454546, "perplexity": 50.99754333496094, "temp": 1.9024350604846685}, {"step": 120, "acc": 0.406025824964132, "perplexity": 53.064788818359375, "temp": 1.8835008050233613}, {"step": 140, "acc": 0.5352517985611511, "perplexity": 51.31902313232422, "temp": 1.8647549954319398}, {"step": 160, "acc": 0.5338129496402878, "perplexity": 51.453147888183594, "temp": 1.8461957561760873}, {"step": 180, "acc": 0.6950867052023122, "perplexity": 51.32959747314453, "temp": 1.8278212303880095}, {"step": 200, "acc": 0.6289222373806276, "perplexity": 50.89954376220703, "temp": 1.809629579680652}, {"step": 220, "acc": 0.6991279069767442, "perplexity": 50.93463134765625, "temp": 1.79161898396377}, {"step": 240, "acc": 0.7229916897506925, "perplexity": 51.67230987548828, "temp": 1.773787641261825}, {"step": 260, "acc": 0.7832167832167832, "perplexity": 54.66363525390625, "temp": 1.7561337675336965}], "codebook_hist": [[0.0298, 0.028, 0.021, 0.0061, 0.0269, 0.054, 0.0, 0.0, 0.1268, 0.0345, 0.0228, 0.0251, 0.028, 0.0362, 0.0082, 0.0245, 0.0736, 0.0202, 0.0327, 0.0, 0.057, 0.0286, 0.0397, 0.0564, 0.0386, 0.0064, 0.028, 0.0012, 0.0421, 0.0362, 0.035, 0.0324], [0.0441, 0.0248, 0.0, 0.0543, 0.0336, 0.0312, 0.0409, 0.0377, 0.0, 0.0456, 0.0269, 0.0409, 0.1308, 0.0415, 0.0178, 0.0134, 0.0502, 0.026, 0.0514, 0.0216, 0.0, 0.007, 0.0272, 0.0, 0.0134, 0.021, 0.0526, 0.0324, 0.0134, 0.0318, 0.0073, 0.061]], "example_wave": [-0.004900000058114529, 0.13809999823570251, -0.9067000150680542, 0.38119998574256897, -0.8276000022888184, 0.6270999908447266, -0.46540001034736633, 0.9577999711036682, -0.29989999532699585, 0.5562999844551086, 0.008700000122189522, -0.5514000058174133, 0.3149000108242035, -0.9760000109672546, 0.475600004196167, -0.6194999814033508, 0.8296999931335449, -0.3709000051021576, 0.9042999744415283, -0.1875, 0.009800000116229057, 0.1932000070810318, -0.9027000069618225, 0.38260000944137573, -0.8302000164985657, 0.617900013923645, -0.4537999927997589, 0.9638000130653381, -0.2957000136375427, 0.541700005531311, -0.00019999999494757503, -0.5440000295639038, 0.2996000051498413, -0.9764999747276306, 0.46560001373291016, -0.4627000093460083, 0.005100000184029341, 0.27630001306533813, -0.5156999826431274, 0.7222999930381775, 0.2451999932527542, -0.7802000045776367, 0.9764000177383423, 0.002400000113993883, -0.9664000272750854, 0.7777000069618225, -0.23149999976158142, -0.7317000031471252, 0.4966000020503998, -0.3741999864578247, -0.008299999870359898, 0.37279999256134033, -0.5027999877929688, 0.7175999879837036, 0.2475000023841858, -0.7497000098228455, 0.9815000295639038, 0.008899999782443047, -0.9710000157356262, 0.7777000069618225, -0.24130000174045563, -0.7509999871253967, 0.4927000105381012, -0.37380000948905945, -0.03139999881386757, 0.3846000134944916, -0.5016000270843506, 0.7279999852180481, 0.26260000467300415, -0.7534999847412109, 0.9782000184059143, 0.018300000578165054, 0.000699999975040555, 0.49410000443458557, 0.026200000196695328, -0.5807999968528748, -0.18449999392032623, 0.7143999934196472, 0.08829999715089798, -0.5169000029563904, -0.3652999997138977, 0.7542999982833862, 0.14159999787807465, -0.4745999872684479, -0.5325999855995178, 0.8299999833106995, 0.1973000019788742, -0.46129998564720154, -0.6704000234603882, 0.8889999985694885, 0.24969999492168427, -0.4023999869823456, -0.8100000023841858, 0.9528999924659729, 0.2799000144004822, -0.4097999930381775, -0.8669000267982483, 0.9649999737739563, 0.3138999938964844, -0.357699990272522, -0.9376999735832214, 0.9711999893188477, 0.328900009393692, -0.35499998927116394, -0.9656999707221985, 0.9624999761581421, 0.3571999967098236, -0.25130000710487366, 9.999999747378752e-05, 0.1371999979019165, -0.8973000049591064, 0.3700999915599823, -0.8296999931335449, 0.6176000237464905, -0.4684999883174896, 0.9739000201225281, -0.29440000653266907, 0.5435000061988831, -0.007600000128149986, -0.5299999713897705, 0.31630000472068787, -0.951200008392334, 0.4645000100135803, -0.6148999929428101, 0.8133000135421753, -0.382999986410141, 0.890999972820282, -0.1777999997138977, -0.013500000350177288, 0.18549999594688416, -0.9078999757766724, 0.3865000009536743, -0.8313000202178955, 0.6288999915122986, -0.4629000127315521, 0.9664999842643738, -0.3116999864578247, 0.5580000281333923, 0.013100000098347664, -0.5572999715805054, 0.31869998574256897, -0.9851999878883362, 0.4632999897003174, -0.45969998836517334, -0.004399999976158142, 0.007300000172108412, 0.012500000186264515, 0.007199999876320362, -0.014100000262260437, 0.0012000000569969416, -0.00019999999494757503, -0.00279999990016222, -0.00279999990016222, 0.006200000178068876, -0.004600000102072954, 0.003700000001117587, -0.00430000014603138, 0.015300000086426735, -0.009700000286102295, 0.005200000014156103, 0.003100000089034438, -0.010999999940395355, 0.020600000396370888, 0.010400000028312206, -0.00430000014603138, 0.005900000222027302, -0.004399999976158142, 0.001500000013038516, -0.0035000001080334187, 0.0071000000461936, -0.0031999999191612005, 0.0026000000070780516, 0.010900000110268593, 0.0032999999821186066, -0.0019000000320374966, 0.02800000086426735, 0.011500000022351742, -0.0012000000569969416, 0.0010999999940395355, -0.0020000000949949026, -0.008299999870359898, -0.31299999356269836, 0.3894999921321869, 0.21639999747276306, -0.4438000023365021, 0.3659999966621399, 0.40220001339912415, -0.4733000099658966, 0.3312000036239624, 0.5853000283241272, -0.5282999873161316, 0.3151000142097473, 0.7261000275611877, -0.597599983215332, 0.2750999927520752, 0.845300018787384, -0.6585999727249146, 0.22669999301433563, 0.916700005531311, -0.7476000189781189, 0.17870000004768372, 0.9726999998092651, -0.8166000247001648, 0.12250000238418579, 0.9740999937057495, -0.8919000029563904, 0.03709999844431877, 0.9598000049591064, -0.9337999820709229, -0.025800000876188278, 0.9124000072479248, -0.9768999814987183, -0.08460000157356262, 0.8446000218391418, -0.978600025177002, -0.10970000177621841, -0.004399999976158142, 0.04969999939203262, 0.1151999980211258, 0.1860000044107437, 0.24169999361038208, 0.3034999966621399, 0.3749000132083893, 0.4108000099658966, 0.4772999882698059, 0.526199996471405, 0.580299973487854, 0.6381000280380249, 0.676800012588501, 0.7095999717712402, 0.7534999847412109, 0.7939000129699707, 0.8330000042915344, 0.8564000129699707, 0.8748000264167786, 0.9035999774932861, 0.9284999966621399, 0.9430999755859375, 0.9610000252723694, 0.9726999998092651, 0.9747999906539917, 0.9678999781608582, 0.9805999994277954, 0.978600025177002, 0.9670000076293945, 0.9699000120162964, 0.9458000063896179, 0.9366000294685364, 0.9322999715805054, 0.9027000069618225, 0.8867999911308289, 0.6571000218391418, -0.0038999998942017555, -0.3190000057220459, 0.3898000121116638, 0.20409999787807465, -0.4352000057697296, 0.36489999294281006, 0.40299999713897705, -0.4848000109195709, 0.3481000065803528, 0.5669000148773193, -0.5378000140190125, 0.30640000104904175, 0.7246000170707703, -0.5927000045776367, 0.27320000529289246, 0.8522999882698059, -0.6830999851226807, 0.24500000476837158, 0.9067000150680542, -0.744700014591217, 0.1729000061750412, 0.9628000259399414, -0.8156999945640564, 0.12479999661445618, 0.9787999987602234, -0.8934999704360962, 0.04149999842047691, 0.9545999765396118, -0.9325000047683716, -0.01080000028014183, 0.906499981880188, -0.9796000123023987, -0.08290000259876251, 0.84170001745224, -0.9757999777793884, -0.10270000249147415, -0.013199999928474426, 0.05040000006556511, 0.1265999972820282, 0.1898999959230423, 0.24950000643730164, 0.2939000129699707, 0.36730000376701355, 0.4138000011444092, 0.4722999930381775, 0.5422999858856201, 0.5733000040054321, 0.6402000188827515, 0.6658999919891357, 0.7074000239372253, 0.7662000060081482, 0.7955999970436096, 0.8303999900817871, 0.8682000041007996, 0.8579000234603882, 0.9054999947547913, 0.9243000149726868, 0.9383000135421753, 0.968500018119812, 0.9721999764442444, 0.9692999720573425, 0.97079998254776, 0.9715999960899353, 0.972000002861023, 0.9750999808311462, 0.9732999801635742, 0.9535999894142151, 0.946399986743927, 0.9200999736785889, 0.911899983882904, 0.8992999792098999, 0.6481999754905701, -0.006300000008195639, -0.325300008058548, 0.3889000117778778, 0.2142000049352646, -0.4456000030040741, 0.3580000102519989, 0.39480000734329224, -0.47760000824928284, 0.35920000076293945, 0.5900999903678894, -0.541100025177002, 0.3061999976634979, 0.7310000061988831, -0.5975000262260437, 0.2786000072956085, 0.8507000207901001, -0.6769000291824341, 0.22429999709129333, 0.9269999861717224, -0.7305999994277954, 0.1898999959230423, 0.9609000086784363, -0.8251000046730042, 0.11010000109672546, 0.9839000105857849, -0.878600001335144, 0.057100001722574234, 0.9555000066757202, -0.9337999820709229, -0.023600000888109207, 0.9146999716758728, -0.9617000222206116, -0.08609999716281891, 0.8485000133514404, -0.9714000225067139, -0.10989999771118164, -0.012000000104308128, 0.04650000110268593, 0.11630000174045563, 0.1914999932050705, 0.25929999351501465, 0.3100999891757965, 0.3635999858379364, 0.4368000030517578, 0.47099998593330383, 0.5343999862670898, 0.5698000192642212, 0.628600001335144, 0.683899998664856, 0.7343999743461609, 0.7530999779701233, 0.8007000088691711, 0.817300021648407, 0.8532999753952026, 0.8863999843597412, 0.8907999992370605, 0.9384999871253967, 0.9405999779701233, 0.95660001039505, 0.9605000019073486, 0.9842000007629395, 0.9951000213623047, 0.9678999781608582, 0.9853000044822693, 0.9692000150680542, 0.9531000256538391, 0.942799985408783, 0.9402999877929688, 0.9106000065803528, 0.9235000014305115, 0.9025999903678894, 0.6521999835968018, 0.004100000020116568, 0.1599999964237213, 0.39730000495910645, 0.5899999737739563], "example_mask": [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0], "example_phones": [0, 5, 4, 0, 7, 1, 2, 1, 2, 1, 2, 6], "n_latent_frames": 214};
+
+const DETAILS = {
+  cnn:{title:"CNN Feature Encoder",tag:"Paper §2.1",
+    formula:"z = GELU(GroupNorm(Conv1d(...)))  ×4 layers\nstrides 5·4·2·2 = 80  →  16 kHz waveform to ~200 Hz latents\nshape: (B, samples) → (B, T, D)",
+    points:["Operates directly on the raw waveform — no spectrogram, no torchaudio.","Strided temporal convolutions downsample to latent frames z_t.","Outputs are layer-normalised before masking / quantization."],
+    file:"src/model.py → FeatureEncoder"},
+  quant:{title:"Product Quantizer (Gumbel codebook)",tag:"Paper §2.2",
+    formula:"logits = Linear(z)         # (G groups × V codewords)\none-hot = GumbelSoftmax(logits, hard)\nq = concat_g( codebook_g[argmax_g] )",
+    points:["Discretizes each latent into G=2 groups, each choosing 1 of V=32 codewords.","Straight-through Gumbel-softmax makes the discrete choice differentiable.","The concatenated codewords q_t are the contrastive targets (computed from the *unmasked* z)."],
+    file:"src/model.py → GumbelVectorQuantizer"},
+  mask:{title:"Mask latent time-steps",tag:"Paper §3.1",
+    formula:"sample span starts; mask M consecutive frames\nz_t (masked) ← learned mask vector",
+    points:["A random subset of latent frames is replaced by a single learned mask embedding.","Masking spans (not isolated frames) makes the task non-trivial.","Only masked positions contribute to the loss."],
+    file:"src/model.py → compute_mask_indices"},
+  ctx:{title:"Transformer Context Network",tag:"Paper §2.1",
+    formula:"x = z_masked + ConvPositionalEmbedding(z_masked)\nc = TransformerEncoder(x)",
+    points:["Builds context c_t from the surrounding unmasked frames.","Uses a convolutional positional embedding instead of fixed sinusoids.","Must infer the content of masked frames to solve the contrastive task."],
+    file:"src/model.py → ContextTransformer"},
+  loss:{title:"Contrastive InfoNCE loss",tag:"Paper §3.2",
+    formula:"L = -log  exp(sim(c_t, q_t)/κ)\n          ────────────────────────────\n          Σ_{q̃∈{q_t}∪Q_distractors} exp(sim(c_t, q̃)/κ)\n\nsim = cosine similarity,  κ = 0.1",
+    points:["For each masked step, pick the true q_t among K distractors sampled from other masked steps.","A diversity loss is added to keep the codebook from collapsing.","Accuracy = how often the positive wins — the metric plotted above."],
+    file:"src/model.py → Wav2Vec2.forward"},
+};
+
+const blocks=document.querySelectorAll('.block');
+const dTitle=document.getElementById('d-title'),dTag=document.getElementById('d-tag'),dFormula=document.getElementById('d-formula'),dPoints=document.getElementById('d-points'),dFile=document.getElementById('d-file');
+function show(k,el){const d=DETAILS[k];if(!d)return;blocks.forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');dTitle.textContent=d.title;dTag.textContent=d.tag;dFormula.textContent=d.formula;dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join('');dFile.textContent=d.file;}
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function lineChart(id,pts,key,color,ymax,chance){
+  const c=document.getElementById(id),ctx=c.getContext('2d');
+  const W=c.width=c.clientWidth||520,H=c.height,pad=36;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle='#1e2946';ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){const y=pad+g/4*(H-2*pad);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-8,y);ctx.stroke();}
+  if(chance!=null){const y=H-pad-chance/ymax*(H-2*pad);ctx.setLineDash([4,4]);ctx.strokeStyle='#64748b';ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-8,y);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#64748b';ctx.font='11px monospace';ctx.fillText('chance',W-58,y-5);}
+  const maxStep=pts[pts.length-1].step;
+  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=2.5;
+  pts.forEach((p,i)=>{const x=pad+p.step/maxStep*(W-pad-8);const y=H-pad-Math.min(p[key],ymax)/ymax*(H-2*pad);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='11px monospace';
+  ctx.fillText('0',10,H-pad+4);ctx.fillText(ymax<=1?'100%':(''+ymax),6,pad+4);
+  ctx.fillText('step '+maxStep,W-70,H-10);
+}
+
+function render(d){
+  // stats
+  document.getElementById('stat-row').innerHTML=`
+    <div class="box"><div class="big" style="color:var(--loss)">${(d.final_acc*100).toFixed(1)}%</div><div class="lab">final masked accuracy (chance ${(d.chance*100).toFixed(1)}%)</div></div>
+    <div class="box"><div class="big" style="color:var(--quant)">${d.final_perplexity.toFixed(1)}<span style="font-size:15px;color:var(--muted)"> / ${d.num_codewords}</span></div><div class="lab">codebook perplexity</div></div>
+    <div class="box"><div class="big" style="color:var(--mask)">${d.num_groups}×${d.num_vars}</div><div class="lab">codebook (groups × codewords)</div></div>`;
+
+  lineChart('acc-canvas',d.accuracy_curve,'acc','#f59e0b',1.0,d.chance);
+  lineChart('ppl-canvas',d.accuracy_curve,'perplexity','#34d399',d.num_codewords,null);
+
+  // codebook histogram (grouped bars)
+  const hc=document.getElementById('hist-canvas'),hx=hc.getContext('2d');
+  const W=hc.width=hc.clientWidth||520,H=hc.height,pad=28;
+  hx.clearRect(0,0,W,H);
+  const V=d.num_vars,G=d.codebook_hist.length;
+  const bw=(W-2*pad)/(V);const cols=['#22d3ee','#a78bfa'];
+  let hmax=0;d.codebook_hist.forEach(h=>h.forEach(v=>{if(v>hmax)hmax=v;}));
+  d.codebook_hist.forEach((h,g)=>{
+    h.forEach((v,i)=>{const x=pad+i*bw;const bh=v/hmax*(H-2*pad)/G;
+      hx.fillStyle=cols[g%cols.length];
+      hx.fillRect(x+1,H-pad-g*(H-2*pad)/G-bh,bw-1.5,bh);});
+  });
+  hx.fillStyle='#93a0c0';hx.font='11px monospace';
+  hx.fillText('group 0',pad,14);hx.fillText('group 1',pad,H/2+2);
+  hx.fillText('codeword index →',W-150,H-8);
+
+  // waveform + mask bands
+  const wc=document.getElementById('wave-canvas'),wx=wc.getContext('2d');
+  const WW=wc.width=wc.clientWidth||520,WH=wc.height;
+  wx.clearRect(0,0,WW,WH);
+  const mask=d.example_mask,Tm=mask.length;
+  for(let i=0;i<Tm;i++){if(mask[i]){wx.fillStyle='rgba(251,113,133,.22)';wx.fillRect(i/Tm*WW,0,Math.ceil(WW/Tm),WH);}}
+  const wav=d.example_wave,N=wav.length;
+  wx.beginPath();wx.strokeStyle='#22d3ee';wx.lineWidth=1.5;
+  wav.forEach((v,i)=>{const x=i/(N-1)*WW;const y=WH/2-v*(WH/2-8);i?wx.lineTo(x,y):wx.moveTo(x,y);});
+  wx.stroke();
+  document.getElementById('wave-note').textContent=
+    `${Tm} latent frames, ${mask.reduce((a,b)=>a+b,0)} masked (red). Phone sequence: [${d.example_phones.join(', ')}].`;
+}
+
+async function init(){
+  let data=BAKED;
+  if(location.protocol.startsWith('http')){try{const r=await fetch('../data/demo_sample.json',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}}
+  render(data);
+  show('loss',document.querySelector('.block[data-key="loss"]'));
+}
+window.addEventListener('resize',()=>render(BAKED));
+init();
+</script>
+</body>
+</html>
