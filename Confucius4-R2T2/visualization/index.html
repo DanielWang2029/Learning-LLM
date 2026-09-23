@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Confucius4-R2T2 — Longest Stable Prefix (append-only streaming)</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340; --ink: #e8ecf7;
+    --muted: #93a0c0; --line: #2a3352;
+    --audio: #22d3ee; --stable: #34d399; --unfixed: #f59e0b; --revise: #fb7185;
+    --commit: #a78bfa; --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #123a2f 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--audio); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(52,211,153,.14) 45%, rgba(245,158,11,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 32px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #34d399 45%, #f59e0b 80%, #fb7185);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 820px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 40px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; max-width: 860px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  h4 { margin: 0 0 4px; } p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+
+  /* token chips */
+  .tokrow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height: 34px; }
+  .tok { font-family: ui-monospace, monospace; font-size: 13px; padding: 4px 9px; border-radius: 8px;
+         border:1px solid var(--line); background: var(--panel-2); color: var(--ink); transition: all .18s; }
+  .tok.stable { background: linear-gradient(180deg, rgba(52,211,153,.30), rgba(52,211,153,.12)); border-color:#34d39988; }
+  .tok.unfixed { background: linear-gradient(180deg, rgba(245,158,11,.30), rgba(245,158,11,.10)); border-color:#f59e0b88; }
+  .tok.new { box-shadow: 0 0 0 2px #34d39988; }
+  .tok.revise { background: linear-gradient(180deg, rgba(251,113,133,.35), rgba(251,113,133,.12)); border-color:#fb718588; animation: flick .5s; }
+  @keyframes flick { 0%{transform:translateY(-4px);} 100%{transform:none;} }
+  .tok.commit { background: linear-gradient(180deg, rgba(167,139,250,.30), rgba(167,139,250,.10)); border-color:#a78bfa88; }
+
+  .legend { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:12px; margin:12px 0 4px; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  .controls { display:flex; align-items:center; gap:12px; margin: 6px 0 16px; flex-wrap: wrap; }
+  button { background: var(--panel-2); color: var(--ink); border:1px solid var(--line); border-radius:10px;
+           padding:8px 14px; cursor:pointer; font-size:14px; }
+  button:hover { border-color:#fff4; }
+  button.primary { background: linear-gradient(90deg, #34d399, #22d3ee); color:#04231b; border:none; font-weight:600; }
+  .tline { color:var(--muted); font-family: ui-monospace, monospace; font-size:13px; }
+
+  .stat { display:flex; gap:24px; flex-wrap:wrap; margin-top: 10px; }
+  .stat .box { background:#0d132a; border:1px solid var(--line); border-radius:12px; padding:12px 16px; min-width:130px; }
+  .stat .num { font-size:26px; font-weight:700; }
+  .stat .lbl { color:var(--muted); font-size:12px; }
+  .good { color: var(--stable); } .bad { color: var(--revise); }
+
+  .flowdiag { display:grid; grid-template-columns: 1fr; gap:10px; }
+  .flowrow { display:flex; align-items:center; gap:10px; }
+  .pill { padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); font-size:13px; }
+  .arrow { color: var(--line); font-size: 20px; }
+  code.k { background: #0d132a; border:1px solid var(--line); padding: 1px 6px; border-radius:6px; color:#cfe8ff; font-family: ui-monospace, monospace; }
+  canvas { width: 100%; height: 260px; display:block; background:#0d132a; border-radius:10px; border:1px solid var(--line); }
+  .footer { color: var(--muted); font-size: 13px; text-align:center; margin-top: 44px; }
+  table.sweep { width:100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.sweep th, table.sweep td { border-bottom:1px solid var(--line); padding:8px 10px; text-align:right; }
+  table.sweep th:first-child, table.sweep td:first-child { text-align:left; }
+  table.sweep th { color: var(--muted); font-weight:600; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Confucius4-R2T2 — Real Real-Time Transcription</h1>
+  <p>A true-streaming ASR decoding paradigm: commit only the <b>Longest Stable Prefix</b>, and never revise text you have already shown. The result is <b>append-only</b> output with no flicker — at configurable chunk sizes from 80&nbsp;ms to 2&nbsp;s.</p>
+  <div class="badges">
+    <span class="badge">NetEase Youdao, 2026</span>
+    <span class="badge">Official model card (Qwen3-ASR fine-tune)</span>
+    <span class="badge">Longest Stable Prefix</span>
+    <span class="badge">Append-only</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="small" style="margin-top:6px">This page reproduces the <i>documented mechanism</i> at small scale. There is no formal paper yet; the implementation is grounded in the included <code class="k">confucius4-r2t2_model_card.md</code>. Data below is baked in from a real run of <code class="k">demo/run_demo.py</code> (serve over http to load live data).</p>
+
+  <h2 class="section-title">The LSP commit mechanism</h2>
+  <p class="section-sub">Each arriving audio chunk yields a fresh hypothesis for all the audio heard so far. The <b>trailing edge is unstable</b> — the last sound is still ambiguous until it finishes. LSP compares consecutive hypotheses, keeps the prefix on which they <b>agree</b>, holds back a small trailing <b>unfixed</b> window (rollback guard), and permanently commits the rest.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>How a token becomes committed</h4>
+      <p class="small">§ model card: “dynamically determine when a stable prefix can be safely emitted … guaranteeing that previously emitted text remains unchanged.”</p>
+      <div class="flowdiag">
+        <div class="flowrow"><span class="pill" style="border-color:#22d3ee88">audio chunk k</span><span class="arrow">→</span><span class="pill">underlying ASR</span><span class="arrow">→</span><span class="pill">hypothesis Hₖ</span></div>
+        <div class="flowrow"><span class="pill">Hₖ₋₁, Hₖ</span><span class="arrow">→</span><span class="pill" style="border-color:#34d39988">longest common prefix = stable</span></div>
+        <div class="flowrow"><span class="pill" style="border-color:#34d39988">stable</span><span class="arrow">−</span><span class="pill" style="border-color:#f59e0b88">unfixed window</span><span class="arrow">→</span><span class="pill" style="border-color:#a78bfa88">commit (append-only)</span></div>
+      </div>
+      <div class="formula" style="margin-top:14px; background:#0d132a; border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-family: ui-monospace, monospace; color:#cfe8ff; font-size:13px; white-space:pre-wrap;">commit = LCP(H_{k-1}, H_k)[ : -unfixed_token_num]
+already_emitted ⊆ commit    # never revised</div>
+    </div>
+    <div class="card">
+      <h4>Why the trailing edge is unstable</h4>
+      <p class="small">Our synthetic phones (like real speech) reveal their identity only in their <i>second half</i>. A phone that has just begun is easily mis-recognized, then corrected once its formant arrives — the correction a naive decoder would show as flicker.</p>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--stable)"></span> stable / committed</span>
+        <span><span class="sw" style="background:var(--unfixed)"></span> unfixed window (held back)</span>
+        <span><span class="sw" style="background:var(--audio)"></span> unstable trailing hypothesis</span>
+        <span><span class="sw" style="background:var(--revise)"></span> revision (flicker)</span>
+      </div>
+      <div id="mech-demo" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Append-only vs revising — live streaming timeline</h2>
+  <p class="section-sub">Play the same synthesized utterance through both decoders. Watch LSP grow only forward (green), while the naive decoder overwrites earlier words (pink) — the visual flicker R2T2 eliminates.</p>
+  <div class="controls">
+    <button class="primary" id="play">▶ Play</button>
+    <button id="step">Step ▸</button>
+    <button id="reset">⟲ Reset</button>
+    <span class="tline" id="clock">t = 0 ms</span>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--stable)">LSP (append-only) — R2T2</h4>
+      <p class="small">Raw hypothesis with unstable tail on top; committed transcript below.</p>
+      <div class="tline">hypothesis</div>
+      <div class="tokrow" id="lsp-hyp"></div>
+      <div class="tline" style="margin-top:10px">committed (never revised)</div>
+      <div class="tokrow" id="lsp-com"></div>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--revise)">Naive streaming (revises)</h4>
+      <p class="small">Displays the whole current hypothesis; changed words flash pink.</p>
+      <div class="tline">displayed transcript (mutable)</div>
+      <div class="tokrow" id="naive-com"></div>
+      <div class="stat"><div class="box"><div class="num bad" id="naive-rev">0</div><div class="lbl">revisions so far (flicker)</div></div></div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="box"><div class="num good" id="lsp-rev">0</div><div class="lbl">LSP revisions (append-only ⇒ 0)</div></div>
+    <div class="box"><div class="num" id="ref">—</div><div class="lbl">ground-truth transcript</div></div>
+  </div>
+
+  <h2 class="section-title">Chunk-size sweep — one recognizer, no retraining</h2>
+  <p class="section-sub">Smaller chunks commit sooner (lower latency) but require holding a longer unstable tail; larger chunks are steadier. Across every setting from 80&nbsp;ms to 2&nbsp;s, LSP stays append-only (<b>0 revisions</b>) while the naive decoder flickers.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Latency &amp; revisions vs chunk size</h4>
+      <canvas id="chart" width="1000" height="260"></canvas>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--commit)"></span> LSP commit latency (ms)</span>
+        <span><span class="sw" style="background:var(--revise)"></span> naive revisions</span>
+        <span><span class="sw" style="background:var(--stable)"></span> LSP revisions (=0)</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Sweep table</h4>
+      <table class="sweep" id="sweep-table"></table>
+      <p class="small" style="margin-top:12px">Accuracy is identical (both converge to the same final text); the difference is <b>stability</b>: LSP commits permanently, the naive decoder keeps editing.</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Confucius4-R2T2</b> (NetEase Youdao, 2026) — official model card, no formal paper yet.
+    Mechanism and data generated by <code class="k">demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"reference":[7,5,5,7,4,6,6,1,0,2,2,6],"phone_names":["aa","iy","eh","uw","ih","ao","ae","ow"],"frame_ms":10,"phone_ms":200,"demo_chunk_ms":160,"lsp_trace":[{"chunk":1,"audio_ms":160,"hypothesis":[7],"committed":[],"newly_committed":[]},{"chunk":2,"audio_ms":320,"hypothesis":[7,5],"committed":[],"newly_committed":[]},{"chunk":3,"audio_ms":480,"hypothesis":[7,5,5],"committed":[7],"newly_committed":[7]},{"chunk":4,"audio_ms":640,"hypothesis":[7,5,5,7],"committed":[7,5],"newly_committed":[5]},{"chunk":5,"audio_ms":800,"hypothesis":[7,5,5,7],"committed":[7,5,5],"newly_committed":[5]},{"chunk":6,"audio_ms":960,"hypothesis":[7,5,5,7,4],"committed":[7,5,5],"newly_committed":[]},{"chunk":7,"audio_ms":1120,"hypothesis":[7,5,5,7,4,1],"committed":[7,5,5,7],"newly_committed":[7]},{"chunk":8,"audio_ms":1280,"hypothesis":[7,5,5,7,4,6,1],"committed":[7,5,5,7],"newly_committed":[]},{"chunk":9,"audio_ms":1440,"hypothesis":[7,5,5,7,4,6,6,1],"committed":[7,5,5,7,4],"newly_committed":[4]},{"chunk":10,"audio_ms":1600,"hypothesis":[7,5,5,7,4,6,6,1],"committed":[7,5,5,7,4,6,6],"newly_committed":[6,6]},{"chunk":11,"audio_ms":1760,"hypothesis":[7,5,5,7,4,6,6,1,0],"committed":[7,5,5,7,4,6,6],"newly_committed":[]},{"chunk":12,"audio_ms":1920,"hypothesis":[7,5,5,7,4,6,6,1,0,2],"committed":[7,5,5,7,4,6,6,1],"newly_committed":[1]},{"chunk":13,"audio_ms":2080,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2],"committed":[7,5,5,7,4,6,6,1,0],"newly_committed":[0]},{"chunk":14,"audio_ms":2240,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2,1],"committed":[7,5,5,7,4,6,6,1,0,2],"newly_committed":[2]},{"chunk":15,"audio_ms":2400,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2,6],"committed":[7,5,5,7,4,6,6,1,0,2],"newly_committed":[]}],"naive_trace":[{"chunk":1,"audio_ms":160,"hypothesis":[7],"committed":[7]},{"chunk":2,"audio_ms":320,"hypothesis":[7,5],"committed":[7,5]},{"chunk":3,"audio_ms":480,"hypothesis":[7,5,5],"committed":[7,5,5]},{"chunk":4,"audio_ms":640,"hypothesis":[7,5,5,7],"committed":[7,5,5,7]},{"chunk":5,"audio_ms":800,"hypothesis":[7,5,5,7],"committed":[7,5,5,7]},{"chunk":6,"audio_ms":960,"hypothesis":[7,5,5,7,4],"committed":[7,5,5,7,4]},{"chunk":7,"audio_ms":1120,"hypothesis":[7,5,5,7,4,1],"committed":[7,5,5,7,4,1]},{"chunk":8,"audio_ms":1280,"hypothesis":[7,5,5,7,4,6,1],"committed":[7,5,5,7,4,6,1]},{"chunk":9,"audio_ms":1440,"hypothesis":[7,5,5,7,4,6,6,1],"committed":[7,5,5,7,4,6,6,1]},{"chunk":10,"audio_ms":1600,"hypothesis":[7,5,5,7,4,6,6,1],"committed":[7,5,5,7,4,6,6,1]},{"chunk":11,"audio_ms":1760,"hypothesis":[7,5,5,7,4,6,6,1,0],"committed":[7,5,5,7,4,6,6,1,0]},{"chunk":12,"audio_ms":1920,"hypothesis":[7,5,5,7,4,6,6,1,0,2],"committed":[7,5,5,7,4,6,6,1,0,2]},{"chunk":13,"audio_ms":2080,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2],"committed":[7,5,5,7,4,6,6,1,0,2,2]},{"chunk":14,"audio_ms":2240,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2,1],"committed":[7,5,5,7,4,6,6,1,0,2,2,1]},{"chunk":15,"audio_ms":2400,"hypothesis":[7,5,5,7,4,6,6,1,0,2,2,6],"committed":[7,5,5,7,4,6,6,1,0,2,2,6]}],"lsp_final":[7,5,5,7,4,6,6,1,0,2,2,6],"naive_final":[7,5,5,7,4,6,6,1,0,2,2,6],"lsp_revisions":0,"naive_revisions_demo":3,"sweep":[{"chunk_ms":80,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":153.3,"naive_revisions":5,"naive_latency_ms":0.0},{"chunk_ms":160,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":260.0,"naive_revisions":3,"naive_latency_ms":0.0},{"chunk_ms":320,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":460.0,"naive_revisions":2,"naive_latency_ms":33.3},{"chunk_ms":560,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":800.0,"naive_revisions":3,"naive_latency_ms":133.3},{"chunk_ms":1120,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":1126.7,"naive_revisions":2,"naive_latency_ms":400.0},{"chunk_ms":2000,"lsp_acc":1.0,"lsp_revisions":0,"lsp_latency_ms":1200.0,"naive_revisions":0,"naive_latency_ms":1033.3}]};
+
+let DATA = BAKED;
+const NAMES = () => DATA.phone_names;
+const name = i => NAMES()[i];
+
+function chip(tokList, cls) {
+  return tokList.map(t => `<span class="tok ${cls||''}">${name(t)}</span>`).join('');
+}
+
+// ---- Mechanism mini-demo (static illustrative frame from chunk 9).
+function renderMech() {
+  const row = DATA.lsp_trace[8]; // chunk 9
+  const hyp = row.hypothesis, committed = row.committed;
+  const unfixed = 1;
+  const stableLen = committed.length; // committed = stable minus unfixed already
+  let html = '<div class="tline">hypothesis H₉ (heard so far)</div><div class="tokrow">';
+  hyp.forEach((t, i) => {
+    let cls = 'stable';
+    if (i >= hyp.length - unfixed) cls = 'unfixed';
+    if (i >= committed.length + unfixed) cls = ''; // unstable trailing
+    if (i >= committed.length && i < hyp.length - unfixed) cls = 'unfixed';
+    if (i < committed.length) cls = 'stable';
+    html += `<span class="tok ${cls}">${name(t)}</span>`;
+  });
+  html += '</div><div class="tline" style="margin-top:10px">→ committed (append-only)</div><div class="tokrow">' + chip(committed, 'commit') + '</div>';
+  document.getElementById('mech-demo').innerHTML = html;
+}
+
+// ---- Live timeline playback.
+let idx = 0, timer = null;
+function frame(i) {
+  const L = DATA.lsp_trace[i], N = DATA.naive_trace[i];
+  document.getElementById('clock').textContent = `t = ${L.audio_ms} ms   (chunk ${L.chunk} @ ${DATA.demo_chunk_ms} ms)`;
+
+  // LSP hypothesis: committed prefix green, trailing unstable cyan.
+  let h = '';
+  L.hypothesis.forEach((t, k) => {
+    const isCommitted = k < L.committed.length;
+    h += `<span class="tok ${isCommitted ? 'stable' : ''}" ${isCommitted?'':'style="background:linear-gradient(180deg,rgba(34,211,238,.28),rgba(34,211,238,.08));border-color:#22d3ee88"'}>${name(t)}</span>`;
+  });
+  document.getElementById('lsp-hyp').innerHTML = h;
+  const newset = new Set(L.newly_committed.map((x,ii)=>L.committed.length - L.newly_committed.length + ii));
+  document.getElementById('lsp-com').innerHTML = L.committed.map((t,k)=>{
+    const isNew = k >= L.committed.length - L.newly_committed.length;
+    return `<span class="tok stable ${isNew?'new':''}">${name(t)}</span>`;
+  }).join('');
+
+  // Naive: detect changed positions vs previous displayed.
+  const prev = i>0 ? DATA.naive_trace[i-1].committed : [];
+  let revsHtml = '';
+  N.committed.forEach((t,k)=>{
+    const changed = k < prev.length && prev[k] !== t;
+    revsHtml += `<span class="tok ${changed?'revise':'commit'}">${name(t)}</span>`;
+  });
+  document.getElementById('naive-com').innerHTML = revsHtml;
+
+  // running revision count
+  let rev = 0;
+  for (let s=1; s<=i; s++){
+    const a = DATA.naive_trace[s-1].committed, b = DATA.naive_trace[s].committed;
+    for (let k=0;k<Math.min(a.length,b.length);k++) if (a[k]!==b[k]) rev++;
+  }
+  document.getElementById('naive-rev').textContent = rev;
+  document.getElementById('lsp-rev').textContent = 0;
+}
+function reset(){ clearInterval(timer); timer=null; idx=0; frame(0); document.getElementById('play').textContent='▶ Play'; }
+function step(){ if (idx < DATA.lsp_trace.length-1){ idx++; frame(idx);} else { clearInterval(timer); timer=null; document.getElementById('play').textContent='▶ Play'; } }
+document.getElementById('step').onclick = step;
+document.getElementById('reset').onclick = reset;
+document.getElementById('play').onclick = function(){
+  if (timer){ clearInterval(timer); timer=null; this.textContent='▶ Play'; return; }
+  if (idx >= DATA.lsp_trace.length-1) idx = 0;
+  this.textContent='⏸ Pause';
+  timer = setInterval(()=>{ step(); if (idx>=DATA.lsp_trace.length-1){ clearInterval(timer); timer=null; document.getElementById('play').textContent='▶ Play'; } }, 650);
+};
+
+// ---- Sweep chart + table.
+function renderSweep(){
+  const sw = DATA.sweep;
+  // table
+  let t = '<tr><th>chunk (ms)</th><th>LSP acc</th><th>LSP rev</th><th>LSP lat (ms)</th><th>naive rev</th></tr>';
+  sw.forEach(r=>{ t += `<tr><td>${r.chunk_ms}</td><td>${(r.lsp_acc*100).toFixed(0)}%</td><td class="good">${r.lsp_revisions}</td><td>${r.lsp_latency_ms}</td><td class="bad">${r.naive_revisions}</td></tr>`; });
+  document.getElementById('sweep-table').innerHTML = t;
+
+  const cv = document.getElementById('chart'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, pad = 44;
+  ctx.clearRect(0,0,W,H);
+  const n = sw.length, bw = (W-2*pad)/n;
+  const maxLat = Math.max(...sw.map(r=>r.lsp_latency_ms))*1.15;
+  const maxRev = Math.max(...sw.map(r=>r.naive_revisions), 1)+1;
+  // grid
+  ctx.strokeStyle='#1e2946'; ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){ const y=pad+(H-2*pad)*g/4; ctx.beginPath(); ctx.moveTo(pad,y); ctx.lineTo(W-pad,y); ctx.stroke(); }
+  // latency line (commit)
+  ctx.strokeStyle='#a78bfa'; ctx.lineWidth=3; ctx.beginPath();
+  sw.forEach((r,i)=>{ const x=pad+bw*(i+0.5); const y=H-pad-(H-2*pad)*(r.lsp_latency_ms/maxLat); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+  sw.forEach((r,i)=>{ const x=pad+bw*(i+0.5); const y=H-pad-(H-2*pad)*(r.lsp_latency_ms/maxLat);
+    ctx.fillStyle='#a78bfa'; ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
+    ctx.fillStyle='#93a0c0'; ctx.font='11px monospace'; ctx.textAlign='center'; ctx.fillText(r.chunk_ms+'ms', x, H-pad+16); });
+  // naive revisions bars
+  sw.forEach((r,i)=>{ const x=pad+bw*i+bw*0.30, w=bw*0.16;
+    const hgt=(H-2*pad)*(r.naive_revisions/maxRev); ctx.fillStyle='#fb7185cc';
+    ctx.fillRect(x, H-pad-hgt, w, hgt);
+    // lsp revisions (0) marker
+    ctx.fillStyle='#34d399'; ctx.fillRect(x+bw*0.22, H-pad-3, w, 3);
+  });
+  ctx.fillStyle='#93a0c0'; ctx.font='12px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('latency ↑', pad, pad-16); ctx.textAlign='right'; ctx.fillText('revisions ↑', W-pad, pad-16);
+}
+
+// init
+(async function init(){
+  if (location.protocol.startsWith('http')) {
+    try { const res = await fetch('../data/streaming_run.json',{cache:'no-store'}); if(res.ok){ DATA = await res.json(); } } catch(e){}
+  }
+  document.getElementById('ref').textContent = DATA.reference.map(name).join(' ');
+  renderMech(); frame(0); renderSweep();
+})();
+</script>
+</body>
+</html>
