@@ -18,7 +18,8 @@
     "Reasoning",
     "Multimodal",
     "Evaluation & Analysis",
-    "Survey"
+    "Survey",
+    "Audio & Speech Encoders"
   ],
   "papers": [
     {
@@ -1325,6 +1326,285 @@
         "efficiency"
       ],
       "summary": "Compressed Convolutional Attention (CCA) compresses K/V to cut attention cost and KV-cache."
+    },
+    {
+      "id": "conformer",
+      "title": "Conformer: Convolution-augmented Transformer for Speech Recognition",
+      "authors": [
+        "Gulati",
+        "et al."
+      ],
+      "year": 2020,
+      "venue": "Interspeech",
+      "arxiv": "2005.08100",
+      "category": "Audio & Speech Encoders",
+      "folder": "Conformer",
+      "status": "reproduced",
+      "tags": [
+        "conformer",
+        "cnn+attention",
+        "asr-encoder"
+      ],
+      "summary": "Convolution-augmented Transformer capturing local + global speech structure; the backbone of most streaming ASR encoders."
+    },
+    {
+      "id": "wav2vec2",
+      "title": "wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations",
+      "authors": [
+        "Baevski",
+        "Zhou",
+        "Mohamed",
+        "Auli"
+      ],
+      "year": 2020,
+      "venue": "NeurIPS",
+      "arxiv": "2006.11477",
+      "category": "Audio & Speech Encoders",
+      "folder": "wav2vec 2.0",
+      "status": "reproduced",
+      "tags": [
+        "self-supervised",
+        "contrastive",
+        "quantization"
+      ],
+      "summary": "Self-supervised speech encoder: masked latent prediction with a contrastive loss over quantized targets."
+    },
+    {
+      "id": "emformer",
+      "title": "Emformer: Efficient Memory Transformer Based Acoustic Model for Low Latency Streaming Speech Recognition",
+      "authors": [
+        "Shi",
+        "et al."
+      ],
+      "year": 2021,
+      "venue": "ICASSP",
+      "arxiv": "2010.10759",
+      "category": "Audio & Speech Encoders",
+      "folder": "Emformer",
+      "status": "reproduced",
+      "tags": [
+        "streaming",
+        "augmented-memory",
+        "low-latency"
+      ],
+      "summary": "Streaming Transformer with an augmented memory bank and cached left context for low-latency block processing."
+    },
+    {
+      "id": "whisper",
+      "title": "Robust Speech Recognition via Large-Scale Weak Supervision (Whisper)",
+      "authors": [
+        "Radford",
+        "et al."
+      ],
+      "year": 2022,
+      "venue": "OpenAI",
+      "arxiv": "2212.04356",
+      "category": "Audio & Speech Encoders",
+      "folder": "Whisper",
+      "status": "reproduced",
+      "tags": [
+        "encoder-decoder",
+        "weak-supervision",
+        "multitask"
+      ],
+      "summary": "Weakly-supervised encoder-decoder ASR; its log-mel + conv + Transformer encoder is reused by many speech-LLMs."
+    },
+    {
+      "id": "fastconformer",
+      "title": "Fast Conformer with Linearly Scalable Attention for Efficient Speech Recognition",
+      "authors": [
+        "Rekesh",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "ASRU",
+      "arxiv": "2305.05084",
+      "category": "Audio & Speech Encoders",
+      "folder": "FastConformer",
+      "status": "reproduced",
+      "tags": [
+        "8x-subsampling",
+        "efficiency",
+        "conformer"
+      ],
+      "summary": "Conformer with 8x depthwise-separable convolutional subsampling for large speed/memory gains."
+    },
+    {
+      "id": "zipformer",
+      "title": "Zipformer: A Faster and Better Encoder for Automatic Speech Recognition",
+      "authors": [
+        "Yao",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "ICLR",
+      "arxiv": "2310.11230",
+      "category": "Audio & Speech Encoders",
+      "folder": "Zipformer",
+      "status": "reproduced",
+      "tags": [
+        "u-net",
+        "multi-rate",
+        "biasnorm"
+      ],
+      "summary": "U-Net-like multi-rate ASR encoder with a low-rate middle, BiasNorm, and reused attention weights."
+    },
+    {
+      "id": "cache-aware-conformer",
+      "title": "Stateful Conformer with Cache-based Inference for Streaming Automatic Speech Recognition",
+      "authors": [
+        "Noroozi",
+        "et al."
+      ],
+      "year": 2023,
+      "venue": "arXiv",
+      "arxiv": "2312.17279",
+      "category": "Audio & Speech Encoders",
+      "folder": "Cache-Aware Streaming Conformer",
+      "status": "reproduced",
+      "tags": [
+        "cache-aware",
+        "streaming",
+        "latency"
+      ],
+      "summary": "Cache-aware streaming Conformer that caches attention/conv states across chunks; one model, many latencies."
+    },
+    {
+      "id": "wenet-u2pp",
+      "title": "U2++: Unified Two-pass Bidirectional End-to-end Model for Speech Recognition",
+      "authors": [
+        "Wu",
+        "et al."
+      ],
+      "year": 2021,
+      "venue": "arXiv",
+      "arxiv": "2106.05642",
+      "category": "Audio & Speech Encoders",
+      "folder": "WeNet U2++",
+      "status": "reproduced",
+      "tags": [
+        "unified-streaming",
+        "dynamic-chunk",
+        "ctc-rescoring"
+      ],
+      "summary": "One shared encoder trained with dynamic chunk masking for streaming + non-streaming, with attention rescoring."
+    },
+    {
+      "id": "voxtral",
+      "title": "Voxtral",
+      "authors": [
+        "Mistral AI"
+      ],
+      "year": 2025,
+      "venue": "Mistral AI",
+      "arxiv": "2507.13264",
+      "category": "Audio & Speech Encoders",
+      "folder": "Voxtral",
+      "status": "reproduced",
+      "tags": [
+        "speech-llm",
+        "whisper-encoder",
+        "adapter"
+      ],
+      "summary": "Speech-LLM: a Whisper-large-v3 encoder + a 4-frame-concat adapter (50->12.5 Hz) feeding a Mistral language decoder."
+    },
+    {
+      "id": "qwen2.5-omni",
+      "title": "Qwen2.5-Omni Technical Report",
+      "authors": [
+        "Qwen Team"
+      ],
+      "year": 2025,
+      "venue": "Alibaba",
+      "arxiv": "2503.20215",
+      "category": "Audio & Speech Encoders",
+      "folder": "Qwen2.5-Omni",
+      "status": "reproduced",
+      "tags": [
+        "block-wise-encoder",
+        "streaming",
+        "omni-modal",
+        "thinker-talker"
+      ],
+      "summary": "Omni-modal model whose audio encoder uses block-wise (2s) attention for streaming prefill, feeding a Thinker-Talker LLM."
+    },
+    {
+      "id": "uni-asr",
+      "title": "Uni-ASR: Unified LLM-Based Architecture for Non-Streaming and Streaming Automatic Speech Recognition",
+      "authors": [
+        "Alibaba"
+      ],
+      "year": 2026,
+      "venue": "arXiv",
+      "arxiv": "2603.11123",
+      "category": "Audio & Speech Encoders",
+      "folder": "Uni-ASR",
+      "status": "reproduced",
+      "tags": [
+        "unified-streaming",
+        "llm-asr",
+        "fallback-decoding"
+      ],
+      "summary": "One LLM-based model for streaming + non-streaming ASR via interleaved sequences and a zero-latency fallback decode."
+    },
+    {
+      "id": "vibevoice-asr-streaming",
+      "title": "VibeVoice-ASR-Streaming Technical Report",
+      "authors": [
+        "Tu",
+        "et al."
+      ],
+      "year": 2026,
+      "venue": "Microsoft",
+      "arxiv": "2609.02812",
+      "category": "Audio & Speech Encoders",
+      "folder": "VibeVoice-ASR-Streaming",
+      "status": "reproduced",
+      "tags": [
+        "speaker-attributed",
+        "streaming",
+        "who-said-what"
+      ],
+      "summary": "LLM-based streaming speaker-attributed ASR: interleaves audio chunks + lookahead + text to emit 'who said what' live."
+    },
+    {
+      "id": "confucius4-r2t2",
+      "title": "Confucius4-R2T2 (Real Real-Time Transcription)",
+      "authors": [
+        "NetEase Youdao"
+      ],
+      "year": 2026,
+      "venue": "Model card",
+      "arxiv": null,
+      "category": "Audio & Speech Encoders",
+      "folder": "Confucius4-R2T2",
+      "status": "reproduced",
+      "tags": [
+        "longest-stable-prefix",
+        "append-only",
+        "true-streaming"
+      ],
+      "summary": "True-streaming ASR (Qwen3-ASR fine-tune) that commits only the longest stable prefix for append-only, flicker-free output."
+    },
+    {
+      "id": "nemotron-3.5-asr",
+      "title": "Nemotron 3.5 ASR Streaming 0.6B",
+      "authors": [
+        "NVIDIA"
+      ],
+      "year": 2026,
+      "venue": "Model card",
+      "arxiv": null,
+      "category": "Audio & Speech Encoders",
+      "folder": "Nemotron 3.5 ASR Streaming 0.6B",
+      "status": "reproduced",
+      "tags": [
+        "cache-aware",
+        "fastconformer-rnnt",
+        "configurable-chunk",
+        "lang-id"
+      ],
+      "summary": "Cache-aware FastConformer-RNNT streaming ASR with configurable chunk sizes and language-ID prompt conditioning."
     }
   ],
   "citations": [
@@ -1823,6 +2103,102 @@
     {
       "from": "zaya1-8b",
       "to": "nsa"
+    },
+    {
+      "from": "conformer",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "wav2vec2",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "emformer",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "whisper",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "fastconformer",
+      "to": "conformer"
+    },
+    {
+      "from": "fastconformer",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "zipformer",
+      "to": "conformer"
+    },
+    {
+      "from": "cache-aware-conformer",
+      "to": "conformer"
+    },
+    {
+      "from": "cache-aware-conformer",
+      "to": "emformer"
+    },
+    {
+      "from": "wenet-u2pp",
+      "to": "conformer"
+    },
+    {
+      "from": "voxtral",
+      "to": "whisper"
+    },
+    {
+      "from": "voxtral",
+      "to": "mistral-7b"
+    },
+    {
+      "from": "qwen2.5-omni",
+      "to": "whisper"
+    },
+    {
+      "from": "qwen2.5-omni",
+      "to": "qwen2.5"
+    },
+    {
+      "from": "qwen2.5-omni",
+      "to": "rope-roformer"
+    },
+    {
+      "from": "uni-asr",
+      "to": "conformer"
+    },
+    {
+      "from": "uni-asr",
+      "to": "whisper"
+    },
+    {
+      "from": "uni-asr",
+      "to": "qwen3"
+    },
+    {
+      "from": "vibevoice-asr-streaming",
+      "to": "whisper"
+    },
+    {
+      "from": "vibevoice-asr-streaming",
+      "to": "uni-asr"
+    },
+    {
+      "from": "confucius4-r2t2",
+      "to": "qwen3"
+    },
+    {
+      "from": "confucius4-r2t2",
+      "to": "whisper"
+    },
+    {
+      "from": "nemotron-3.5-asr",
+      "to": "fastconformer"
+    },
+    {
+      "from": "nemotron-3.5-asr",
+      "to": "cache-aware-conformer"
     }
   ]
 }

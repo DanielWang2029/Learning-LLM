@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Uni-ASR — Unified Streaming ASR with Latest-Token Fallback</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --enc:#22d3ee; --adapt:#a78bfa; --llm:#f59e0b; --ok:#34d399; --bad:#fb7185;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),
+     radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;}
+  a{color:var(--enc);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(245,158,11,.14));border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:34px;letter-spacing:.5px;background:linear-gradient(90deg,#22d3ee,#a78bfa 40%,#34d399 72%,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:820px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;} .section-sub{color:var(--muted);margin:0 0 18px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media(max-width:820px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  .pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;}
+  .stage{flex:1;min-width:150px;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center;background:var(--panel-2);}
+  .stage b{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .arrowx{color:var(--muted);font-size:20px;}
+  .seq{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+  .tok{padding:6px 9px;border-radius:8px;font-family:ui-monospace,monospace;font-size:13px;border:1px solid var(--line);}
+  .tok.a{background:rgba(34,211,238,.16);} .tok.t{background:rgba(245,158,11,.16);}
+  .tok.pad{background:#141b30;color:var(--muted);border-style:dashed;}
+  table{width:100%;border-collapse:collapse;font-size:13px;} th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:right;} th:first-child,td:first-child{text-align:left;} th{color:var(--muted);}
+  .kpi{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;}
+  .kpi div{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-width:120px;}
+  .kpi .v{font-size:22px;font-weight:700;} .kpi .l{font-size:12px;color:var(--muted);}
+  .mono{font-family:ui-monospace,monospace;}
+  .g{color:var(--ok);} .r{color:var(--bad);}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Uni-ASR</h1>
+  <p>One model — causal Conformer encoder + adapter + LLM decoder — for both non-streaming and streaming ASR, trained on <b>interleaved speech-text</b> sequences. Its <b>latest-token fallback</b> re-decodes the provisional last token of each chunk once the next chunk arrives, fixing boundary errors at no added latency.</p>
+  <div class="badges">
+    <span class="badge">Alibaba, 2026</span>
+    <span class="badge">arXiv:2603.11123</span>
+    <span class="badge">Interleaved speech-text</span>
+    <span class="badge">Latest-token fallback</span>
+    <span class="badge">Unified NS + streaming</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">Architecture &amp; interleaved sequence</h2>
+  <p class="section-sub">Speech is aligned to text and interleaved; the loss is taken only on the text targets (§2.2.2). Each speech segment <code class="k">a_j</code> pools the encoder frames of token <code class="k">j</code> that have arrived so far.</p>
+  <div class="card">
+    <div class="pipe">
+      <div class="stage" style="background:linear-gradient(180deg,rgba(34,211,238,.15),transparent)"><b>audio</b>causal Conformer encoder</div>
+      <div class="arrowx">→</div>
+      <div class="stage" style="background:linear-gradient(180deg,rgba(167,139,250,.15),transparent)"><b>adapter</b>2× linear + ReLU</div>
+      <div class="arrowx">→</div>
+      <div class="stage" style="background:linear-gradient(180deg,rgba(245,158,11,.15),transparent)"><b>decoder</b>LLM (autoregressive)</div>
+    </div>
+    <p class="small" style="margin-top:14px">Interleaved input sequence (speech <span class="mono" style="color:var(--enc)">a</span>, text <span class="mono" style="color:var(--llm)">t</span>):</p>
+    <div class="seq" id="seq"></div>
+  </div>
+
+  <h2 class="section-title">Latest-token fallback vs naive chunked decoding</h2>
+  <p class="section-sub">At a chunk boundary the last token's acoustic nucleus may not have arrived yet. Naive decoding commits the guess; fallback re-decodes it after the next chunk. Both emit the same tokens at the same time — equal latency.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Streaming token error by chunk size</h4>
+      <p class="small">Pink = naive, green = with fallback. Chunk sizes that are multiples of the 160 ms token length never split a token, so naive already has no error there.</p>
+      <canvas id="err" height="250"></canvas>
+      <div class="kpi">
+        <div><div class="v r" id="k-naive">–</div><div class="l">mean naive error</div></div>
+        <div><div class="v g" id="k-fb">–</div><div class="l">mean fallback error</div></div>
+        <div><div class="v" id="k-red">–</div><div class="l">relative reduction</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h4>Numbers</h4>
+      <table id="tab"><thead><tr><th>chunk</th><th>naive acc</th><th>fallback acc</th></tr></thead><tbody></tbody></table>
+      <p class="small" style="margin-top:8px">Non-streaming (full audio) accuracy: <b id="ns">–</b> — the same weights, no chunking.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">A worked example</h2>
+  <p class="section-sub">One utterance decoded three ways at a misaligned chunk size. Naive garbles the boundary tokens; fallback matches the gold transcript exactly.</p>
+  <div class="card">
+    <div id="example"></div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Uni-ASR</b> (Alibaba, 2026). Data baked from <code class="k">python demo/run_demo.py</code>.
+    Serve the folder over http to load fresh <code class="k">data/demo_results.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config":{"n_tokens":8,"vocab":8,"frames_per_token":4,"frame_ms":40.0,"params":869672},"nonstreaming_acc":1.0,"by_chunk":[{"chunk_frames":2,"chunk_ms":80.0,"naive_acc":0.1823,"fallback_acc":1.0,"naive_err":0.8177,"fallback_err":0.0},{"chunk_frames":3,"chunk_ms":120.0,"naive_acc":0.3125,"fallback_acc":1.0,"naive_err":0.6875,"fallback_err":0.0},{"chunk_frames":4,"chunk_ms":160.0,"naive_acc":1.0,"fallback_acc":1.0,"naive_err":0.0,"fallback_err":0.0},{"chunk_frames":5,"chunk_ms":200.0,"naive_acc":0.5312,"fallback_acc":1.0,"naive_err":0.4688,"fallback_err":0.0},{"chunk_frames":6,"chunk_ms":240.0,"naive_acc":0.7005,"fallback_acc":1.0,"naive_err":0.2995,"fallback_err":0.0},{"chunk_frames":8,"chunk_ms":320.0,"naive_acc":1.0,"fallback_acc":1.0,"naive_err":0.0,"fallback_err":0.0}],"mean_naive_err":0.3789,"mean_fallback_err":0.0,"error_reduction_pct":100.0,"example":{"tokens":[7,4,4,2,4,4,0,0],"chunk_frames":3,"naive":[5,2,2,2,2,2,0,2],"fallback":[7,4,4,2,4,4,0,0],"nonstreaming":[7,4,4,2,4,4,0,0]}};
+
+function fit(cv){const W=cv.width=cv.clientWidth*2,H=cv.height*2;return[cv.getContext('2d'),W,H];}
+
+function render(D){
+  // interleaved seq illustration using the example
+  const toks=D.example.tokens.slice(0,6);
+  const seq=document.getElementById('seq');seq.innerHTML='';
+  toks.forEach((t,j)=>{
+    const a=document.createElement('span');a.className='tok a';a.textContent='a'+j;seq.appendChild(a);
+    const tt=document.createElement('span');tt.className='tok t';tt.textContent='t'+j+'='+t;seq.appendChild(tt);
+  });
+  const dots=document.createElement('span');dots.className='tok pad';dots.textContent='…';seq.appendChild(dots);
+
+  // error chart
+  drawErr(D.by_chunk);
+  document.getElementById('k-naive').textContent=(D.mean_naive_err*100).toFixed(1)+'%';
+  document.getElementById('k-fb').textContent=(D.mean_fallback_err*100).toFixed(1)+'%';
+  document.getElementById('k-red').textContent=D.error_reduction_pct.toFixed(0)+'%';
+  document.getElementById('ns').textContent=(D.nonstreaming_acc*100).toFixed(1)+'%';
+
+  const tb=document.querySelector('#tab tbody');
+  tb.innerHTML=D.by_chunk.map(r=>`<tr><td>${r.chunk_ms} ms</td><td>${(r.naive_acc*100).toFixed(1)}%</td><td>${(r.fallback_acc*100).toFixed(1)}%</td></tr>`).join('');
+
+  // example
+  const e=D.example;
+  const row=(label,arr,gold)=>{
+    const cells=arr.map((v,i)=>`<span class="tok ${v===gold[i]?'':'pad'}" style="${v===gold[i]?'background:rgba(52,211,153,.16)':'background:rgba(251,113,133,.18);border-style:solid'}">${v}</span>`).join('');
+    return `<div style="margin:8px 0"><div class="small" style="margin-bottom:4px">${label}</div><div class="seq">${cells}</div></div>`;
+  };
+  document.getElementById('example').innerHTML=
+    `<div class="small">chunk size = ${e.chunk_frames*D.config.frame_ms} ms</div>`+
+    row('gold', e.tokens, e.tokens)+
+    row('non-streaming (full audio)', e.nonstreaming, e.tokens)+
+    row('streaming — naive', e.naive, e.tokens)+
+    row('streaming — latest-token fallback', e.fallback, e.tokens);
+}
+
+function drawErr(rows){
+  const [ctx,W,H]=fit(document.getElementById('err'));ctx.clearRect(0,0,W,H);
+  const pad=60,n=rows.length,bw=(W-pad*2)/n;
+  ctx.strokeStyle='#1e2946';for(let g=0;g<=4;g++){const y=24+g/4*(H-80);ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-20,y);ctx.stroke();}
+  ctx.font='19px monospace';ctx.textAlign='center';
+  rows.forEach((r,i)=>{
+    const x=pad+i*bw;
+    const hn=r.naive_err*(H-90),hf=r.fallback_err*(H-90);
+    ctx.fillStyle='#fb7185';ctx.fillRect(x+bw*0.14,H-46-hn,bw*0.34,hn);
+    ctx.fillStyle='#34d399';ctx.fillRect(x+bw*0.52,H-46-hf,bw*0.34,Math.max(hf,2));
+    ctx.fillStyle='#93a0c0';ctx.fillText(r.chunk_ms+'ms',x+bw/2,H-18);
+    ctx.fillStyle='#e8ecf7';ctx.fillText((r.naive_err*100).toFixed(0)+'%',x+bw*0.31,H-52-hn);
+  });
+  ctx.textAlign='left';ctx.fillStyle='#93a0c0';ctx.fillText('100%',10,34);ctx.fillText('0%',22,H-46);
+  ctx.fillStyle='#fb7185';ctx.fillRect(pad,4,15,15);ctx.fillStyle='#93a0c0';ctx.fillText('naive',pad+20,17);
+  ctx.fillStyle='#34d399';ctx.fillRect(pad+130,4,15,15);ctx.fillStyle='#93a0c0';ctx.fillText('fallback',pad+150,17);
+}
+
+(async function init(){
+  let D=BAKED;
+  if(location.protocol.startsWith('http')){try{const r=await fetch('../data/demo_results.json',{cache:'no-store'});if(r.ok)D=await r.json();}catch(e){}}
+  render(D);
+  window.addEventListener('resize',()=>render(D));
+})();
+</script>
+</body>
+</html>

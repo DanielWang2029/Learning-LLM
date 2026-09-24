@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fast Conformer — 8x Depthwise-Separable Sub-sampling</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel-2: #1a2340;
+    --ink: #e8ecf7; --muted: #93a0c0; --line: #2a3352;
+    --mel: #22d3ee; --sub: #a78bfa; --attn: #fb7185; --conv: #34d399;
+    --gold: #f59e0b; --gen: #f472b6;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 20% -10%, #17223f 0%, transparent 60%),
+                radial-gradient(1000px 500px at 100% 0%, #24123a 0%, transparent 60%),
+                var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--mel); }
+  header.hero {
+    padding: 40px 24px 28px; text-align: center;
+    background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(167,139,250,.14) 45%, rgba(244,114,182,.14));
+    border-bottom: 1px solid var(--line);
+  }
+  header.hero h1 {
+    margin: 0; font-size: 32px; letter-spacing: .5px;
+    background: linear-gradient(90deg, #22d3ee, #a78bfa 40%, #fb7185 75%, #f59e0b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { color: var(--muted); margin: 8px auto 0; max-width: 780px; }
+  .badges { margin-top: 14px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+  .section-title { font-size: 20px; margin: 34px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 4px; }
+  .card p.small { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .formula { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: #0d132a; border: 1px solid var(--line);
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; color: #cfe8ff; overflow-x: auto; white-space: pre-wrap; }
+
+  /* pipeline diagram */
+  .pipe { display:flex; flex-direction:column; gap:0; }
+  .io { text-align:center; color: var(--muted); font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 6px 0; background: rgba(255,255,255,.02); }
+  .arrow { text-align:center; color: var(--line); font-size: 18px; margin: -1px 0; }
+  .block { display:flex; align-items:center; gap:10px; padding:11px 13px; margin:7px 0; border-radius:11px; border:1px solid transparent; background: var(--panel-2); cursor:pointer; transition: transform .12s, box-shadow .12s, border-color .12s; }
+  .block:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+  .block.active { border-color:#fff3; box-shadow: 0 0 0 2px #ffffff22, var(--shadow); }
+  .dot { width:11px; height:11px; border-radius:50%; flex:0 0 auto; }
+  .block .label { font-weight:600; }
+  .block .sec { margin-left:auto; font-size:11px; color:var(--muted); }
+  .c-mel { background: linear-gradient(90deg, rgba(34,211,238,.16), transparent); }
+  .c-sub { background: linear-gradient(90deg, rgba(167,139,250,.16), transparent); }
+  .c-attn { background: linear-gradient(90deg, rgba(251,113,133,.16), transparent); }
+  .c-conv { background: linear-gradient(90deg, rgba(52,211,153,.16), transparent); }
+  .c-gen { background: linear-gradient(90deg, rgba(244,114,182,.16), transparent); }
+  .tokens { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; margin:6px 0 2px; }
+  .tok { width:16px; height:16px; border-radius:4px; background: var(--sub); opacity:.85; }
+  .tok.four { background: var(--attn); }
+  .detail { background: var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px 20px; box-shadow: var(--shadow); min-height: 220px; }
+  .detail h3 { margin:0 0 4px; font-size:18px; }
+  .detail .tag { font-size:12px; color:var(--muted); }
+  .detail ul { margin:10px 0 0; padding-left:18px; } .detail li { margin:5px 0; }
+
+  /* bars */
+  .bars { display:grid; grid-template-columns: 130px 1fr; gap:10px 14px; align-items:center; margin-top:6px; }
+  .bars .lab { color:var(--muted); font-size:13px; text-align:right; }
+  .bar-track { background:#0d132a; border:1px solid var(--line); border-radius:8px; height:26px; position:relative; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:7px 0 0 7px; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:12px; color:#00121f; font-weight:700; white-space:nowrap; }
+  code.k { background:#0d132a; border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:#cfe8ff; }
+  table.cmp { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; }
+  table.cmp th, table.cmp td { border:1px solid var(--line); padding:8px 10px; text-align:center; }
+  table.cmp th { color:var(--muted); font-weight:600; }
+  table.cmp td.metric { text-align:left; color:var(--muted); }
+  .win { color:#7be3a3; font-weight:700; }
+  .footer { color:var(--muted); font-size:13px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Fast Conformer</h1>
+  <p>Replace Conformer's 4x convolutional sub-sampling with <b>8x depthwise-separable</b> sub-sampling. Half the tokens, ~4x cheaper self-attention, and a cheaper front end — with no loss in accuracy.</p>
+  <div class="badges">
+    <span class="badge">Rekesh et al., 2023</span>
+    <span class="badge">arXiv:2305.05084</span>
+    <span class="badge">8x downsampling</span>
+    <span class="badge">Depthwise-separable conv</span>
+    <span class="badge">CPU demo</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2 class="section-title">The encoder pipeline</h2>
+  <p class="section-sub">Only the <b>sub-sampling</b> front end changes. Everything after it is a standard Conformer stack — so the sole difference is how many tokens the attention and convolution blocks must chew through. Click any block.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="pipe">
+        <div class="io">Raw waveform → log-mel features &nbsp;<code class="k">(T ≈ 78, 10 ms hop)</code></div>
+        <div class="arrow">↓</div>
+        <div class="block c-mel" data-key="mel"><span class="dot" style="background:var(--mel)"></span><span class="label">Log-mel front end</span><span class="sec">numpy STFT</span></div>
+        <div class="arrow">↓</div>
+        <div class="block c-sub" data-key="sub"><span class="dot" style="background:var(--sub)"></span><span class="label">8x Depthwise-Separable Sub-sampling</span><span class="sec">§2.1</span></div>
+        <div class="tokens" id="tok8"></div>
+        <div class="arrow">↓</div>
+        <div class="block c-attn" data-key="attn"><span class="dot" style="background:var(--attn)"></span><span class="label">Multi-Head Self-Attention × N</span><span class="sec">O(T²)</span></div>
+        <div class="arrow">↓</div>
+        <div class="block c-conv" data-key="conv"><span class="dot" style="background:var(--conv)"></span><span class="label">Conformer Conv Module × N</span><span class="sec">Conformer</span></div>
+        <div class="arrow">↓</div>
+        <div class="block c-gen" data-key="head"><span class="dot" style="background:var(--gen)"></span><span class="label">Per-frame classifier</span><span class="sec">demo</span></div>
+        <div class="arrow">↓</div>
+        <div class="io">Per-token acoustic class labels</div>
+      </div>
+    </div>
+    <div class="detail" id="detail">
+      <h3 id="d-title">Click a block</h3>
+      <div class="tag" id="d-tag">Each stage of the encoder is interactive.</div>
+      <div class="formula" id="d-formula">Select a component to see what it does and where it lives in the paper.</div>
+      <ul id="d-points"></ul>
+    </div>
+  </div>
+
+  <h2 class="section-title">Depthwise-separable sub-sampling, unpacked</h2>
+  <p class="section-sub">A dense convolution mixes across space <i>and</i> channels at once. Depthwise-separable splits that into a cheap per-channel spatial filter plus a 1×1 channel mixer — far fewer multiply-adds (FastConformer §2.1).</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Baseline: 4x regular conv <span class="sec" style="color:var(--muted);font-size:12px">Conformer</span></h4>
+      <div class="formula">2 × Conv1d(stride 2)            frame rate 10 ms → 40 ms
+cost per layer ≈ T · Cin · Cout · K   (dense)
+tokens out: T / 4</div>
+    </div>
+    <div class="card">
+      <h4>Fast Conformer: 8x depthwise-separable <span class="sec" style="color:var(--muted);font-size:12px">§2.1</span></h4>
+      <div class="formula">3 × [ DepthwiseConv1d(K=9, stride 2) → PointwiseConv1d(1×1) ]
+                                frame rate 10 ms → 80 ms
+cost per layer ≈ T·Cin·K  +  T·Cin·Cout   (separable)
+tokens out: T / 8   ← half of the 4x path</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Measured result (this folder's demo)</h2>
+  <p class="section-sub">Two identical Conformer encoders trained on the synthetic frame-labeling task — differing only in the sub-sampler. Numbers below are baked in from <code class="k">data/demo_results.json</code>; serve the folder over http to load live results.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Tokens the encoder attends over</h4>
+      <p class="small">Fewer tokens → quadratically cheaper self-attention.</p>
+      <div class="bars" id="token-bars"></div>
+      <h4 style="margin-top:18px">Self-attention compute (MAC proxy)</h4>
+      <div class="bars" id="attn-bars"></div>
+    </div>
+    <div class="card">
+      <h4>Compute vs accuracy</h4>
+      <p class="small">The key claim: cut compute, keep accuracy.</p>
+      <table class="cmp" id="cmp-table"></table>
+      <p class="small" id="verdict" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>"Fast Conformer with Linearly Scalable Attention for Efficient Speech Recognition"</b> (Rekesh et al., 2023).
+    Data generated by <code class="k">python demo/run_demo.py</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {
+  "results": {
+    "4x": {"tokens":20,"subsampling_macs":545280,"attention_macs":102400,"accuracy":0.98828125},
+    "8x": {"tokens":10,"subsampling_macs":254040,"attention_macs":25600,"accuracy":0.9906250238418579}
+  },
+  "token_ratio_4x_over_8x": 2.0,
+  "attention_speedup_8x": 4.0,
+  "subsampling_speedup_8x": 2.146433632498819
+};
+
+const DETAILS = {
+  mel: { title:"Log-mel front end", tag:"Synthetic numpy STFT",
+    formula:"waveform → |STFT|² → mel filterbank → log\n(25 ms window, 10 ms hop, 40 mel bins)",
+    points:["Hand-rolled STFT + triangular mel filterbank in numpy — no torchaudio/librosa.","Produces ~78 frames per utterance at a 10 ms hop.","Identical input for both the 4x and 8x encoders."]},
+  sub: { title:"8x Depthwise-Separable Sub-sampling", tag:"FastConformer §2.1 — the contribution",
+    formula:"3 × [ depthwise Conv1d(K=9, stride 2) → pointwise 1×1 ]\nT → T/8  (10 ms → 80 ms frame rate)",
+    points:["Downsamples 8x instead of 4x — halving the tokens every later block sees.","Depthwise-separable factorization makes the block itself far cheaper than dense conv.","Kernel 9 and reduced channels mirror the paper's tuned design."]},
+  attn: { title:"Multi-Head Self-Attention", tag:"O(T²) — why tokens matter",
+    formula:"Attention(Q,K,V) = softmax(Q·Kᵀ / √d)·V\ncompute ∝ T²·d   per block",
+    points:["Cost grows with the square of the token count T.","Halving T (8x vs 4x) cuts this by ~4x — the main efficiency win.","Everything else in the block is unchanged from Conformer."]},
+  conv: { title:"Conformer Convolution Module", tag:"Gulati et al. 2020",
+    formula:"pointwise → GLU → depthwise(K) → BN → Swish → pointwise",
+    points:["Captures local acoustic context between attention steps.","Left unchanged by FastConformer.","Also benefits from the shorter sequence."]},
+  head: { title:"Per-frame classifier", tag:"Demo task head",
+    formula:"Linear(d_model → num_classes) applied at every token",
+    points:["Labels each sub-sampled token with its acoustic class.","Stands in for the CTC/RNNT head of a real ASR model.","Lets us measure accuracy at 4x vs 8x directly."]}
+};
+
+const blocks = document.querySelectorAll('.block');
+const dTitle=document.getElementById('d-title'), dTag=document.getElementById('d-tag'),
+      dFormula=document.getElementById('d-formula'), dPoints=document.getElementById('d-points');
+function show(key, el){ const d=DETAILS[key]; if(!d) return;
+  blocks.forEach(b=>b.classList.remove('active')); if(el) el.classList.add('active');
+  dTitle.textContent=d.title; dTag.textContent=d.tag; dFormula.textContent=d.formula;
+  dPoints.innerHTML=d.points.map(p=>`<li>${p}</li>`).join(''); }
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function render(data){
+  const r4=data.results["4x"], r8=data.results["8x"];
+  // token strip for 8x
+  const strip=document.getElementById('tok8'); strip.innerHTML='';
+  for(let i=0;i<r8.tokens;i++){ const d=document.createElement('div'); d.className='tok'; strip.appendChild(d); }
+
+  function bars(id, v4, v8, fmt, color){
+    const el=document.getElementById(id); el.innerHTML='';
+    const max=Math.max(v4,v8);
+    [["4x", v4, "var(--attn)"],["8x", v8, "var(--sub)"]].forEach(([lab,val,c])=>{
+      const l=document.createElement('div'); l.className='lab'; l.textContent=lab+' sub-sampling';
+      const track=document.createElement('div'); track.className='bar-track';
+      const fill=document.createElement('div'); fill.className='bar-fill';
+      fill.style.width=(100*val/max)+'%'; fill.style.background=c; fill.textContent=fmt(val);
+      track.appendChild(fill); el.appendChild(l); el.appendChild(track);
+    });
+  }
+  bars('token-bars', r4.tokens, r8.tokens, v=>v+' tokens');
+  bars('attn-bars', r4.attention_macs, r8.attention_macs, v=>v.toLocaleString()+' MAC');
+
+  const rows=[
+    ["encoder tokens", r4.tokens, r8.tokens, true],
+    ["sub-sampling MACs", r4.subsampling_macs.toLocaleString(), r8.subsampling_macs.toLocaleString(), true],
+    ["attention MACs", r4.attention_macs.toLocaleString(), r8.attention_macs.toLocaleString(), true],
+    ["frame accuracy", (r4.accuracy*100).toFixed(1)+'%', (r8.accuracy*100).toFixed(1)+'%', false],
+  ];
+  const t=document.getElementById('cmp-table');
+  t.innerHTML='<tr><th>metric</th><th>4x baseline</th><th>8x FastConformer</th></tr>'+
+    rows.map(([m,a,b,lowerBetter])=>`<tr><td class="metric">${m}</td><td>${a}</td><td class="${lowerBetter?'win':''}">${b}</td></tr>`).join('');
+  document.getElementById('verdict').innerHTML =
+    `<b>8x</b> uses <span class="win">${data.token_ratio_4x_over_8x.toFixed(2)}×</span> fewer tokens → `+
+    `<span class="win">${data.attention_speedup_8x.toFixed(2)}×</span> cheaper attention and `+
+    `<span class="win">${data.subsampling_speedup_8x.toFixed(2)}×</span> cheaper sub-sampling, at equal accuracy.`;
+}
+
+(async function init(){
+  if(location.protocol.startsWith('http')){
+    try{ const res=await fetch('../data/demo_results.json',{cache:'no-store'});
+      if(res.ok){ render(await res.json()); show('sub', document.querySelector('.block[data-key="sub"]')); return; } }catch(e){}
+  }
+  render(BAKED); show('sub', document.querySelector('.block[data-key="sub"]'));
+})();
+</script>
+</body>
+</html>

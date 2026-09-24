@@ -174,6 +174,35 @@ rather than mature citation counts.
 | Deep Delta Learning | Architectural Innovations | [`Deep Delta Learning/`](Deep%20Delta%20Learning/) |
 | ZAYA1-8B | Architectural Innovations | [`ZAYA1-8B/`](ZAYA1-8B/) |
 
+## Streaming audio encoders
+
+A focused set on **audio encoders, especially streaming** ASR encoders — the
+canonical top papers plus six specifically requested recent models. Each has the
+same self-contained layout; demos synthesize audio with NumPy and implement
+log-Mel/STFT from scratch (no `torchaudio`/`librosa`), so they run offline on CPU.
+
+| Paper | Year | Streaming idea | Folder |
+|---|---|---|---|
+| Conformer | 2020 | conv-augmented Transformer encoder (backbone) | [`Conformer/`](Conformer/) |
+| wav2vec 2.0 | 2020 | self-supervised contrastive speech encoder | [`wav2vec 2.0/`](wav2vec%202.0/) |
+| Emformer | 2021 | augmented-memory block streaming Transformer | [`Emformer/`](Emformer/) |
+| WeNet U2++ | 2021 | dynamic-chunk unified streaming/non-streaming | [`WeNet U2++/`](WeNet%20U2%2B%2B/) |
+| Whisper | 2022 | log-mel + conv + Transformer encoder (30s chunks) | [`Whisper/`](Whisper/) |
+| FastConformer | 2023 | 8× depthwise-separable subsampling | [`FastConformer/`](FastConformer/) |
+| Zipformer | 2023 | U-Net multi-rate encoder + BiasNorm | [`Zipformer/`](Zipformer/) |
+| Cache-Aware Streaming Conformer | 2023 | KV/conv cache, exact chunked streaming | [`Cache-Aware Streaming Conformer/`](Cache-Aware%20Streaming%20Conformer/) |
+| Qwen2.5-Omni *(requested)* | 2025 | block-wise (2s) streaming audio encoder | [`Qwen2.5-Omni/`](Qwen2.5-Omni/) |
+| Voxtral *(requested)* | 2025 | Whisper encoder + 4-frame-concat adapter (50→12.5 Hz) | [`Voxtral/`](Voxtral/) |
+| Uni-ASR *(requested)* | 2026 | unified streaming + fallback decoding | [`Uni-ASR/`](Uni-ASR/) |
+| VibeVoice-ASR-Streaming *(requested)* | 2026 | streaming speaker-attributed "who said what" | [`VibeVoice-ASR-Streaming/`](VibeVoice-ASR-Streaming/) |
+| Confucius4-R2T2 *(requested)* | 2026 | Longest Stable Prefix, append-only streaming | [`Confucius4-R2T2/`](Confucius4-R2T2/) |
+| Nemotron 3.5 ASR Streaming 0.6B *(requested)* | 2026 | cache-aware FastConformer-RNNT, configurable chunks | [`Nemotron 3.5 ASR Streaming 0.6B/`](Nemotron%203.5%20ASR%20Streaming%200.6B/) |
+
+The six requested models are marked *(requested)*. Four have arXiv papers
+(Voxtral, Qwen2.5-Omni, Uni-ASR, VibeVoice-ASR-Streaming); **Confucius4-R2T2**
+and **Nemotron 3.5 ASR** have no formal paper yet, so each folder includes the
+official model card as its reference document.
+
 ## Adding a new paper
 
 1. Create a new top-level folder named after the paper and drop the PDF inside.
