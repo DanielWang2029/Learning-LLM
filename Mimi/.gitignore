@@ -1,0 +1,13 @@
+# Development environment
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Generated demo artifacts (recreated by demo/run_demo.py)
+data/demo_sample.json
+
+# OS
+.DS_Store
