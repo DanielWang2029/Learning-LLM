@@ -1605,6 +1605,35 @@
         "lang-id"
       ],
       "summary": "Cache-aware FastConformer-RNNT streaming ASR with configurable chunk sizes and language-ID prompt conditioning."
+    },
+    {
+      "id": "mimi",
+      "title": "Mimi: Streaming Neural Audio Codec (introduced in Moshi: a speech-text foundation model for real-time dialogue)",
+      "authors": [
+        "D\u00e9fossez",
+        "Mazar\u00e9",
+        "Orsini",
+        "Royer",
+        "P\u00e9rez",
+        "J\u00e9gou",
+        "Grave",
+        "Zeghidour"
+      ],
+      "year": 2024,
+      "venue": "Kyutai",
+      "arxiv": "2410.00037",
+      "category": "Audio & Speech Encoders",
+      "folder": "Mimi",
+      "status": "reproduced",
+      "tags": [
+        "neural-codec",
+        "rvq",
+        "semantic-acoustic-split",
+        "12.5hz",
+        "streaming",
+        "full-duplex"
+      ],
+      "summary": "Streaming RVQ neural audio codec at 12.5 Hz / ~1.1 kbps with a split RVQ (semantic VQ distilled from WavLM + parallel acoustic RVQ); the audio tokenizer behind Moshi and Hibiki simultaneous S2S."
     }
   ],
   "citations": [
@@ -2199,6 +2228,14 @@
     {
       "from": "nemotron-3.5-asr",
       "to": "cache-aware-conformer"
+    },
+    {
+      "from": "mimi",
+      "to": "attention-is-all-you-need"
+    },
+    {
+      "from": "mimi",
+      "to": "wav2vec2"
     }
   ]
 }

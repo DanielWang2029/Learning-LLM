@@ -191,6 +191,7 @@ log-Mel/STFT from scratch (no `torchaudio`/`librosa`), so they run offline on CP
 | FastConformer | 2023 | 8× depthwise-separable subsampling | [`FastConformer/`](FastConformer/) |
 | Zipformer | 2023 | U-Net multi-rate encoder + BiasNorm | [`Zipformer/`](Zipformer/) |
 | Cache-Aware Streaming Conformer | 2023 | KV/conv cache, exact chunked streaming | [`Cache-Aware Streaming Conformer/`](Cache-Aware%20Streaming%20Conformer/) |
+| Mimi (neural audio codec) | 2024 | streaming split-RVQ codec, 12.5 Hz, semantic+acoustic tokens | [`Mimi/`](Mimi/) |
 | Qwen2.5-Omni *(requested)* | 2025 | block-wise (2s) streaming audio encoder | [`Qwen2.5-Omni/`](Qwen2.5-Omni/) |
 | Voxtral *(requested)* | 2025 | Whisper encoder + 4-frame-concat adapter (50→12.5 Hz) | [`Voxtral/`](Voxtral/) |
 | Uni-ASR *(requested)* | 2026 | unified streaming + fallback decoding | [`Uni-ASR/`](Uni-ASR/) |
@@ -201,7 +202,14 @@ log-Mel/STFT from scratch (no `torchaudio`/`librosa`), so they run offline on CP
 The six requested models are marked *(requested)*. Four have arXiv papers
 (Voxtral, Qwen2.5-Omni, Uni-ASR, VibeVoice-ASR-Streaming); **Confucius4-R2T2**
 and **Nemotron 3.5 ASR** have no formal paper yet, so each folder includes the
-official model card as its reference document.
+official model card as its reference document. **Mimi** is the streaming neural
+audio codec introduced in the Moshi tech report (arXiv 2410.00037).
+
+For an in-depth comparison of these encoders, a survey of how the
+speech-to-speech field chooses audio encoders, an analysis of the encoder
+families/techniques, and recommendations for building a simultaneous
+interpreter, see
+[`docs/streaming-audio-encoders-for-speech-to-speech.md`](docs/streaming-audio-encoders-for-speech-to-speech.md).
 
 ## Adding a new paper
 
