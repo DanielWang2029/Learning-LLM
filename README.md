@@ -203,6 +203,26 @@ The six requested models are marked *(requested)*. Four have arXiv papers
 and **Nemotron 3.5 ASR** have no formal paper yet, so each folder includes the
 official model card as its reference document.
 
+## Qwen papers (past two years)
+
+Reproductions of the **Qwen** family's papers from the past two years (late 2024–2026).
+Qwen2.5, Qwen2.5-Omni, Qwen3, and Qwen-AgentWorld already appear above; the folders
+below cover the rest. Each is a tiny CPU reproduction of the paper's core mechanism.
+
+| Paper | Year | Core idea reproduced | Folder |
+|---|---|---|---|
+| Qwen2-VL | 2024 | naive dynamic resolution + Multimodal RoPE | [`Qwen2-VL/`](Qwen2-VL/) |
+| Qwen2.5-Coder | 2024 | fill-in-the-middle code infilling | [`Qwen2.5-Coder/`](Qwen2.5-Coder/) |
+| Qwen2.5-Math | 2024 | tool-integrated reasoning (TIR) | [`Qwen2.5-Math/`](Qwen2.5-Math/) |
+| Qwen2.5-1M | 2025 | Dual Chunk Attention long-context extrapolation | [`Qwen2.5-1M/`](Qwen2.5-1M/) |
+| Qwen2.5-VL | 2025 | ViT window attention + spatial grounding | [`Qwen2.5-VL/`](Qwen2.5-VL/) |
+| Qwen3-Embedding | 2025 | instruction-aware embedding + reranking | [`Qwen3-Embedding/`](Qwen3-Embedding/) |
+| Qwen-Image | 2025 | text-conditioned diffusion (MMDiT) | [`Qwen-Image/`](Qwen-Image/) |
+| Qwen3-Omni | 2025 | AuT block-wise audio encoder + MoE + MTP talker | [`Qwen3-Omni/`](Qwen3-Omni/) |
+| Qwen3-VL | 2025 | DeepStack multi-level ViT features + interleaved-MRoPE | [`Qwen3-VL/`](Qwen3-VL/) |
+| Qwen3-VL-Embedding | 2026 | unified multimodal embedding + reranker | [`Qwen3-VL-Embedding/`](Qwen3-VL-Embedding/) |
+| Qwen3-Coder-Next | 2026 | MoE coding agent + agentic RL with execution feedback | [`Qwen3-Coder-Next/`](Qwen3-Coder-Next/) |
+
 ## Adding a new paper
 
 1. Create a new top-level folder named after the paper and drop the PDF inside.
