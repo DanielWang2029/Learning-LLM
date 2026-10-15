@@ -223,6 +223,7 @@ below cover the rest. Each is a tiny CPU reproduction of the paper's core mechan
 | Qwen3-VL | 2025 | DeepStack multi-level ViT features + interleaved-MRoPE | [`Qwen3-VL/`](Qwen3-VL/) |
 | Qwen3-VL-Embedding | 2026 | unified multimodal embedding + reranker | [`Qwen3-VL-Embedding/`](Qwen3-VL-Embedding/) |
 | Qwen3-Coder-Next | 2026 | MoE coding agent + agentic RL with execution feedback | [`Qwen3-Coder-Next/`](Qwen3-Coder-Next/) |
+| Qwen-Audio-3.1-Realtime | 2026 | agentic voice: Core-Cocktail SFT + M²-OPD on-policy distillation (Text Teacher + Audio Reference) | [`Qwen-Audio-3.1-Realtime/`](Qwen-Audio-3.1-Realtime/) |
 
 ## Data selection for reasoning
 

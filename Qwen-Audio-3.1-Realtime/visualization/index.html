@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Qwen-Audio-3.1-Realtime — Think / Act / Speak &amp; M²-OPD</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#131a2e; --panel-2:#1a2340; --ink:#e8ecf7; --muted:#93a0c0; --line:#2a3352;
+    --think:#22d3ee; --act:#a78bfa; --speak:#fb7185; --ok:#34d399; --warn:#f59e0b;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;} html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(1200px 600px at 20% -10%,#17223f 0,transparent 60%),
+               radial-gradient(1000px 500px at 100% 0%,#24123a 0,transparent 60%),var(--bg);
+    color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--think);}
+  header.hero{padding:40px 24px 28px;text-align:center;
+    background:linear-gradient(135deg,rgba(34,211,238,.14),rgba(167,139,250,.14) 45%,rgba(251,113,133,.14));
+    border-bottom:1px solid var(--line);}
+  header.hero h1{margin:0;font-size:32px;letter-spacing:.5px;
+    background:linear-gradient(90deg,#22d3ee,#a78bfa 45%,#fb7185 75%,#f59e0b);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  header.hero p{color:var(--muted);margin:8px auto 0;max-width:840px;}
+  .badges{margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .badge{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 64px;}
+  .section-title{font-size:20px;margin:34px 0 6px;}
+  .section-sub{color:var(--muted);margin:0 0 18px;}
+
+  .pipe{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;justify-content:center;}
+  .stage{flex:1;min-width:210px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:14px;box-shadow:var(--shadow);cursor:pointer;transition:transform .12s,border-color .12s;}
+  .stage:hover{transform:translateY(-3px);}
+  .stage.active{border-color:#fff5;box-shadow:0 0 0 2px #ffffff22,var(--shadow);}
+  .stage .dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:7px;}
+  .stage h4{margin:0 0 6px;font-size:15px;} .stage .rate{font-size:12px;color:var(--muted);}
+  .c-think{background:linear-gradient(180deg,rgba(34,211,238,.15),transparent);}
+  .c-act{background:linear-gradient(180deg,rgba(167,139,250,.15),transparent);}
+  .c-speak{background:linear-gradient(180deg,rgba(251,113,133,.15),transparent);}
+  .arrowx{align-self:center;color:var(--muted);font-size:22px;}
+
+  .detail{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 20px;box-shadow:var(--shadow);}
+  .detail h3{margin:0 0 4px;font-size:18px;} .detail .tag{font-size:12px;color:var(--muted);}
+  .formula{margin:14px 0;padding:12px 14px;border-radius:10px;background:#0d132a;border:1px solid var(--line);
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:13.5px;color:#cfe8ff;white-space:pre-wrap;overflow-x:auto;}
+  .detail ul{margin:10px 0 0;padding-left:18px;} .detail li{margin:5px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px;} @media(max-width:860px){.grid2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);}
+  .card h4{margin:0 0 4px;} .card p.small{color:var(--muted);font-size:13px;margin:0 0 12px;}
+  canvas{width:100%;display:block;background:#0d132a;border-radius:10px;border:1px solid var(--line);}
+  code.k{background:#0d132a;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#cfe8ff;}
+  .footer{color:var(--muted);font-size:13px;text-align:center;margin-top:40px;}
+
+  /* M2-OPD flow */
+  .flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px;}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:150px;text-align:center;box-shadow:var(--shadow);}
+  .node .t{font-weight:700;font-size:14px;} .node .s{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .node.sft{border-color:#f59e0b66;} .node.opd{border-color:#22d3ee66;} .node.m2{border-color:#34d39966;}
+  .teachers{display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;}
+  .teacher{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:12px;}
+  .legend span b{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+</style>
+</head>
+<body>
+<header class="hero">
+  <h1>Qwen-Audio-3.1-Realtime</h1>
+  <p>A reliable <b>agentic voice</b> model organized as <b>Think</b> · <b>Act</b> · <b>Speak&nbsp;and&nbsp;Coordinate</b>. The foundation of Think is <b>M²-OPD</b>: on-policy distillation from a <b>Text Teacher</b> plus a frozen <b>Audio Reference</b>. Click a layer, then see the real demo results below.</p>
+  <div class="badges">
+    <span class="badge">Alibaba, 2026</span>
+    <span class="badge">arXiv:2609.25176</span>
+    <span class="badge">Core-Cocktail SFT</span>
+    <span class="badge">M²-OPD on-policy distillation</span>
+    <span class="badge">GRPO executable environments</span>
+    <span class="badge">full-duplex policy</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <h2 class="section-title">Three layers of a reliable voice assistant</h2>
+  <p class="section-sub">Listen and Think support concurrent Act and Speak — e.g. reporting progress while a tool runs. Click a layer.</p>
+
+  <div class="pipe">
+    <div class="stage c-think" data-key="think"><h4><span class="dot" style="background:var(--think)"></span>Think</h4><div class="rate">audio reasoning + instruction following</div><div class="rate" style="margin-top:6px">foundation: Core-Cocktail SFT + M²-OPD</div></div>
+    <div class="arrowx">→</div>
+    <div class="stage c-act" data-key="act"><h4><span class="dot" style="background:var(--act)"></span>Act</h4><div class="rate">tool use + task completion</div><div class="rate" style="margin-top:6px">GRPO in self-evolving environments</div></div>
+    <div class="arrowx">→</div>
+    <div class="stage c-speak" data-key="speak"><h4><span class="dot" style="background:var(--speak)"></span>Speak &amp; Coordinate</h4><div class="rate">whether / when / how to speak</div><div class="rate" style="margin-top:6px">full-duplex: listen · speak · stop · resume</div></div>
+  </div>
+
+  <div class="detail" id="detail">
+    <h3 id="d-title">Click a layer above</h3>
+    <div class="tag" id="d-tag"></div>
+    <div class="formula" id="d-formula"></div>
+    <ul id="d-points"></ul>
+  </div>
+
+  <h2 class="section-title">Foundation training: the M²-OPD pipeline (§3)</h2>
+  <p class="section-sub">An off-policy cold start, then on-policy distillation that scores the student on its own trajectories. The reproduction trains all three boxes.</p>
+  <div class="card">
+    <div class="flow">
+      <div class="node sft"><div class="t">Core-Cocktail SFT</div><div class="s">off-policy, gold states<br>→ initial policy &amp; Audio Reference</div></div>
+      <div class="arrowx">→</div>
+      <div class="node opd"><div class="t">Multimodality OPD</div><div class="s">on-policy · Text Teacher q<sub>T</sub><br>+ frozen Audio Reference q<sub>ref</sub></div></div>
+      <div class="arrowx">→</div>
+      <div class="node m2"><div class="t">Multi-Teacher OPD</div><div class="s">consolidate domain experts<br>→ one deployable AudioLM</div></div>
+    </div>
+    <div class="teachers">
+      <span class="teacher" style="border-color:#22d3ee66">Text Teacher q<sub>T</sub> — reads clean text x<sub>t</sub>, scores reasoning/tools</span>
+      <span class="teacher" style="border-color:#fb718566">Audio Reference q<sub>ref</sub> — frozen; supplies audio-only behavior</span>
+    </div>
+    <div class="formula" style="margin-top:14px">y ~ π_θ(· | x_a)                         (student samples its OWN trajectory)
+p_θ^(j) = π_θ(· | x_a, y_&lt;j)              (student, on its own prefix)
+q_T^(j) = q_T(· | x_t, y_&lt;j)              (Text Teacher scores that prefix)
+q_ref^(j) = q_ref(· | x_a, y_&lt;j)          (frozen Audio Reference)
+→ update p_θ toward q_T (text-representable) and q_ref (audio-only)</div>
+  </div>
+
+  <h2 class="section-title">Reproduction results (baked from the demo)</h2>
+  <p class="section-sub" id="res-sub"></p>
+  <div class="grid2">
+    <div class="card">
+      <h4>[A] On-policy reliability (exposure bias)</h4>
+      <p class="small">Coverage of the transition function over the <b>whole</b> state space — including states the student only reaches by mistake. Off-policy SFT sees only gold states; on-policy OPD covers the rest.</p>
+      <canvas id="barA" height="240"></canvas>
+    </div>
+    <div class="card">
+      <h4>[B] Audio-only attribute retention</h4>
+      <p class="small">Accuracy on the audio-only STYLE the Text Teacher cannot see. Text-only OPD forgets it; the frozen Audio Reference in M²-OPD preserves it.</p>
+      <canvas id="barB" height="240"></canvas>
+    </div>
+  </div>
+
+  <div class="footer">
+    Interactive companion to <b>Qwen-Audio-3.1-Realtime</b> (Alibaba, 2026). Data baked from <code class="k">python demo/run_demo.py</code>.
+    Serve the folder over http to load fresh <code class="k">data/demo_results.json</code>.
+  </div>
+</div>
+
+<script>
+const BAKED = {"config":{"V":8,"L":12,"params":9236},"sft":{"coverage_acc":0.5553385416666666,"freerun_acc":0.9261067509651184,"style_acc":1.0},"opd_text":{"coverage_acc":0.806640625,"freerun_acc":0.9407551884651184,"style_acc":0.203125},"m2_opd":{"coverage_acc":0.7526041666666666,"freerun_acc":0.9405924677848816,"style_acc":1.0},"seconds":13.2};
+
+const DETAILS = {
+  think:{title:"Think — foundation for spoken intelligence",tag:"§3 — Core-Cocktail SFT + M²-OPD",
+    formula:"Core-Cocktail SFT → Multimodality OPD → domain GRPO experts → Multi-Teacher OPD\nM²-OPD = the two on-policy-distillation stages together",
+    points:["Starts from a text-pretrained Qwen LLM re-anchored to an audio policy (Core-Cocktail SFT).","Multimodality OPD transfers reasoning/instructions/tool decisions from a Text Teacher on the student's own trajectories.","A frozen Audio Reference supplies behavior text cannot describe (emotion, acoustic scene, pragmatics).","Multi-Teacher OPD consolidates domain experts into one deployable model. (This is what the demo reproduces.)"]},
+  act:{title:"Act — learning to use tools in executable environments",tag:"§4 — GRPO with multi-granularity rewards",
+    formula:"environment = { tool pool, stateful DB, business policy }\nreward at: dialogue level · milestone level · turn level  → GRPO",
+    points:["Self-evolving environments seeded from open-source tool / MCP schemas; a code agent expands tools, policy, and a database.","Rollouts are scored by terminal state, permitted writes, and behavioral assertions (e.g. confirm before a write).","Three reward granularities: whole dialogues, continuations from saved milestones, and local turn decisions.","Covers refusal, long-horizon completion, and truthful progress reporting — not just function-call syntax."]},
+  speak:{title:"Speak and Coordinate — conversational policy",tag:"§5 — whether / when / how to speak or act",
+    formula:"a_t = π(o_≤t, h_≤t, s_t)\nactions: continue listening · begin response · stop playback · resume",
+    points:["Whether: answer, call a tool, ask to confirm, refuse, or stay silent — under capability boundaries.","When: wait, yield, or resume; distinguish backchannels, interruptions, and speech addressed to others.","How: length, persona, empathy, and spoken naturalness, using actionable acoustic cues.","Full-Duplex-Bench v1.5: response to background speech falls 73.0% → 13.0% vs 3.0."]}
+};
+
+const blocks=document.querySelectorAll('.stage');
+function show(k,el){const d=DETAILS[k];if(!d)return;blocks.forEach(b=>b.classList.remove('active'));if(el)el.classList.add('active');
+  document.getElementById('d-title').textContent=d.title;document.getElementById('d-tag').textContent=d.tag;
+  document.getElementById('d-formula').textContent=d.formula;
+  document.getElementById('d-points').innerHTML=d.points.map(p=>`<li>${p}</li>`).join('');}
+blocks.forEach(b=>b.addEventListener('click',()=>show(b.dataset.key,b)));
+
+function drawBars(id, rows){
+  const cv=document.getElementById(id);const ctx=cv.getContext('2d');
+  const W=cv.width=cv.clientWidth*2,H=cv.height*2;ctx.clearRect(0,0,W,H);
+  const padL=70,padB=78,padT=30,padR=20;
+  const H0=padT, H1=H-padB;
+  ctx.font='20px monospace';ctx.textAlign='right';
+  for(let g=0;g<=5;g++){const a=g/5;const y=H1-(H1-H0)*a;ctx.strokeStyle='#1e2946';ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+    ctx.fillStyle='#93a0c0';ctx.fillText((a*100)+'%',padL-10,y+7);}
+  const bw=(W-padL-padR)/rows.length;
+  rows.forEach((r,i)=>{
+    const x=padL+i*bw;const h=(H1-H0)*r.v;
+    ctx.fillStyle=r.c;ctx.fillRect(x+bw*0.22,H1-h,bw*0.56,h);
+    ctx.fillStyle='#e8ecf7';ctx.textAlign='center';ctx.font='22px monospace';
+    ctx.fillText((r.v*100).toFixed(1)+'%',x+bw/2,H1-h-12);
+    ctx.fillStyle='#93a0c0';ctx.font='19px -apple-system,sans-serif';
+    r.label.split('\n').forEach((ln,k)=>ctx.fillText(ln,x+bw/2,H1+28+k*24));
+  });
+}
+
+function render(D){
+  document.getElementById('res-sub').innerHTML=
+    `A tiny ${D.config.params.toLocaleString()}-param student on a synthetic audio task (${D.config.V}-state machine, length ${D.config.L}); three stages trained in ${D.seconds}s on CPU.`;
+  drawBars('barA',[
+    {label:'Core-Cocktail\nSFT (off-policy)',v:D.sft.coverage_acc,c:'#f59e0b'},
+    {label:'Multimodality\nOPD',v:D.opd_text.coverage_acc,c:'#22d3ee'},
+    {label:'M²-OPD',v:D.m2_opd.coverage_acc,c:'#34d399'},
+  ]);
+  drawBars('barB',[
+    {label:'SFT\n(init)',v:D.sft.style_acc,c:'#f59e0b'},
+    {label:'OPD text-only\n(forgets)',v:D.opd_text.style_acc,c:'#fb7185'},
+    {label:'M²-OPD\n(+Audio Ref)',v:D.m2_opd.style_acc,c:'#34d399'},
+  ]);
+}
+
+(async function init(){
+  let D=BAKED;
+  if(location.protocol.startsWith('http')){
+    try{const r=await fetch('../data/demo_results.json',{cache:'no-store'});if(r.ok)D=await r.json();}catch(e){}
+  }
+  render(D);
+  show('think',document.querySelector('.stage[data-key="think"]'));
+  window.__D=D;
+})();
+window.addEventListener('resize',()=>{if(window.__D)render(window.__D);});
+</script>
+</body>
+</html>
