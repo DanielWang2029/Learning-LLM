@@ -193,6 +193,7 @@ log-Mel/STFT from scratch (no `torchaudio`/`librosa`), so they run offline on CP
 | Cache-Aware Streaming Conformer | 2023 | KV/conv cache, exact chunked streaming | [`Cache-Aware Streaming Conformer/`](Cache-Aware%20Streaming%20Conformer/) |
 | Qwen2.5-Omni *(requested)* | 2025 | block-wise (2s) streaming audio encoder | [`Qwen2.5-Omni/`](Qwen2.5-Omni/) |
 | Voxtral *(requested)* | 2025 | Whisper encoder + 4-frame-concat adapter (50→12.5 Hz) | [`Voxtral/`](Voxtral/) |
+| Voxtral Realtime | 2026 | causal sliding-window encoder + Delayed Streams Modeling + AdaRMSNorm delay | [`Voxtral Realtime/`](Voxtral%20Realtime/) |
 | Uni-ASR *(requested)* | 2026 | unified streaming + fallback decoding | [`Uni-ASR/`](Uni-ASR/) |
 | VibeVoice-ASR-Streaming *(requested)* | 2026 | streaming speaker-attributed "who said what" | [`VibeVoice-ASR-Streaming/`](VibeVoice-ASR-Streaming/) |
 | Confucius4-R2T2 *(requested)* | 2026 | Longest Stable Prefix, append-only streaming | [`Confucius4-R2T2/`](Confucius4-R2T2/) |

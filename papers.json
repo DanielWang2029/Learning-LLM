@@ -1509,6 +1509,27 @@
       "summary": "Speech-LLM: a Whisper-large-v3 encoder + a 4-frame-concat adapter (50->12.5 Hz) feeding a Mistral language decoder."
     },
     {
+      "id": "voxtral-realtime",
+      "title": "Voxtral Realtime",
+      "authors": [
+        "Mistral AI"
+      ],
+      "year": 2026,
+      "venue": "Mistral AI",
+      "arxiv": "2602.11298",
+      "category": "Audio & Speech Encoders",
+      "folder": "Voxtral Realtime",
+      "status": "reproduced",
+      "tags": [
+        "streaming",
+        "causal-encoder",
+        "sliding-window",
+        "delayed-streams-modeling",
+        "adarmsnorm"
+      ],
+      "summary": "Natively streaming speech recognizer: a causal sliding-window encoder plus Delayed Streams Modeling (one token / 80ms frame), with AdaRMSNorm delay conditioning so one model trades latency for accuracy."
+    },
+    {
       "id": "qwen2.5-omni",
       "title": "Qwen2.5-Omni Technical Report",
       "authors": [
@@ -2551,6 +2572,20 @@
       "to": "gated-deltanet-2"
     },
     {
+      "from": "voxtral-realtime",
+      "to": "voxtral"
+    },
+    {
+      "from": "voxtral-realtime",
+      "to": "whisper"
+    },
+    {
+      "from": "voxtral-realtime",
+      "to": "emformer"
+    },
+    {
+      "from": "voxtral-realtime",
+      "to": "attention-is-all-you-need"
       "from": "hes-data-selection",
       "to": "chain-of-thought"
     },
