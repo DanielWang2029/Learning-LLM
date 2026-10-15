@@ -314,7 +314,138 @@ and a Mimi talker.
 
 ---
 
-## 7. Decision cheat-sheet
+## 7. Streaming ASR (text) output from the same encoders
+
+**Yes.** The Thinker-Talker (speech→speech) is only *one* decoder you can attach
+to these encoders. Every recommended streaming encoder emits
+**frame-synchronous embeddings** as the audio arrives, and a streaming ASR
+system is just "that same encoder + a streaming text decoder/head." You can even
+run **ASR text and translated speech at the same time off one shared encoder**
+(§7.3).
+
+### 7.1 Pick a streaming text decoder/head
+
+| Head | Cadence | Latency | Models output deps? | Repo example | When to use |
+|---|---|---|---|---|---|
+| **CTC** | frame-synchronous | lowest (per frame) | no (conditional independence) | `WeNet U2++/` (1st pass) | ultra-low-latency partial captions; cheap extra head |
+| **RNN-T / Transducer** | frame-synchronous (0+ tokens/frame via blank) | low | yes (prediction net) | `Nemotron 3.5 ASR Streaming 0.6B/`, `Cache-Aware Streaming Conformer/` | best standalone streaming ASR accuracy/latency |
+| **DSM / stream-synchronous LLM** | 1 token / frame (`[P]`/`[W]`/word) | tunable via τ | yes (autoregressive) | `Voxtral Realtime/` | you already have an LLM decoder; want a latency dial |
+| **Chunk-synchronous attention (AED, monotonic)** | per chunk | chunk-sized | yes | `Qwen2.5-Omni/`, `Qwen3-Omni/` (Thinker) | reuse an attention decoder you already train |
+| **Two-pass (streaming CTC + attention rescoring)** | partials per chunk, final at endpoint | low partials, higher finals | yes (2nd pass) | `WeNet U2++/` | best quality finals while keeping instant partials |
+| **LLM interleaving** | per audio chunk | chunk-sized | yes | `Uni-ASR/`, `VibeVoice-ASR-Streaming/` | one LLM, source audio+text interleaved; speaker labels |
+
+All of these consume the *same* streaming encoder frames — you choose the head by
+your latency/accuracy/engineering budget.
+
+### 7.2 How to run it (the streaming loop)
+
+1. **Run the encoder incrementally.** Feed audio in chunks and carry the
+   per-layer **K/V cache + conv-state cache** so each step is *exact* and uses
+   bounded memory (`Voxtral Realtime/src/encoder.py` `stream()`;
+   `Cache-Aware Streaming Conformer/` for conv-state caching). Chunk size = your
+   latency budget.
+2. **Attach a head** (above) and decode frame-by-frame or chunk-by-chunk.
+3. **Partial vs. final hypotheses.** Emit *partials* every chunk for
+   responsiveness; mark text *final* once it stabilizes or an endpoint fires.
+4. **Flicker-free display.** Commit only the **longest stable prefix**
+   (`Confucius4-R2T2/`) so on-screen text is append-only and never rewrites.
+5. **Endpointing / segmentation.** Use CTC/RNN-T blank runs (or a small VAD) to
+   detect pauses and finalize segments.
+6. **Timestamps.** CTC/RNN-T give frame-level alignment for free (frame index ×
+   frame period, e.g. 80 ms), so each word carries a start time.
+7. **Latency dial.** Turn one knob: **chunk size** (cache-aware Conformer, WeNet
+   U2++, Nemotron) or **delay τ** (Voxtral Realtime AdaRMSNorm). Smaller =
+   faster/less accurate.
+
+### 7.3 Running ASR + S2S together off ONE encoder
+
+The encoder is the expensive, shared trunk; heads are cheap. Tap it once and run
+two (or more) heads in parallel:
+
+```
+                         ┌──► CTC / RNN-T head ──► streaming SOURCE-language captions (low latency)
+audio ─► streaming ──────┤
+         encoder (12.5Hz) ├──► Thinker (translation) ─► Talker + Mimi codec ─► TARGET-language speech
+                         └──► (optional) DSM head ───► streaming TARGET-language text (subtitles)
+```
+
+- The **Thinker already produces text** (its intermediate target-language
+  tokens), so translated **subtitles are essentially free** — just read the
+  Thinker's text stream.
+- For **source-language captions**, add a lightweight **CTC or RNN-T head** on
+  the shared encoder. Marginal extra compute, since the encoder is reused.
+- This is exactly how omni stacks (`Qwen2.5-Omni/`, `Qwen3-Omni/`) expose
+  transcription *and* translation *and* speech output from one model.
+
+### 7.4 Minimal recipes (pseudocode)
+
+**CTC — zero-latency greedy partials:**
+
+```python
+cache, prev = None, BLANK
+for chunk in audio_stream:                  # e.g. 1–8 frames
+    emb, cache = encoder.step(chunk, cache) # exact streaming, bounded memory
+    for logit in ctc_head(emb):             # per frame
+        y = logit.argmax()
+        if y != BLANK and y != prev:        # collapse blanks + repeats
+            emit_partial(y)
+        prev = y
+```
+
+**RNN-T — standard streaming transducer:**
+
+```python
+cache, state, hist = None, pred_net.init(), []
+for chunk in audio_stream:
+    enc, cache = encoder.step(chunk, cache)
+    for t in range(enc.frames):
+        while True:                         # emit 0+ labels on this frame
+            j = joiner(enc[t], pred_net(hist, state))
+            y = j.argmax()
+            if y == BLANK: break            # advance time
+            emit(y); hist.append(y)         # emit label, stay on frame
+```
+
+**DSM (Voxtral Realtime) — one token per frame, with a latency dial:**
+
+```python
+prev, cache = PAD, None
+for frame in audio_stream:
+    e, cache = encoder.step(frame, cache)
+    x = adapter(e) + embed(prev)            # fuse audio + previous token
+    tok = decoder_step(x, g(tau)).argmax()  # tau = AdaRMSNorm latency knob
+    if tok != PAD: emit(tok)                # [W] then word
+    prev = tok
+```
+
+**Two-pass (WeNet U2++) — instant partials, accurate finals:**
+
+```python
+# pass 1 (always on): streaming CTC → partial text every chunk
+# on endpoint: attention decoder rescores CTC n-best → final text
+```
+
+Wrap the emitted text in the **longest-stable-prefix** policy
+(`Confucius4-R2T2/`) so what the user sees only ever grows.
+
+### 7.5 Which head for which recommendation
+
+- **Voxtral Realtime encoder** → **DSM head** (same per-frame cadence; τ gives the
+  latency dial) for text, *or* a parallel **CTC/RNN-T** head for ultra-low-latency
+  captions.
+- **Qwen3-Omni / Qwen2.5-Omni** → the **Thinker** already emits streaming text;
+  add a **CTC/RNN-T** head if you want sub-chunk source captions.
+- **Nemotron 3.5 ASR / Cache-Aware Streaming Conformer** → **RNN-T** is the native
+  head; chunk size is the latency dial. These are *already* streaming ASR systems.
+- **WeNet U2++ / Uni-ASR** → **two-pass CTC+attention** / **LLM interleaving**;
+  one model covers streaming partials and non-streaming-quality finals.
+
+**Bottom line:** streaming ASR text and the S2S Thinker-Talker are not either/or.
+Build the streaming encoder once, then attach whichever text head(s) you need —
+CTC/RNN-T for low-latency captions, DSM/attention for LLM-grade text — and read
+the Thinker's stream for translated subtitles, all from the one shared encoder.
+
+## 8. Decision cheat-sheet
 
 | Your priority | Pick |
 |---|---|
@@ -330,7 +461,7 @@ and a Mimi talker.
 
 ---
 
-## 8. References (reproductions in this repo)
+## 9. References (reproductions in this repo)
 
 `Conformer/`, `wav2vec 2.0/`, `Emformer/`, `WeNet U2++/`, `Whisper/`,
 `FastConformer/`, `Zipformer/`, `Cache-Aware Streaming Conformer/`, `Voxtral/`,
