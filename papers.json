@@ -1782,6 +1782,28 @@
       "summary": "Thinker-Talker MoE omni model with a from-scratch AuT block-wise streaming audio encoder (12.5 Hz) and a multi-codebook MTP talker."
     },
     {
+      "id": "qwen-audio-3.1-realtime",
+      "title": "Qwen-Audio-3.1-Realtime: Towards Reliable Agentic Voice Interaction",
+      "authors": [
+        "Alibaba Token Foundry"
+      ],
+      "year": 2026,
+      "venue": "Alibaba",
+      "arxiv": "2609.25176",
+      "category": "Audio & Speech Encoders",
+      "folder": "Qwen-Audio-3.1-Realtime",
+      "status": "reproduced",
+      "tags": [
+        "agentic-voice",
+        "on-policy-distillation",
+        "m2-opd",
+        "grpo",
+        "full-duplex",
+        "audio-llm"
+      ],
+      "summary": "Agentic real-time voice model (Think/Act/Speak): foundation training via Core-Cocktail SFT + M2-OPD (on-policy distillation from a Text Teacher and a frozen Audio Reference), tool-use GRPO in self-evolving environments, and a full-duplex conversational policy."
+    },
+    {
       "id": "qwen3-vl",
       "title": "Qwen3-VL Technical Report",
       "authors": [
@@ -2586,6 +2608,8 @@
     {
       "from": "voxtral-realtime",
       "to": "attention-is-all-you-need"
+    },
+    {
       "from": "hes-data-selection",
       "to": "chain-of-thought"
     },
@@ -2608,6 +2632,22 @@
     {
       "from": "hes-data-selection",
       "to": "s1"
+    },
+    {
+      "from": "qwen-audio-3.1-realtime",
+      "to": "qwen3-omni"
+    },
+    {
+      "from": "qwen-audio-3.1-realtime",
+      "to": "qwen2.5-omni"
+    },
+    {
+      "from": "qwen-audio-3.1-realtime",
+      "to": "deepseekmath"
+    },
+    {
+      "from": "qwen-audio-3.1-realtime",
+      "to": "whisper"
     }
   ]
 }
