@@ -1839,6 +1839,35 @@
         "agentic-rl"
       ],
       "summary": "80B/3B-active MoE coding-agent model with hybrid attention, trained via agentic RL on verifiable coding tasks with execution feedback."
+    },
+    {
+      "id": "hes-data-selection",
+      "title": "Unified Data Selection for LLM Reasoning (High-Entropy Sum)",
+      "authors": [
+        "Li",
+        "Ma",
+        "Li",
+        "Zhu",
+        "Yu",
+        "Bao",
+        "Wang",
+        "Feng",
+        "Liu"
+      ],
+      "year": 2026,
+      "venue": "arXiv",
+      "arxiv": "2605.22389",
+      "category": "Reasoning",
+      "folder": "Unified Data Selection for LLM Reasoning",
+      "status": "reproduced",
+      "tags": [
+        "data-selection",
+        "token-entropy",
+        "long-cot",
+        "training-free",
+        "sft-rft-rl"
+      ],
+      "summary": "High-Entropy Sum (HES): a training-free data-quality metric that sums the entropy of the top-p% highest-entropy ('critical') tokens, used to select reasoning data for SFT/RFT/RL."
     }
   ],
   "citations": [
@@ -2557,6 +2586,28 @@
     {
       "from": "voxtral-realtime",
       "to": "attention-is-all-you-need"
+      "from": "hes-data-selection",
+      "to": "chain-of-thought"
+    },
+    {
+      "from": "hes-data-selection",
+      "to": "deepseek-r1"
+    },
+    {
+      "from": "hes-data-selection",
+      "to": "limo"
+    },
+    {
+      "from": "hes-data-selection",
+      "to": "phi-3"
+    },
+    {
+      "from": "hes-data-selection",
+      "to": "deepseekmath"
+    },
+    {
+      "from": "hes-data-selection",
+      "to": "s1"
     }
   ]
 }

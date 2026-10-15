@@ -224,6 +224,12 @@ below cover the rest. Each is a tiny CPU reproduction of the paper's core mechan
 | Qwen3-VL-Embedding | 2026 | unified multimodal embedding + reranker | [`Qwen3-VL-Embedding/`](Qwen3-VL-Embedding/) |
 | Qwen3-Coder-Next | 2026 | MoE coding agent + agentic RL with execution feedback | [`Qwen3-Coder-Next/`](Qwen3-Coder-Next/) |
 
+## Data selection for reasoning
+
+| Paper | Year | Core idea reproduced | Folder |
+|---|---|---|---|
+| Unified Data Selection for LLM Reasoning (HES) | 2026 | High-Entropy Sum: sum the entropy of the top-p% critical tokens to score & select reasoning data | [`Unified Data Selection for LLM Reasoning/`](Unified%20Data%20Selection%20for%20LLM%20Reasoning/) |
+
 ## Adding a new paper
 
 1. Create a new top-level folder named after the paper and drop the PDF inside.
